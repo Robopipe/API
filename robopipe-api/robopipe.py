@@ -13,6 +13,7 @@ from .handler.sensor_handler import (
     SensorCaptureHandler,
     SensorConfigHandler,
     SensorNNHandler,
+    SensorControlHandler,
 )
 from .handler.stream_handler import StreamHandler
 
@@ -51,6 +52,11 @@ def main():
                 dict(camera_manager=camera_manager),
             ),
             (
+                r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/control",
+                SensorControlHandler,
+                dict(camera_manager=camera_manager),
+            ),
+            (
                 r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/still",
                 SensorCaptureHandler,
                 dict(camera_manager=camera_manager),
@@ -76,6 +82,7 @@ def main():
             main_loop.add_callback_from_signal(shutdown)
 
     def shutdown():
+        stream_service.stop()
         server.stop()
         main_loop.stop()
 

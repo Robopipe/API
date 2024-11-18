@@ -68,8 +68,8 @@ class ColorCameraConfigProperties(ConfigProperties):
 
 
 @dataclass
-class MonoCameraProperties(ConfigProperties):
-    resolution: str  # dai.MonoCameraProperties.SensorResolution.value
+class MonoCameraConfigProperties(ConfigProperties):
+    resolution: int  # dai.MonoCameraProperties.SensorResolution.value
     fps: float
 
     @classmethod
@@ -84,7 +84,7 @@ class MonoCameraProperties(ConfigProperties):
 CONFIG_PROPERTIES: dict[CameraNode, ConfigProperties] = {
     dai.node.Camera: CameraConfigProperties,
     dai.node.ColorCamera: ColorCameraConfigProperties,
-    dai.node.MonoCamera: MonoCameraProperties,
+    dai.node.MonoCamera: MonoCameraConfigProperties,
 }
 
 

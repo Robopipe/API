@@ -5,6 +5,7 @@ from dataclasses import asdict
 from io import BytesIO
 
 from ..camera.nn import CameraNNConfig
+from ..camera.sensor_control import SensorControl
 from .base_handler import CameraBaseHandler
 
 
@@ -27,6 +28,24 @@ class SensorConfigHandler(CameraBaseHandler):
         sensor.camera_config = tornado.escape.json_decode(self.request.body)
 
         self.finish(asdict(sensor.camera_config))
+
+
+class SensorControlHandler(CameraBaseHandler):
+    def get(self, mxid: str, sensor_name: str):
+        sensor_control = self.camera_manager[mxid].sensors[sensor_name].sensor_control
+
+        self.finish(asdict(sensor_control))
+
+    def post(self, mxid: str, sensor_name: str):
+        sensor = self.camera_manager[mxid].sensors[sensor_name]
+        sensor.sensor_control = SensorControl(
+            **(
+                asdict(sensor.sensor_control)
+                | tornado.escape.json_decode(self.request.body)
+            )
+        )
+
+        self.finish(asdict(sensor.sensor_control))
 
 
 class SensorCaptureHandler(CameraBaseHandler):

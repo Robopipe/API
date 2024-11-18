@@ -7,9 +7,17 @@ from typing import Callable
 
 from ..utils.image import dai_image_to_pil_image
 from .pipeline import PipelineQueueType
-from .sensor_config import CameraConfig, CameraConfigProperties
+from .sensor_config import (
+    CameraConfig,
+    CameraConfigProperties,
+    ColorCameraConfigProperties,
+    MonoCameraConfigProperties,
+)
+from .sensor_control import SensorControl
 
-# from .sensor_control import SensorControl
+ConfigProperties = (
+    CameraConfigProperties | ColorCameraConfigProperties | MonoCameraConfigProperties
+)
 
 
 class Sensor:
@@ -25,16 +33,28 @@ class Sensor:
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
         self._camera_config = CameraConfig(self.sensor_node)
-        # self._control = SensorControl(self.sensor_node.initialControl.getData())
+        self._control = SensorControl.from_camera_control(
+            self.sensor_node.initialControl
+        )
 
     @property
-    def camera_config(self) -> CameraConfigProperties:
+    def camera_config(self) -> ConfigProperties:
         return self._camera_config.properties
 
     @camera_config.setter
-    def camera_config(self, value: CameraConfigProperties):
+    def camera_config(self, value: ConfigProperties):
         self._camera_config.properties = value
         self.restart_pipeline()
+
+    @property
+    def sensor_control(self) -> SensorControl:
+        return self._control
+
+    @sensor_control.setter
+    def sensor_control(self, value: SensorControl):
+        self._control = value
+        control_queue = self.input_queues[PipelineQueueType.CONTROL]
+        control_queue.send(self._control.to_camera_control())
 
     def capture_still(self):
         control_queue = self.input_queues[PipelineQueueType.CONTROL]
@@ -51,10 +71,7 @@ class Sensor:
         return dai_image_to_pil_image(img_frame)
 
     def get_video_frame(self):
-        try:
-            video_frame = self.output_queues[PipelineQueueType.VIDEO].getAll()[0]
-        except:
-            return
+        video_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.VIDEO].get()
 
         return av.VideoFrame.from_ndarray(video_frame.getFrame(), "nv12").to_rgb()
 
