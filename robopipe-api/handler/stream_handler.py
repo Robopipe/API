@@ -10,13 +10,9 @@ class StreamHandler(tornado.websocket.WebSocketHandler):
     def check_origin(self, origin):
         return True
 
-    def open(self, mxid: str, sensor_name: str):
+    async def open(self, mxid: str, sensor_name: str):
         self.stream_key = (mxid, sensor_name)
-
-        try:
-            self.stream_service.subscribe((mxid, sensor_name), self)
-        except:
-            self.close()
+        await self.stream_service.subscribe((mxid, sensor_name), self)
 
     def on_close(self):
         self.stream_service.unsubscribe(self.stream_key, self)

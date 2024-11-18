@@ -4,11 +4,11 @@ import tornado.ioloop
 import tornado.gen
 
 import asyncio
-import io
 
 from .log import logger
 from .camera.camera_manager import CameraManager
 from .error import SensorNotFoundException
+from .video_encoder import VideoEncoder
 
 
 StreamKey = tuple[str, str]
@@ -20,8 +20,17 @@ class StreamService:
         self.camera_manager = camera_manager
         self.main_loop = main_loop
         self.subscribers: StreamSubscriber = {}
+        self.encoders: dict[StreamKey, VideoEncoder] = {}
 
-    def subscribe(self, key: StreamKey, handler: tornado.websocket.WebSocketHandler):
+    def __del__(self):
+        self.stop()
+
+    def stop(self):
+        self.subscribers.clear()
+
+    async def subscribe(
+        self, key: StreamKey, handler: tornado.websocket.WebSocketHandler
+    ):
         mxid, sensor_name = key
         camera = self.camera_manager[mxid]
 
@@ -30,8 +39,10 @@ class StreamService:
 
         if key not in self.subscribers:
             self.subscribers[key] = []
+            self.encoders[key] = VideoEncoder(camera.sensors[key[1]])
 
         self.subscribers[key].append(handler)
+        await handler.write_message(self.encoders[key].init_fragment, True)
 
         if len(self.subscribers[key]) == 1:
             self.open_stream(key)
@@ -42,49 +53,28 @@ class StreamService:
 
             if not self.subscribers[key]:
                 del self.subscribers[key]
+                del self.encoders[key]
 
     async def stream(self, key: StreamKey):
         subscribers = self.subscribers.get(key)
-
-        buffer = io.BytesIO()
-        container = av.open(
-            buffer,
-            "w",
-            "mp4",
-            options={
-                "movflags": "frag_keyframe+empty_moov+faststart+default_base_moof",
-                "flush_packets": "1",
-            },
-        )
-        video_stream = container.add_stream(
-            "h264",
-            30,
-            options={
-                "tune": "zerolatency",
-                "preset": "ultrafast",
-                "reset_timestamps": "1",
-            },
-        )
-
-        video_stream.rate = 20
-        video_stream.bit_rate = 5000000
-        video_stream.gop_size = 1
+        video_encoder = self.encoders[key]
 
         while subscribers:
-            sensor_handle = self.camera_manager[key[0]].sensors[key[1]]
-            frame = sensor_handle.get_video_frame()
-
-            if frame is None:
+            try:
+                frame = next(video_encoder)
+            except StopIteration:
+                video_encoder = self.encoders[key] = VideoEncoder(
+                    self.camera_manager[key[0]].sensors[key[1]]
+                )
                 continue
 
-            container.mux(video_stream.encode(frame))
+            send_futures = [
+                handler.write_message(frame, True) for handler in subscribers
+            ]
 
-            await subscribers[0].write_message(buffer.getvalue(), True)
-            buffer.seek(0)
-            buffer.truncate()
+            await tornado.gen.multi(send_futures)
+
             subscribers = self.subscribers.get(key)
-
-        container.close()
 
     def open_stream(self, key: StreamKey):
         def start_stream():
@@ -94,4 +84,4 @@ class StreamService:
             current_loop.stop()
             logger.info(f"Stopping stream for camera: {key[0]}, sensor: {key[1]}")
 
-        self.main_loop.run_in_executor(None, start_stream)
+        return self.main_loop.run_in_executor(None, start_stream)
