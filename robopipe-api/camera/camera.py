@@ -49,10 +49,17 @@ class Camera:
 
         for [sensor_name, sensor_features] in self.all_sensors.items():
             if sensor_name in self.pipeline.cameras:
+                output_queues = self.__get_sensor_queues(sensor_name, False)
+
+                for queue in output_queues.values():
+                    pass
+                    # queue.setBlocking(False)
+                    # queue.setMaxSize(10)
+
                 self.sensors[sensor_name] = Sensor(
                     self.pipeline.cameras[sensor_name],
                     self.__get_sensor_queues(sensor_name, True),
-                    self.__get_sensor_queues(sensor_name, False),
+                    output_queues,
                     lambda: self.open(self.pipeline),
                 )
 
