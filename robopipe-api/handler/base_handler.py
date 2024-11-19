@@ -27,5 +27,6 @@ class BaseHandler(tornado.web.RequestHandler):
 
 
 class CameraBaseHandler(BaseHandler):
-    def initialize(self, camera_manager: CameraManager):
-        self.camera_manager = camera_manager
+    def initialize(self, **kwargs):
+        print(kwargs)
+        self.camera_manager = kwargs["camera_manager"]

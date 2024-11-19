@@ -4,8 +4,8 @@ from ..stream import StreamService
 
 
 class StreamHandler(tornado.websocket.WebSocketHandler):
-    def initialize(self, stream_service: StreamService):
-        self.stream_service = stream_service
+    def initialize(self, **kwargs):
+        self.stream_service = kwargs["stream_service"]
 
     def check_origin(self, origin):
         return True

@@ -7,15 +7,9 @@ import signal
 from .log import logger
 from .camera.camera_manager import CameraManager
 from .stream import StreamService
-from .handler.camera_handler import CamerasHandler, CameraHandler, CameraStatsHandler
-from .handler.sensor_handler import (
-    SensorsHandler,
-    SensorCaptureHandler,
-    SensorConfigHandler,
-    SensorNNHandler,
-    SensorControlHandler,
-)
-from .handler.stream_handler import StreamHandler
+from .handler import *
+
+from .app import app
 
 
 def main():
@@ -27,52 +21,8 @@ def main():
     stream_service = StreamService(camera_manager, main_loop)
 
     logger.info(f"Found {len(camera_manager.cameras)} camera(s)")
-
-    app = tornado.web.Application(
-        [
-            (r"/cameras", CamerasHandler, dict(camera_manager=camera_manager)),
-            (
-                r"/cameras/([A-Z0-9]+)",
-                CameraHandler,
-                dict(camera_manager=camera_manager),
-            ),
-            (
-                r"/cameras/([A-Z0-9]+)/stats",
-                CameraStatsHandler,
-                dict(camera_manager=camera_manager),
-            ),
-            (
-                r"/cameras/([A-Z0-9]+)/sensors",
-                SensorsHandler,
-                dict(camera_manager=camera_manager),
-            ),
-            (
-                r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/config",
-                SensorConfigHandler,
-                dict(camera_manager=camera_manager),
-            ),
-            (
-                r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/control",
-                SensorControlHandler,
-                dict(camera_manager=camera_manager),
-            ),
-            (
-                r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/still",
-                SensorCaptureHandler,
-                dict(camera_manager=camera_manager),
-            ),
-            (
-                r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/stream",
-                StreamHandler,
-                dict(stream_service=stream_service),
-            ),
-            (
-                r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/nn",
-                SensorNNHandler,
-                dict(camera_manager=camera_manager),
-            ),
-        ],
-    )
+    app.add_data({"camera_manager": camera_manager, "stream_service": stream_service})
+    app.build()
 
     server = tornado.httpserver.HTTPServer(app)
     server.listen(8080)

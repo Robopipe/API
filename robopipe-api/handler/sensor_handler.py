@@ -4,11 +4,13 @@ import depthai as dai
 from dataclasses import asdict
 from io import BytesIO
 
+from ..app import app
 from ..camera.nn import CameraNNConfig
 from ..camera.sensor_control import SensorControl
 from .base_handler import CameraBaseHandler
 
 
+@app.route(r"/cameras/([A-Z0-9]+)/sensors")
 class SensorsHandler(CameraBaseHandler):
     def get(self, mxid: str):
         sensors = list(self.camera_manager[mxid].all_sensors.keys())
@@ -17,6 +19,7 @@ class SensorsHandler(CameraBaseHandler):
         self.finish()
 
 
+@app.route(r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/config")
 class SensorConfigHandler(CameraBaseHandler):
     def get(self, mxid: str, sensor_name: str):
         camera_config = self.camera_manager[mxid].sensors[sensor_name].camera_config
@@ -30,6 +33,7 @@ class SensorConfigHandler(CameraBaseHandler):
         self.finish(asdict(sensor.camera_config))
 
 
+@app.route(r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/control")
 class SensorControlHandler(CameraBaseHandler):
     def get(self, mxid: str, sensor_name: str):
         sensor_control = self.camera_manager[mxid].sensors[sensor_name].sensor_control
@@ -48,6 +52,7 @@ class SensorControlHandler(CameraBaseHandler):
         self.finish(asdict(sensor.sensor_control))
 
 
+@app.route(r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/still")
 class SensorCaptureHandler(CameraBaseHandler):
     def get(self, mxid: str, sensor_name: str):
         format = self.get_argument("format", "jpeg")
@@ -66,6 +71,7 @@ class SensorCaptureHandler(CameraBaseHandler):
         self.finish(image_bytes.getvalue())
 
 
+@app.route(r"/cameras/([A-Z0-9]+)/sensors/(CAM_[A-H])/nn")
 class SensorNNHandler(CameraBaseHandler):
     def post(self, mxid: str, sensor_name: str):
         nn_blob_files = self.request.files.get("nn_blob")
