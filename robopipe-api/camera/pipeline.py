@@ -16,18 +16,18 @@ class PipelineQueueType(Enum):
     NN_PASSTHROUGH = "nn_passthrough"
 
     def get_queue_name(self, sensor_name: str) -> str:
-        return sensor_name + "@" + self.value
+        return self.value + "@" + sensor_name
 
     @classmethod
-    def parse_queue_name(cls, queue_name: str) -> tuple[str, Self]:
-        sensor_name, queue_type = queue_name.split("@")
+    def parse_queue_name(cls, queue_name: str) -> tuple[Self, str]:
+        queue_type, sensor_name = queue_name.split("@")
 
-        return (sensor_name, cls(queue_type))
+        return (cls(queue_type), sensor_name)
 
 
 class Pipeline:
-    def __init__(self, pipeline: dai.Pipeline = dai.Pipeline()):
-        self.pipeline = pipeline
+    def __init__(self, pipeline: dai.Pipeline | None = None):
+        self.pipeline = pipeline or dai.Pipeline()
         self.input_queues: dict[str, dict[PipelineQueueType, str]] = {}
         self.output_queues: dict[str, dict[PipelineQueueType, str]] = {}
         self.cameras: dict[
@@ -35,7 +35,7 @@ class Pipeline:
         ] = {}
         self.extract_properties()
 
-    def __add_queue(self, sensor_name: str, queue_type: PipelineQueueType, input: bool):
+    def __add_queue(self, queue_type: PipelineQueueType, sensor_name: str, input: bool):
         queues = self.input_queues if input else self.output_queues
 
         if sensor_name not in queues:
@@ -89,8 +89,10 @@ class EmptyPipeline(Pipeline):
 
 
 class StreamingPipeline(Pipeline):
-    def __init__(self, sensors: list[dai.CameraFeatures]):
-        super().__init__()
+    def __init__(
+        self, sensors: list[dai.CameraFeatures], pipeline: dai.Pipeline | None = None
+    ):
+        super().__init__(pipeline)
 
         for sensor in sensors:
             self.add_sensor(sensor)
@@ -99,9 +101,6 @@ class StreamingPipeline(Pipeline):
         sensor_name = sensor.socket.name
 
         cam_control = self.create_x_link(sensor_name, PipelineQueueType.CONTROL, True)
-        cam_preview = self.create_x_link(
-            sensor_name, PipelineQueueType.PREVIEW, False, False, 1
-        )
         cam_still = self.create_x_link(sensor_name, PipelineQueueType.STILL, False)
         cam_video = self.create_x_link(
             sensor_name, PipelineQueueType.VIDEO, False, False, 1
@@ -115,12 +114,11 @@ class StreamingPipeline(Pipeline):
             cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
 
             cam_config.out.link(cam.inputConfig)
-            cam.preview.link(cam_preview.input)
             cam.still.link(cam_still.input)
             cam.video.link(cam_video.input)
         elif dai.CameraSensorType.MONO in sensor.supportedTypes:
             cam = self.pipeline.createMonoCamera()
-            cam.setResolution(dai.MonoCameraProperties.SensorResolution.THE_480_P)
+            cam.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
             cam.setNumFramesPool(10)
 
             cam_still.input.setBlocking(False)
@@ -131,7 +129,6 @@ class StreamingPipeline(Pipeline):
                     while True:
                         frame = node.io['in'].get()
                         node.io['video'].send(frame)
-                        node.io['preview'].send(frame)
                         node.io['still'].send(frame)
                 """
             )
@@ -140,7 +137,6 @@ class StreamingPipeline(Pipeline):
             script.inputs["in"].setQueueSize(1)
             cam.out.link(script.inputs["in"])
             script.outputs["still"].link(cam_still.input)
-            script.outputs["preview"].link(cam_preview.input)
             script.outputs["video"].link(cam_video.input)
         else:
             return
@@ -152,37 +148,33 @@ class StreamingPipeline(Pipeline):
 
 
 class NNPipeline(Pipeline):
-    def __init__(self, networks: list[CameraNNConfig]):
-        super().__init__()
+    def __init__(
+        self, networks: list[CameraNNConfig], pipeline: dai.Pipeline | None = None
+    ):
+        super().__init__(pipeline)
 
         for nn in networks:
             self.add_nn(nn)
 
     def add_nn(self, nn: CameraNNConfig):
         sensor_name = nn.sensor.name
-        self.input_queues[sensor_name] = {}
-        self.output_queues[sensor_name] = {}
 
-        cam = self.pipeline.createColorCamera()
-        cam.setBoardSocket(nn.sensor)
+        if sensor_name not in self.cameras:
+            cam = self.pipeline.createColorCamera()
+            cam.setBoardSocket(nn.sensor)
+            self.cameras[sensor_name] = cam
+        else:
+            cam = self.cameras[sensor_name]
+
         cam.setPreviewSize(nn.input_shape[:2])
         cam.setInterleaved(False)
-        self.cameras[sensor_name] = cam
+
         nn_node = nn.create_node(self.pipeline)
 
-        cam_nn_out_queue = PipelineQueueType.NN.getQueueName(sensor_name)
-        cam_nn_out = self.pipeline.createXLinkOut()
-        cam_nn_out.setStreamName(cam_nn_out_queue)
-        self.output_queues[sensor_name][PipelineQueueType.NN] = cam_nn_out_queue
-
-        cam_nn_passthrough_queue = PipelineQueueType.NN_PASSTHROUGH.getQueueName(
-            sensor_name
+        cam_nn_out = self.create_x_link(sensor_name, PipelineQueueType.NN, False)
+        cam_nn_passthrough = self.create_x_link(
+            sensor_name, PipelineQueueType.NN_PASSTHROUGH, False
         )
-        cam_nn_passthrough = self.pipeline.createXLinkOut()
-        cam_nn_passthrough.setStreamName(cam_nn_passthrough_queue)
-        self.output_queues[sensor_name][
-            PipelineQueueType.NN_PASSTHROUGH
-        ] = cam_nn_passthrough_queue
 
         cam.preview.link(nn_node.input)
         nn_node.out.link(cam_nn_out.input)
