@@ -11,37 +11,38 @@ from .camera.sensor import Sensor
 
 
 class VideoEncoder:
-    def __init__(self, sensor: Sensor):
+    CONTAINER_OPTIONS = {
+        "movflags": "frag_keyframe+empty_moov+faststart+default_base_moof",
+        "flush_packets": "0",
+    }
+    ENCODER_OPTIONS = {
+        "tune": "zerolatency",
+        "preset": "ultrafast",
+        "reset_timestamps": "0",
+    }
+
+    def __init__(
+        self,
+        sensor: Sensor,
+        container_options: dict = CONTAINER_OPTIONS,
+        encoder_options: dict = ENCODER_OPTIONS,
+    ):
         self.sensor = sensor
         self.buffer = io.BytesIO()
-        self.container = av.open(
-            self.buffer,
-            "w",
-            "mp4",
-            options={
-                "movflags": "frag_keyframe+empty_moov+faststart+default_base_moof",
-                "flush_packets": "1",
-            },
-        )
+        self.container = av.open(self.buffer, "w", "mp4", options=container_options)
 
         sample_frame = sensor.get_video_frame()
 
-        video_stream = self.container.add_stream(
-            "h264",
-            fractions.Fraction(self.sensor.camera_config.fps),
-            options={
-                "tune": "zerolatency",
-                "preset": "ultrafast",
-                "reset_timestamps": "1",
-            },
-        )
+        fps = fractions.Fraction(self.sensor.camera_config.fps - 5)
+        video_stream = self.container.add_stream("h264", fps, options=encoder_options)
+        video_stream.rate = fps
         video_stream.width = sample_frame.width
         video_stream.height = sample_frame.height
         video_stream.gop_size = 1
         bit_rate = math.ceil(
             sample_frame.width
             * sample_frame.height
-            * 0.2  # High Quality video
+            * 0.13  # High Quality video
             * self.sensor.camera_config.fps
         )
         video_stream.bit_rate = bit_rate
