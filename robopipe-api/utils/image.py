@@ -3,9 +3,16 @@ import depthai as dai
 from PIL import Image
 
 
-def dai_image_to_pil_image(
-    dai_image: dai.ImgFrame, format: str = "nv12"
-) -> Image.Image:
-    nv12_frame = av.VideoFrame.from_ndarray(dai_image.getFrame(), format)
+class UnsupportedImageFormat(Exception):
+    pass
 
-    return nv12_frame.to_image()
+
+def img_frame_to_pil_image(img_frame: dai.ImgFrame) -> Image.Image:
+    img_type = img_frame.getType()
+
+    if img_type == dai.RawImgFrame.Type.RAW8:
+        return Image.fromarray(img_frame.getFrame(), "L")
+    elif img_type == dai.RawImgFrame.Type.NV12:
+        return av.VideoFrame.from_ndarray(img_frame.getFrame(), "nv12").to_image()
+    else:
+        raise UnsupportedImageFormat()

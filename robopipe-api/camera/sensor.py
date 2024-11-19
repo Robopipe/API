@@ -5,7 +5,7 @@ import numpy as np
 
 from typing import Callable
 
-from ..utils.image import dai_image_to_pil_image
+from ..utils.image import img_frame_to_pil_image
 from .pipeline import PipelineQueueType
 from .sensor_config import (
     CameraConfig,
@@ -64,11 +64,11 @@ class Sensor:
         control_queue.send(ctrl)
 
         try:
-            img_frame = self.output_queues[PipelineQueueType.STILL].get()
+            img_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.STILL].get()
         except:
             return
 
-        return dai_image_to_pil_image(img_frame)
+        return img_frame_to_pil_image(img_frame)
 
     def get_video_frame(self):
         video_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.VIDEO].get()
