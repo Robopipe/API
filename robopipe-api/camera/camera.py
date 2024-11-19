@@ -1,7 +1,8 @@
 import depthai as dai
 
 from ..error import CameraShutDownException
-from .pipeline import Pipeline, NNPipeline
+from .camera_stats import CameraStats
+from .pipeline import Pipeline, NNPipeline, PipelineQueueType
 from .nn import CameraNNConfig
 from .sensor import Sensor
 
@@ -51,10 +52,10 @@ class Camera:
             if sensor_name in self.pipeline.cameras:
                 output_queues = self.__get_sensor_queues(sensor_name, False)
 
-                for queue in output_queues.values():
-                    pass
-                    # queue.setBlocking(False)
-                    # queue.setMaxSize(10)
+                for queue_type, queue in output_queues.items():
+                    if queue_type in [PipelineQueueType.STILL]:
+                        queue.setBlocking(False)
+                        queue.setMaxSize(1)
 
                 self.sensors[sensor_name] = Sensor(
                     self.pipeline.cameras[sensor_name],
@@ -99,26 +100,4 @@ class Camera:
         if self.camera_handle is None:
             raise CameraShutDownException()
 
-        chip_temp = self.camera_handle.getChipTemperature()
-        cmx_mem_usage = self.camera_handle.getCmxMemoryUsage()
-        ddr_mem_usage = self.camera_handle.getDdrMemoryUsage()
-
-        return {
-            "chip_temp": {
-                "average": chip_temp.average,
-                "css": chip_temp.css,
-                "dss": chip_temp.dss,
-                "mss": chip_temp.mss,
-                "upa": chip_temp.upa,
-            },
-            "cmx_mem_usage": {
-                "total": cmx_mem_usage.total,
-                "used": cmx_mem_usage.used,
-                "remaining": cmx_mem_usage.remaining,
-            },
-            "ddr_mem_usage": {
-                "total": ddr_mem_usage.total,
-                "used": ddr_mem_usage.used,
-                "remaining": ddr_mem_usage.remaining,
-            },
-        }
+        return CameraStats.from_device(self.camera_handle)

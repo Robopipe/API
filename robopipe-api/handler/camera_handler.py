@@ -1,5 +1,7 @@
 import tornado.web
 
+import dataclasses
+
 from ..mapper.device_info import from_device_info
 from .base_handler import CameraBaseHandler
 
@@ -35,4 +37,4 @@ class CameraStatsHandler(CameraBaseHandler):
     def get(self, mxid: str):
         camera = self.camera_manager[mxid]
 
-        self.finish(camera.stats)
+        self.finish(dataclasses.asdict(camera.stats))
