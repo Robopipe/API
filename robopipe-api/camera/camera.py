@@ -5,6 +5,7 @@ import time
 from ..error import CameraShutDownException
 from ..log import logger
 from .camera_stats import CameraStats
+from .device_info import DeviceInfo
 from .pipeline import Pipeline, NNPipeline
 from .nn import CameraNNConfig
 from .sensor import Sensor
@@ -104,15 +105,17 @@ class Camera:
         self.open(self.pipeline)
 
     @property
-    def info(self):
+    def info(self) -> DeviceInfo | None:
         if self.camera_handle is not None:
-            return self.camera_handle.getDeviceInfo()
+            device_info = self.camera_handle.getDeviceInfo()
 
         devices = dai.Device.getAllConnectedDevices()
 
         for dev in devices:
             if dev.getMxId() == self.mxid:
-                return dev
+                device_info = dev
+
+        return DeviceInfo.from_device_info(device_info)
 
     @property
     def stats(self):

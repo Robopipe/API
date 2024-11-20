@@ -33,7 +33,7 @@ class VideoEncoder:
 
         sample_frame = sensor.get_video_frame()
 
-        fps = fractions.Fraction(self.sensor.camera_config.fps - 5)
+        fps = fractions.Fraction(self.sensor.config.fps - 5)
         video_stream = self.container.add_stream("h264", fps, options=encoder_options)
         video_stream.rate = fps
         video_stream.width = sample_frame.width
@@ -43,7 +43,7 @@ class VideoEncoder:
             sample_frame.width
             * sample_frame.height
             * 0.13  # High Quality video
-            * self.sensor.camera_config.fps
+            * self.sensor.config.fps
         )
         video_stream.bit_rate = bit_rate
         self.video_stream = video_stream

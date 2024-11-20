@@ -88,7 +88,7 @@ CONFIG_PROPERTIES: dict[CameraNode, ConfigProperties] = {
 }
 
 
-class CameraConfig:
+class SensorConfig:
     def __init__(
         self, camera_node: dai.node.Camera | dai.node.ColorCamera | dai.node.MonoCamera
     ):
@@ -105,3 +105,8 @@ class CameraConfig:
         CONFIG_PROPERTIES[type(self.camera_node)](
             **(asdict(self.properties) | value)
         ).update_node(self.camera_node)
+
+
+SensorConfigProperties = (
+    CameraConfigProperties | ColorCameraConfigProperties | MonoCameraConfigProperties
+)

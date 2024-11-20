@@ -7,17 +7,8 @@ from typing import Callable
 
 from ..utils.image import img_frame_to_pil_image
 from .pipeline import PipelineQueueType
-from .sensor_config import (
-    CameraConfig,
-    CameraConfigProperties,
-    ColorCameraConfigProperties,
-    MonoCameraConfigProperties,
-)
+from .sensor_config import SensorConfig, SensorConfigProperties
 from .sensor_control import SensorControl
-
-ConfigProperties = (
-    CameraConfigProperties | ColorCameraConfigProperties | MonoCameraConfigProperties
-)
 
 
 class Sensor:
@@ -32,26 +23,26 @@ class Sensor:
         self.input_queues = input_queues
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
-        self._camera_config = CameraConfig(self.sensor_node)
+        self._config = SensorConfig(self.sensor_node)
         self._control = SensorControl.from_camera_control(
             self.sensor_node.initialControl
         )
 
     @property
-    def camera_config(self) -> ConfigProperties:
-        return self._camera_config.properties
+    def config(self) -> SensorConfigProperties:
+        return self._config.properties
 
-    @camera_config.setter
-    def camera_config(self, value: ConfigProperties):
-        self._camera_config.properties = value
+    @config.setter
+    def config(self, value: SensorConfigProperties):
+        self._config.properties = value
         self.restart_pipeline()
 
     @property
-    def sensor_control(self) -> SensorControl:
+    def control(self) -> SensorControl:
         return self._control
 
-    @sensor_control.setter
-    def sensor_control(self, value: SensorControl):
+    @control.setter
+    def control(self, value: SensorControl):
         self._control = value
         control_queue = self.input_queues[PipelineQueueType.CONTROL]
         control_queue.send(self._control.to_camera_control())

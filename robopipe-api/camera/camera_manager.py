@@ -1,10 +1,12 @@
 import depthai as dai
 
+from ..error import CameraNotFoundException
+from ..utils.singleton import Singleton
 from .camera import Camera
 from .pipeline import StreamingPipeline
-from ..error import CameraNotFoundException
 
 
+@Singleton
 class CameraManager:
     cameras: dict[str, Camera] = {}
 

@@ -1,48 +1,36 @@
-import tornado.httpserver
-import tornado.web
-import tornado.ioloop
-import tornado.routing
-import signal
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
-from .log import logger
+from contextlib import asynccontextmanager
+
 from .camera.camera_manager import CameraManager
+from .error import (
+    CameraNotFoundException,
+    SensorNotFoundException,
+)
+from .routers import cameras, sensors
 from .stream import StreamService
-from .handler import *
-
-from .app import app
 
 
-def main():
-    main_loop = tornado.ioloop.IOLoop.current()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
 
     camera_manager = CameraManager()
     camera_manager.boot_cameras()
+    stream_service = StreamService()
 
-    stream_service = StreamService(camera_manager, main_loop)
+    yield
 
-    logger.info(f"Found {len(camera_manager.cameras)} camera(s)")
-    app.add_data({"camera_manager": camera_manager, "stream_service": stream_service})
-    app.build()
-
-    server = tornado.httpserver.HTTPServer(app)
-    server.listen(8080)
-
-    def sig_handler(sig, frame):
-        if sig in (signal.SIGTERM, signal.SIGINT):
-            main_loop.add_callback_from_signal(shutdown)
-
-    def shutdown():
-        stream_service.stop()
-        server.stop()
-        main_loop.stop()
-
-    signal.signal(signal.SIGTERM, sig_handler)
-    signal.signal(signal.SIGINT, sig_handler)
-
-    logger.info("Starting HTTP server on port 8080")
-
-    main_loop.start()
+    stream_service.stop()
 
 
-if __name__ == "__main__":
-    main()
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(cameras.router)
+app.include_router(sensors.router)
+
+
+@app.exception_handler(Exception)
+def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, (CameraNotFoundException, SensorNotFoundException)):
+        return JSONResponse(status_code=404, content=None)
