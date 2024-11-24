@@ -1,9 +1,8 @@
 from fastapi import APIRouter, WebSocket
-import fastapi.concurrency
+import anyio
 from fastapi.responses import Response
 import fastapi
 
-from anyio import sleep
 from io import BytesIO
 
 from ..camera.sensor_config import SensorConfigProperties
@@ -60,9 +59,16 @@ def capture_still_image(sensor: SensorDep, format: str = "jpeg"):
 async def get_sensor_stream(
     ws: WebSocket, mxid: Mxid, sensor_name: SensorName, stream_service: StreamServiceDep
 ):
+    tg = anyio.create_task_group()
+
+    async def sleep():
+        async with tg:
+            tg.start_soon(anyio.sleep_forever)
+
     ws_adapter = WsAdapter(ws)
     await ws_adapter.accept()
-    await stream_service.subscribe((mxid, sensor_name), ws_adapter)
-
-    while True:
-        await sleep(10)  # kepp connectino alive TODO: fix this
+    await stream_service.subscribe(
+        (mxid, sensor_name), ws_adapter, lambda: tg.cancel_scope.cancel()
+    )
+    await sleep()
+    stream_service.unsubscribe((mxid, sensor_name), ws_adapter)

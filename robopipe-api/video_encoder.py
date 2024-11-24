@@ -13,12 +13,12 @@ from .camera.sensor import Sensor
 class VideoEncoder:
     CONTAINER_OPTIONS = {
         "movflags": "frag_keyframe+empty_moov+faststart+default_base_moof",
-        "flush_packets": "0",
+        "flush_packets": "1",
     }
     ENCODER_OPTIONS = {
         "tune": "zerolatency",
         "preset": "ultrafast",
-        "reset_timestamps": "0",
+        "reset_timestamps": "1",
     }
 
     def __init__(
@@ -33,7 +33,7 @@ class VideoEncoder:
 
         sample_frame = sensor.get_video_frame()
 
-        fps = fractions.Fraction(self.sensor.config.fps - 5)
+        fps = fractions.Fraction(self.sensor.config.fps + 1)
         video_stream = self.container.add_stream("h264", fps, options=encoder_options)
         video_stream.rate = fps
         video_stream.width = sample_frame.width
