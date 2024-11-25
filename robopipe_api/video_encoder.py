@@ -33,7 +33,7 @@ class VideoEncoder:
 
         sample_frame = sensor.get_video_frame()
 
-        fps = fractions.Fraction(self.sensor.config.fps + 1)
+        fps = fractions.Fraction(self.sensor.config.fps)
         video_stream = self.container.add_stream("h264", fps, options=encoder_options)
         video_stream.rate = fps
         video_stream.width = sample_frame.width
@@ -59,6 +59,7 @@ class VideoEncoder:
         return self.next()
 
     def next(self):
+        time.sleep((1 / self.sensor.config.fps))
         try:
             frame = self.sensor.get_video_frame()
         except:
