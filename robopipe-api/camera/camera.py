@@ -6,7 +6,7 @@ from ..error import CameraShutDownException
 from ..log import logger
 from .camera_stats import CameraStats
 from .device_info import DeviceInfo
-from .pipeline import Pipeline, NNPipeline
+from .pipeline import Pipeline, NNPipeline, PipelineQueueType
 from .nn import CameraNNConfig
 from .sensor import Sensor
 
@@ -14,10 +14,11 @@ from .sensor import Sensor
 class Camera:
     camera_handle: dai.Device | None = None
 
-    def __init__(self, mxid: str, pipeline: Pipeline | None = None):
+    def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
         self.mxid = mxid
+        self.boot_name = name if name == "169.254.1.222" else mxid
 
-        self.camera_handle = dai.Device(mxid)
+        self.camera_handle = dai.Device(self.boot_name)
         self.all_sensors = {
             sensor.socket.name: sensor
             for sensor in self.camera_handle.getConnectedCameraFeatures()
@@ -35,7 +36,7 @@ class Camera:
         for _ in range(retries):
             try:
                 self.camera_handle = dai.Device(
-                    self.pipeline.pipeline, dai.DeviceInfo(self.mxid)
+                    self.pipeline.pipeline, dai.DeviceInfo(self.boot_name)
                 )
                 return
             except:
@@ -68,13 +69,17 @@ class Camera:
             return
 
         for [sensor_name, sensor_features] in self.all_sensors.items():
+            print(sensor_features)
             if sensor_name in self.pipeline.cameras:
                 output_queues = self.__get_sensor_queues(sensor_name, False)
 
-                # for queue_type, queue in output_queues.items():
-                #     if queue_type in [PipelineQueueType.STILL]:
-                #         queue.setBlocking(False)
-                #         queue.setMaxSize(1)
+                for queue_type, queue in output_queues.items():
+                    if (
+                        dai.CameraSensorType.MONO in sensor_features.supportedTypes
+                        and queue_type in [PipelineQueueType.STILL]
+                    ):
+                        queue.setBlocking(False)
+                        queue.setMaxSize(1)
 
                 self.sensors[sensor_name] = Sensor(
                     self.pipeline.cameras[sensor_name],
@@ -107,15 +112,17 @@ class Camera:
     @property
     def info(self) -> DeviceInfo | None:
         if self.camera_handle is not None:
-            device_info = self.camera_handle.getDeviceInfo()
+            return DeviceInfo.from_device_info(self.camera_handle.getDeviceInfo())
 
         devices = dai.Device.getAllConnectedDevices()
 
         for dev in devices:
             if dev.getMxId() == self.mxid:
                 device_info = dev
+                break
 
-        return DeviceInfo.from_device_info(device_info)
+        if device_info:
+            return DeviceInfo.from_device_info(device_info)
 
     @property
     def stats(self):

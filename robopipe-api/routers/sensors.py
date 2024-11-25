@@ -10,7 +10,7 @@ from ..camera.sensor_control import SensorControl
 from ..utils.ws_adapter import WsAdapter
 from .common import CameraDep, SensorDep, Mxid, SensorName, StreamServiceDep
 
-router = APIRouter(prefix="/cameras/{mxid}/sensors")
+router = APIRouter(prefix="/cameras/{mxid}/sensors", tags=["sensors"])
 
 
 @router.get("/")

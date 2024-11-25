@@ -26,10 +26,12 @@ class CameraManager:
 
     def reload_cameras(self):
         mxids = list(map(lambda x: x.getMxId(), dai.Device.getAllConnectedDevices()))
+        devices = dai.Device.getAllConnectedDevices()
 
-        for mxid in mxids:
+        for dev in devices:
+            mxid = dev.getMxId()
             if mxid not in self.cameras:
-                self.cameras[mxid] = Camera(mxid)
+                self.cameras[dev.mxid] = Camera(mxid, dev.name)
 
         for mxid in self.cameras.keys():
             if mxid not in mxids:

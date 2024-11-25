@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from ..camera.device_info import DeviceInfo
 from .common import CameraManagerDep, Mxid, CameraDep
 
-router = APIRouter(prefix="/cameras")
+router = APIRouter(prefix="/cameras", tags=["cameras"])
 
 
 @router.get("/")
