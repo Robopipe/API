@@ -101,7 +101,9 @@ class StreamingPipeline(Pipeline):
         sensor_name = sensor.socket.name
 
         cam_control = self.create_x_link(sensor_name, PipelineQueueType.CONTROL, True)
-        cam_still = self.create_x_link(sensor_name, PipelineQueueType.STILL, False)
+        cam_still = self.create_x_link(
+            sensor_name, PipelineQueueType.STILL, False, False, 1
+        )
         cam_video = self.create_x_link(
             sensor_name, PipelineQueueType.VIDEO, False, False, 1
         )
@@ -110,11 +112,12 @@ class StreamingPipeline(Pipeline):
             cam_config = self.create_x_link(sensor_name, PipelineQueueType.CONFIG, True)
 
             cam = self.pipeline.createColorCamera()
-            cam.setNumFramesPool(2, 2, 3, 3, 2)
+            cam.setNumFramesPool(2, 2, 3, 3, 0)
             cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
+            cam.setPreviewSize(cam.getStillSize())
 
             cam_config.out.link(cam.inputConfig)
-            cam.still.link(cam_still.input)
+            cam.preview.link(cam_still.input)
             cam.video.link(cam_video.input)
         elif dai.CameraSensorType.MONO in sensor.supportedTypes:
             cam = self.pipeline.createMonoCamera()
@@ -156,6 +159,23 @@ class NNPipeline(Pipeline):
         for nn in networks:
             self.add_nn(nn)
 
+    def __reconnect_still_queue(self, cam: dai.node.ColorCamera):
+        socket_name = cam.getBoardSocket().name
+        queue = None
+
+        for q in self.pipeline.getAllNodes():
+            if isinstance(q, dai.node.XLinkOut):
+                stream_name = q.getStreamName()
+                if stream_name == PipelineQueueType.STILL.get_queue_name(socket_name):
+                    queue = q
+
+        if queue is None:
+            return
+
+        cam.preview.unlink(queue.input)
+        cam.still.link(queue.input)
+        cam.setNumFramesPool(2, 2, 3, 3, 0)
+
     def add_nn(self, nn: CameraNNConfig):
         sensor_name = nn.sensor.name
 
@@ -176,6 +196,7 @@ class NNPipeline(Pipeline):
             sensor_name, PipelineQueueType.NN_PASSTHROUGH, False
         )
 
+        self.__reconnect_still_queue(cam)
         cam.preview.link(nn_node.input)
         nn_node.out.link(cam_nn_out.input)
-        nn_node.passthrough.link(cam_nn_passthrough.input)
+        # nn_node.passthrough.link(cam_nn_passthrough.input)
