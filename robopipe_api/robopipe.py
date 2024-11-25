@@ -24,7 +24,11 @@ async def lifespan(app: FastAPI):
     stream_service.stop()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    title="Robopipe API",
+    description="API for the Robopipe application",
+)
 
 app.include_router(cameras.router)
 app.include_router(sensors.router)
