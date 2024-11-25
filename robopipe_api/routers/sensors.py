@@ -1,16 +1,21 @@
-from fastapi import APIRouter, WebSocket
+import depthai as dai
+from fastapi import APIRouter, WebSocket, UploadFile, WebSocketDisconnect
 import anyio
 from fastapi.responses import Response
-import fastapi
 
 from io import BytesIO
 
+from ..camera.nn import CameraNNConfig
 from ..camera.sensor_config import SensorConfigProperties
 from ..camera.sensor_control import SensorControl
 from ..utils.ws_adapter import WsAdapter
 from .common import CameraDep, SensorDep, Mxid, SensorName, StreamServiceDep
 
-router = APIRouter(prefix="/cameras/{mxid}/sensors", tags=["sensors"])
+router = APIRouter(
+    prefix="/cameras/{mxid}/sensors",
+    tags=["sensors"],
+    responses={404: {"description": "Camera not found"}},
+)
 
 
 @router.get("/")
@@ -21,12 +26,19 @@ def get_sensors(camera: CameraDep):
     }
 
 
-@router.get("/{sensor_name}/config")
+sensor_router = APIRouter(
+    prefix="/{sensor_name}",
+    tags=["sensors"],
+    responses={404: {"description": "Camera or sensor not found"}},
+)
+
+
+@sensor_router.get("/config")
 def get_sensor_config(sensor: SensorDep) -> SensorConfigProperties:
     return sensor.config
 
 
-@router.post("/{sensor_name}/config")
+@sensor_router.post("/config")
 def update_sensor_config(
     sensor: SensorDep, config: SensorConfigProperties
 ) -> SensorConfigProperties:
@@ -35,27 +47,57 @@ def update_sensor_config(
     return sensor.config
 
 
-@router.get("/{sensor_name}/control")
+@sensor_router.get("/control")
 def get_sensor_control(sensor: SensorDep) -> SensorControl:
     return sensor.control
 
 
-@router.post("/{sensor_name}/control")
+@sensor_router.post("/control")
 def update_sensor_control(sensor: SensorDep, control: SensorControl) -> SensorControl:
     sensor.control = control
 
     return sensor.control
 
 
-@router.get("/{sensor_name}/still")
-def capture_still_image(sensor: SensorDep, format: str = "jpeg"):
+@sensor_router.get(
+    "/still",
+    response_description="Image bytes in the selected format",
+    response_model=bytes,
+    response_class=Response(media_type="image/*"),
+)
+def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Response:
     img_buffer = BytesIO()
     sensor.capture_still().save(img_buffer, format)
 
     return Response(img_buffer.getvalue(), media_type=f"image/{format}")
 
 
-@router.websocket("/{sensor_name}/stream")
+@sensor_router.post("/nn")
+async def deploy_nn(camera: CameraDep, sensor_name: SensorName, model: UploadFile):
+    model_bytes = await model.read()
+    blob = dai.OpenVINO.Blob(list(model_bytes))
+
+    camera.deploy_nn(
+        CameraNNConfig(dai.CameraBoardSocket.__members__[sensor_name], blob)
+    )
+
+    return {"status": "ok"}
+
+
+@sensor_router.websocket("/nn")
+async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
+    await ws.accept()
+
+    try:
+        while True:
+            detections = sensor.get_nn_detections()
+            await ws.send_json({"detections": detections.getFirstLayerFp16()})
+            await anyio.sleep(0.001)
+    except WebSocketDisconnect:
+        return
+
+
+@sensor_router.websocket("/stream")
 async def get_sensor_stream(
     ws: WebSocket, mxid: Mxid, sensor_name: SensorName, stream_service: StreamServiceDep
 ):
@@ -72,3 +114,6 @@ async def get_sensor_stream(
     )
     await sleep()
     stream_service.unsubscribe((mxid, sensor_name), ws_adapter)
+
+
+router.include_router(sensor_router)
