@@ -55,7 +55,9 @@ class Sensor:
         control_queue.send(ctrl)
 
         try:
-            img_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.STILL].get()
+            img_frame: dai.ImgFrame = self.output_queues[
+                PipelineQueueType.STILL
+            ].getAll()[-1]
         except:
             return
 
@@ -78,3 +80,8 @@ class Sensor:
         )
 
         return (passthrough_frame, detections)
+
+    def get_nn_detections(self) -> dai.NNData:
+        detections = self.output_queues[PipelineQueueType.NN].get()
+
+        return detections
