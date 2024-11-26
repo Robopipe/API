@@ -71,6 +71,8 @@ class Sensor:
             return av.VideoFrame.from_ndarray(video_frame.getFrame(), "nv12").to_rgb()
         elif frame_type == dai.RawImgFrame.Type.BGR888i:
             return av.VideoFrame.from_ndarray(video_frame.getFrame()[..., ::-1], "rbg")
+        elif frame_type == dai.RawImgFrame.Type.RAW8:
+            return av.VideoFrame.from_image(img_frame_to_pil_image(video_frame))
 
     def get_nn_frame(self):
         try:
