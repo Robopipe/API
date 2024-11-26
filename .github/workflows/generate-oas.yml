@@ -3,6 +3,9 @@ name: Generate OpenAPI specification
 permissions:
   contents: write
 
+env:
+  OAS_CHANGED: false
+
 on:
   push:
     branches:
@@ -28,7 +31,14 @@ jobs:
       - name: Run docs.py
         run: python docs.py -f docs/.gitbook/assets/oas.yml
 
+      - name: Check for changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "OAS_CHANGED=true" >> $GITHUB_ENV
+          fi
+
       - name: Commit oas.yml
+        if: env.OAS_CHANGED == 'true'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
