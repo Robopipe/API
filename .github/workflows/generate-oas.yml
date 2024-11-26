@@ -1,0 +1,34 @@
+name: Generate OpenAPI specification
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11.10
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run docs.py
+        run: python docs.py -f docs/.gitbook/assets/oas.yml
+
+      - name: Commit oas.yml
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/.gitbook/assets/oas.yml
+          git commit -m "Update oas.yml"
+          git push
