@@ -191,10 +191,12 @@ class NNPipeline(Pipeline):
 
         nn_node = nn.create_node(self.pipeline)
 
-        cam_nn_out = self.create_x_link(sensor_name, PipelineQueueType.NN, False)
-        cam_nn_passthrough = self.create_x_link(
-            sensor_name, PipelineQueueType.NN_PASSTHROUGH, False
+        cam_nn_out = self.create_x_link(
+            sensor_name, PipelineQueueType.NN, False, False, 1
         )
+        # cam_nn_passthrough = self.create_x_link(
+        #     sensor_name, PipelineQueueType.NN_PASSTHROUGH, False
+        # )
 
         self.__reconnect_still_queue(cam)
         cam.preview.link(nn_node.input)
