@@ -1,5 +1,8 @@
 name: Generate OpenAPI specification
 
+permissions:
+  contents: write
+
 on:
   push:
     branches:
