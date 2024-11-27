@@ -1,5 +1,5 @@
 import depthai as dai
-from fastapi import APIRouter, WebSocket, UploadFile, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, UploadFile, WebSocketDisconnect, status
 import anyio
 from fastapi.responses import Response
 
@@ -31,6 +31,16 @@ sensor_router = APIRouter(
     tags=["sensors"],
     responses={404: {"description": "Camera or sensor not found"}},
 )
+
+
+@sensor_router.post("/", status_code=status.HTTP_201_CREATED)
+def activate_sensor(camera: CameraDep, sensor_name: SensorName):
+    camera.activate_sensor(sensor_name)
+
+
+@sensor_router.delete("/", status_code=status.HTTP_202_ACCEPTED)
+def deactivate_sensor(camera: CameraDep, sensor_name: SensorName):
+    camera.deactivate_sensor(sensor_name)
 
 
 @sensor_router.get("/config")
@@ -72,8 +82,10 @@ def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Respo
     return Response(img_buffer.getvalue(), media_type=f"image/{format}")
 
 
-@sensor_router.post("/nn")
-async def deploy_nn(camera: CameraDep, sensor_name: SensorName, model: UploadFile):
+@sensor_router.post("/nn", status_code=status.HTTP_201_CREATED, tags=["nn"])
+async def deploy_neural_network(
+    camera: CameraDep, sensor_name: SensorName, model: UploadFile
+):
     model_bytes = await model.read()
     blob = dai.OpenVINO.Blob(list(model_bytes))
 
@@ -81,7 +93,10 @@ async def deploy_nn(camera: CameraDep, sensor_name: SensorName, model: UploadFil
         CameraNNConfig(dai.CameraBoardSocket.__members__[sensor_name], blob)
     )
 
-    return {"status": "ok"}
+
+@sensor_router.delete("/nn", status_code=status.HTTP_202_ACCEPTED, tags=["nn"])
+async def delete_neural_network(camera: CameraDep, sensor_name: SensorName):
+    camera.delete_nn(sensor_name)
 
 
 @sensor_router.websocket("/nn")

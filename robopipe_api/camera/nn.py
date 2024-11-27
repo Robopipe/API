@@ -21,6 +21,9 @@ class CameraNNConfig:
     def create_node(self, pipeline: dai.Pipeline) -> dai.node.NeuralNetwork:
         node = pipeline.createNeuralNetwork()
 
+        return self.configure_node(node)
+
+    def configure_node(self, node: dai.node.NeuralNetwork):
         if isinstance(self.blob, dai.OpenVINO.Blob):
             node.setBlob(self.blob)
         else:

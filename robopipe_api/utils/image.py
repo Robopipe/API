@@ -16,5 +16,7 @@ def img_frame_to_pil_image(img_frame: dai.ImgFrame) -> Image.Image:
         return av.VideoFrame.from_ndarray(img_frame.getFrame(), "nv12").to_image()
     elif img_type == dai.RawImgFrame.Type.BGR888i:
         return Image.fromarray(img_frame.getFrame()[..., ::-1])
+    elif img_type == dai.RawImgFrame.Type.BGR888p:
+        return Image.fromarray(img_frame.getFrame().transpose((1, 2, 0))[..., ::-1])
     else:
         raise UnsupportedImageFormat(f"Given format: {img_type}")

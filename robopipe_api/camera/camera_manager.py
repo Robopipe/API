@@ -4,7 +4,7 @@ from functools import lru_cache
 
 from ..error import CameraNotFoundException
 from .camera import Camera
-from .pipeline import StreamingPipeline
+from .pipeline.streaming_pipeline import StreamingPipeline
 
 
 class CameraManager:

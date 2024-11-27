@@ -6,7 +6,9 @@ from ..error import CameraShutDownException
 from ..log import logger
 from .camera_stats import CameraStats
 from .device_info import DeviceInfo
-from .pipeline import Pipeline, NNPipeline
+from .pipeline.pipeline import Pipeline
+from .pipeline.streaming_pipeline import StreamingPipeline
+from .pipeline.nn_pipeline import NNPipeline
 from .nn import CameraNNConfig
 from .sensor import Sensor
 
@@ -95,10 +97,35 @@ class Camera:
 
         return self
 
+    def activate_sensor(self, sensor_name: str):
+        if self.camera_handle is None:
+            raise CameraShutDownException()
+
+        if not isinstance(self.pipeline, StreamingPipeline):
+            raise RuntimeError("Serve is in invalid state")
+
+        self.pipeline.add_sensor(self.all_sensors[sensor_name])
+        self.open(self.pipeline)
+
+    def deactivate_sensor(self, sensor_name: str):
+        if self.camera_handle is None:
+            raise CameraShutDownException()
+
+        if not isinstance(self.pipeline, StreamingPipeline):
+            raise RuntimeError("Server is in invalid state")
+
+        self.pipeline.remove_sensor(sensor_name)
+        self.open(self.pipeline)
+
     def deploy_nn(self, nn: CameraNNConfig):
         self.pipeline = NNPipeline([nn], self.pipeline.pipeline)
 
         self.open(self.pipeline)
+
+    def delete_nn(self, sensor_name: str):
+        if isinstance(self.pipeline, NNPipeline):
+            self.pipeline.remove_nn(sensor_name)
+            self.open(self.pipeline)
 
     @property
     def info(self) -> DeviceInfo | None:
