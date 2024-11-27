@@ -42,7 +42,7 @@ class VideoEncoder:
         bit_rate = math.ceil(
             sample_frame.width
             * sample_frame.height
-            * 0.13  # High Quality video
+            * 0.5  # High Quality video
             * self.sensor.config.fps
         )
         video_stream.bit_rate = bit_rate
