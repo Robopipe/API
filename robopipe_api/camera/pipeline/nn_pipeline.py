@@ -1,0 +1,105 @@
+import depthai as dai
+
+from ..nn import CameraNNConfig
+from .pipeline_queue_type import PipelineQueueType
+from .streaming_pipeline import StreamingPipeline
+
+
+class NNPipeline(StreamingPipeline):
+    def __init__(
+        self, networks: list[CameraNNConfig], pipeline: dai.Pipeline | None = None
+    ):
+        self.neural_networks: dict[str, dai.node.NeuralNetwork] = {}
+        super().__init__([], pipeline)
+
+        for nn in networks:
+            self.add_nn(nn)
+
+    def extract_properties(self):
+        super().extract_properties()
+
+        for neural_network in self.pipeline.getAllNodes():
+            if not isinstance(neural_network, dai.node.NeuralNetwork):
+                continue
+
+            for camera in self.cameras.values():
+                is_mono = isinstance(camera, dai.node.MonoCamera)
+
+                try:
+                    if is_mono:
+                        camera.out.unlink(neural_network.input)
+                    else:
+                        camera.preview.unlink(neural_network.input)
+                except:
+                    continue
+
+                if is_mono:
+                    camera.out.link(neural_network.input)
+                else:
+                    camera.preview.link(neural_network.input)
+
+                self.neural_networks[camera.getBoardSocket().name] = neural_network
+                break
+
+    def add_nn(self, nn: CameraNNConfig):
+        sensor_name = nn.sensor.name
+
+        if sensor_name in self.neural_networks:
+            nn_node = self.neural_networks[sensor_name]
+            nn.configure_node(nn_node)
+            return
+
+        if sensor_name not in self.cameras:
+            cam = self.pipeline.createColorCamera()
+            cam.setBoardSocket(nn.sensor)
+            self.cameras[sensor_name] = cam
+        else:
+            cam = self.cameras[sensor_name]
+
+        cam.setPreviewSize(nn.input_shape[:2])
+        cam.setInterleaved(False)
+
+        nn_node = nn.create_node(self.pipeline)
+        self.neural_networks[sensor_name] = nn_node
+
+        cam_nn_out = self.create_x_link(
+            sensor_name, PipelineQueueType.NN, False, False, 1
+        )
+        still_queue = self.outputs.get(
+            PipelineQueueType.STILL.get_queue_name(sensor_name)
+        )
+
+        if still_queue is not None:
+            cam.preview.unlink(still_queue.input)
+            cam.still.link(still_queue.input)
+            cam.setNumFramesPool(2, 2, 3, 3, 2)
+
+        cam.preview.link(nn_node.input)
+        nn_node.out.link(cam_nn_out.input)
+
+    def remove_nn(self, sensor_name: str):
+        if sensor_name not in self.neural_networks:
+            return
+
+        nn_node = self.neural_networks[sensor_name]
+        cam = self.cameras[sensor_name]
+        still_queue = self.outputs.get(
+            PipelineQueueType.STILL.get_queue_name(sensor_name)
+        )
+
+        cam.preview.unlink(nn_node.input)
+        self.pipeline.remove(nn_node)
+        del self.neural_networks[sensor_name]
+
+        if still_queue is not None:
+            cam.still.unlink(still_queue.input)
+            cam.preview.link(still_queue.input)
+            cam.setPreviewSize(cam.getStillSize())
+            cam.setNumFramesPool(2, 2, 3, 3, 0)
+        else:
+            print(self.outputs.items())
+
+    def remove_sensor(self, sensor):
+        self.remove_nn(sensor)
+
+        return super().remove_sensor(sensor)
