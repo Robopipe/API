@@ -1,12 +1,12 @@
 import depthai as dai
 
+from functools import lru_cache
+
 from ..error import CameraNotFoundException
-from ..utils.singleton import Singleton
 from .camera import Camera
 from .pipeline import StreamingPipeline
 
 
-@Singleton
 class CameraManager:
     cameras: dict[str, Camera] = {}
 
@@ -49,3 +49,8 @@ class CameraManager:
 
     def shutdown_camera(self, mxid: str):
         self.cameras[mxid].close()
+
+
+@lru_cache(maxsize=1)
+def camera_manager_factory():
+    return CameraManager()

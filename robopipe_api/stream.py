@@ -1,5 +1,6 @@
 import anyio.to_thread
 
+from functools import lru_cache
 import anyio
 import threading
 from typing import Callable
@@ -7,7 +8,6 @@ from typing import Callable
 from .camera.camera_manager import CameraManager
 from .error import SensorNotFoundException
 from .video_encoder import VideoEncoder
-from .utils.singleton import Singleton
 from .websocket import WebSocket
 
 
@@ -15,10 +15,9 @@ StreamKey = tuple[str, str]
 StreamSubscriber = dict[StreamKey, list[tuple[WebSocket, Callable[[], None]]]]
 
 
-@Singleton
 class StreamService:
-    def __init__(self):
-        self.camera_manager = CameraManager()
+    def __init__(self, camera_manager: CameraManager):
+        self.camera_manager = camera_manager
         self.subscribers: StreamSubscriber = {}
         self.encoders: dict[StreamKey, VideoEncoder] = {}
         self.workers: dict[StreamKey, threading.Thread] = {}
@@ -106,3 +105,8 @@ class StreamService:
         worker = threading.Thread(target=start_stream)
         worker.start()
         self.workers[key] = worker
+
+
+@lru_cache(maxsize=1)
+def stream_service_factory(camera_manager: CameraManager):
+    return StreamService(camera_manager)
