@@ -7,7 +7,7 @@ We currently support connecting a neural network to **one** sensor, without the 
 {% endhint %}
 
 {% hint style="warning" %}
-Deploying an AI model on the camera takes some time (several seconds), during this time, the camera will be inaccessible via the API, since it needs to restart in order to deploy the model. All running streams from the particular camera will be paused and will resume when the camera is up again.
+Deploying an AI model on the camera takes some time (usually \~20s, but may take up to a minute), during this time, the camera will be inaccessible via the API, since it needs to restart in order to deploy the model. All running streams from the particular camera will be paused and will resume when the camera is up again.
 {% endhint %}
 
 ## API Reference

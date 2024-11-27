@@ -1,7 +1,7 @@
 ---
 description: >-
   This guide covers the setup of Robopipe API to start interacting with your
-  Robopipe devices or local devices.
+  Robopipe or local devices.
 ---
 
 # Setup
@@ -20,6 +20,7 @@ Before you run Robopipe API on your device, make sure you have the following pre
 
 * You have cloned the [Robopipe API GitHub repository](https://github.com/Koala42/io.robopipe.api).
 * You have [Python](https://www.python.org/) 3.11.10 or higher installed.
+* Though it is not a requirement for running the API, you should be able to connect to a Luxonis device, otherwise the things you can do with the API are greatly limited.
 
 ### Running the API
 
@@ -32,28 +33,31 @@ cd robopipe-api
 Set up and activate virtual environment (this step is optional).
 
 ```bash
-python3 -m venv .venv 
+python -m venv .venv 
 source .venv/bin/activate
 ```
 
 Install dependencies.
 
 ```bash
-python3 -m pip install requirements.txt
+python -m pip install requirements.txt
 ```
 
 Run the API.
 
 {% tabs %}
-{% tab title="Running via Fastapi CLI" %}
+{% tab title="Running on uvicorn server" %}
 ```bash
-fastapi run robopipe_api/robopipe.py
+python3 -m robopipe_api
 ```
 {% endtab %}
 
-{% tab title="Running on guvicorn server" %}
+{% tab title="Running  via FastAPI CLI" %}
+If you want to run the API using FastAPI CLI, you also need to install the CLI additionally to already installed dependencies. To learn more about FastAPI CLI please refer to [this documentation](https://fastapi.tiangolo.com/fastapi-cli/).
+
 ```bash
-python3 -m robopipe_api
+python -m pip install "fastapi-cli[standard]"
+fastapi run robopipe_api/robopipe.py
 ```
 {% endtab %}
 {% endtabs %}
