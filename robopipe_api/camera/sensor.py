@@ -6,7 +6,7 @@ import numpy as np
 from typing import Callable
 
 from ..utils.image import img_frame_to_pil_image
-from .pipeline import PipelineQueueType
+from .pipeline.pipeline_queue_type import PipelineQueueType
 from .sensor_config import SensorConfig, SensorConfigProperties
 from .sensor_control import SensorControl
 
