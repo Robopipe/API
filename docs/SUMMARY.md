@@ -5,6 +5,7 @@
 ## API
 
 * [Setup](api/setup.md)
+* [Configuration](api/configuration.md)
 * [API Reference](api/api-reference/README.md)
   * [Cameras](api/api-reference/cameras.md)
   * [Sensors](api/api-reference/sensors.md)
