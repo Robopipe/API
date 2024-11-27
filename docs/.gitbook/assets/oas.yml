@@ -166,6 +166,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/sensors/{sensor_name}/:
+    post:
+      tags:
+      - sensors
+      - sensors
+      summary: Activate Sensor
+      operationId: activate_sensor_cameras__mxid__sensors__sensor_name___post
+      parameters:
+      - name: sensor_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]
+          title: Sensor Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera or sensor not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - sensors
+      - sensors
+      summary: Deactivate Sensor
+      operationId: deactivate_sensor_cameras__mxid__sensors__sensor_name___delete
+      parameters:
+      - name: sensor_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]
+          title: Sensor Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera or sensor not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /cameras/{mxid}/sensors/{sensor_name}/config:
     get:
       tags:
@@ -389,8 +460,9 @@ paths:
       tags:
       - sensors
       - sensors
-      summary: Deploy Nn
-      operationId: deploy_nn_cameras__mxid__sensors__sensor_name__nn_post
+      - nn
+      summary: Deploy Neural Network
+      operationId: deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post
       parameters:
       - name: sensor_name
         in: path
@@ -411,9 +483,45 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Body_deploy_nn_cameras__mxid__sensors__sensor_name__nn_post'
+              $ref: '#/components/schemas/Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post'
       responses:
-        '200':
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera or sensor not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - sensors
+      - sensors
+      - nn
+      summary: Delete Neural Network
+      operationId: delete_neural_network_cameras__mxid__sensors__sensor_name__nn_delete
+      parameters:
+      - name: sensor_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]
+          title: Sensor Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '202':
           description: Successful Response
           content:
             application/json:
@@ -428,7 +536,7 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
-    Body_deploy_nn_cameras__mxid__sensors__sensor_name__nn_post:
+    Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post:
       properties:
         model:
           type: string
@@ -437,7 +545,7 @@ components:
       type: object
       required:
       - model
-      title: Body_deploy_nn_cameras__mxid__sensors__sensor_name__nn_post
+      title: Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post
     CameraConfigProperties:
       properties:
         resolution:
