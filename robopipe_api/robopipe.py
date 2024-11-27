@@ -51,8 +51,8 @@ def setup():
         CORSMiddleware,
         allow_origins=(os.environ.get("CORS_ORIGINS") or "*").split(","),
         allow_credentials=True,
-        allow_methods=(os.environ.get("CORS_METHODS") or "*").split(","),
-        allow_headers=(os.environ.get("CORS_HEADERS") or "*").split(","),
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
 
