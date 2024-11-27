@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import uvicorn
 
 from contextlib import asynccontextmanager
 
@@ -47,3 +48,7 @@ app.add_middleware(
 def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, (CameraNotFoundException, SensorNotFoundException)):
         return JSONResponse(status_code=404, content=None)
+
+
+def main():
+    uvicorn.run(app, host="0.0.0.0", port=8000)
