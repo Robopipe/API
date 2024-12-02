@@ -6,7 +6,7 @@ import pathlib
 class CameraNNConfig:
     def __init__(
         self,
-        sensor: dai.CameraBoardSocket,
+        sensor: dai.CameraFeatures,
         blob: dai.OpenVINO.Blob | pathlib.Path,
         num_inference_threads: int = 2,
     ):

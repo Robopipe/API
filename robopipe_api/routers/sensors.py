@@ -89,9 +89,7 @@ async def deploy_neural_network(
     model_bytes = await model.read()
     blob = dai.OpenVINO.Blob(list(model_bytes))
 
-    camera.deploy_nn(
-        CameraNNConfig(dai.CameraBoardSocket.__members__[sensor_name], blob)
-    )
+    camera.deploy_nn(CameraNNConfig(camera.all_sensors[sensor_name], blob))
 
 
 @sensor_router.delete("/nn", status_code=status.HTTP_202_ACCEPTED, tags=["nn"])

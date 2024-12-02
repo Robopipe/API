@@ -73,6 +73,9 @@ class StreamingPipeline(Pipeline):
                         frame = node.io['in'].get()
                         node.io['video'].send(frame)
                         node.io['still'].send(frame)
+
+                        if "preview" in node.io:
+                            node.io['preview'].send(frame)
                 """
             )
 
@@ -94,19 +97,7 @@ class StreamingPipeline(Pipeline):
         if sensor_name not in self.cameras:
             return
 
-        for queue in self.input_queues[sensor_name].values():
-            for input_name, input_node in self.inputs.items():
-                if input_name.endswith(sensor_name):
-                    self.pipeline.remove(input_node)
-            del self.inputs[queue]
-        for queue in self.output_queues[sensor_name].values():
-            for output_name, output_node in self.outputs.items():
-                if output_name.endswith(sensor_name):
-                    self.pipeline.remove(output_node)
-            del self.outputs[queue]
-
-        del self.input_queues[sensor_name]
-        del self.output_queues[sensor_name]
+        self.del_all_queues(sensor_name)
         self.pipeline.remove(self.cameras[sensor_name])
         del self.cameras[sensor_name]
 
