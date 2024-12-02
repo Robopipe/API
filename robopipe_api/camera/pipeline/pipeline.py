@@ -68,6 +68,32 @@ class Pipeline:
 
         return x_link
 
+    def del_queue(self, sensor_name: str, queue_type: PipelineQueueType):
+        queue_name = queue_type.get_queue_name(sensor_name)
+
+        if queue_name in self.inputs:
+            nodes = self.inputs
+            queues = self.input_queues
+        elif queue_name in self.outputs:
+            nodes = self.outputs
+            queues = self.output_queues
+        else:
+            return
+
+        self.pipeline.remove(nodes[queue_name])
+        del nodes[queue_name]
+        del queues[sensor_name][queue_type]
+
+    def del_all_queues(self, sensor_name: str):
+        for queue_type in PipelineQueueType:
+            try:
+                self.del_queue(sensor_name, queue_type)
+            except:
+                pass
+
+        del self.input_queues[sensor_name]
+        del self.output_queues[sensor_name]
+
 
 class EmptyPipeline(Pipeline):
     pass
