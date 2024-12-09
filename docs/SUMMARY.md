@@ -2,6 +2,12 @@
 
 * [Welcome](README.md)
 
+## Getting started
+
+* [Supported devices](getting-started/supported-devices.md)
+* [Connection](getting-started/connection.md)
+* [Hello world](getting-started/hello-world.md)
+
 ## API
 
 * [Setup](api/setup.md)
