@@ -17,6 +17,10 @@
   * [Sensors](api/api-reference/sensors.md)
   * [Stream](api/api-reference/stream.md)
   * [Neural Network](api/api-reference/neural-network.md)
+  * [Controller](api/api-reference/controller/README.md)
+    * [Analog I/O](api/api-reference/controller/analog-i-o.md)
+    * [Digital I/O](api/api-reference/controller/digital-i-o.md)
+    * [Led](api/api-reference/controller/led.md)
 
 ## Other
 
