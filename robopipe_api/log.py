@@ -1,8 +1,5 @@
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[logging.StreamHandler()],
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-logger = logging.getLogger("robopipe-api")
+UVICORN_LOGGER = "uvicorn.error"
+
+logger = logging.getLogger(UVICORN_LOGGER)
