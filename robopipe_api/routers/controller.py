@@ -55,18 +55,29 @@ def create_endpoints(
 
 
 DEVICE_ENDPOINTS = [
-    [AI, AnalogInput, AnalogInputUpdate],
-    [AO, AnalogOutput, AnalogOutputUpdate],
-    [DI, DigitalInput, DigitalInputUpdate],
-    [DO, DigitalOutput, DigitalOutputUpdate],
-    [LED, Led, LedUpdate],
+    [AI, AnalogInput, AnalogInputUpdate, "analog input"],
+    [AO, AnalogOutput, AnalogOutputUpdate, "analog output"],
+    [DI, DigitalInput, DigitalInputUpdate, "digital input"],
+    [DO, DigitalOutput, DigitalOutputUpdate, "digital output"],
+    [LED, Led, LedUpdate, "led"],
 ]
 
 
-def register_device_endpoints(endpoints: list[tuple[str, Any, Any]]):
+def register_device_endpoints(endpoints: list[tuple[str, Any, Any, str]]):
     for endpoint in endpoints:
-        get_all, set_all, get, set = create_endpoints(*endpoint)
-        router.add_api_route(rf"/{endpoint[0]}", get_all, methods=["GET"])
-        router.add_api_route(rf"/{endpoint[0]}", set_all, methods=["POST"])
-        router.add_api_route(rf"/{endpoint[0]}/{{circuit}}", get, methods=["GET"])
-        router.add_api_route(rf"/{endpoint[0]}/{{circuit}}", set, methods=["POST"])
+        path, out, inp, name = endpoint
+        get_all, set_all, get, set = create_endpoints(path, out, inp)
+        plural_name = name + "s"
+
+        router.add_api_route(
+            rf"/{path}", get_all, name=f"Get all {plural_name}", methods=["GET"]
+        )
+        router.add_api_route(
+            rf"/{path}", set_all, name=f"Set all {plural_name}", methods=["POST"]
+        )
+        router.add_api_route(
+            rf"/{path}/{{circuit}}", get, name=f"Get {name}", methods=["GET"]
+        )
+        router.add_api_route(
+            rf"/{path}/{{circuit}}", set, name=f"Set {name}", methods=["POST"]
+        )
