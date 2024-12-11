@@ -10,3 +10,5 @@ uvicorn==0.32.1
 python-multipart==0.0.17
 websockets==14.1
 python-dotenv==1.0.1
+asyncowfs@git+https://github.com/UniPiTechnology/asyncowfs
+pymodbus@git+https://github.com/martyy665/pymodbus@fix-tid-overflow
