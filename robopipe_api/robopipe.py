@@ -2,7 +2,7 @@ import anyio.to_thread
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 import uvicorn
 
 from contextlib import asynccontextmanager
@@ -62,9 +62,9 @@ controller.register_device_endpoints(controller.DEVICE_ENDPOINTS)
 app.include_router(controller.router)
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def hello_robopipe():
-    return "Hello from Robopipe API!"
+    return PlainTextResponse("Hello from Robopipe API!")
 
 
 @app.exception_handler(Exception)
