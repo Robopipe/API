@@ -534,8 +534,689 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /controller/:
+    get:
+      tags:
+      - controller
+      summary: Get All Circuits
+      operationId: get_all_circuits_controller__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /controller/{device_type}:
+    get:
+      tags:
+      - controller
+      summary: Get All Circuits Of Device Type
+      operationId: get_all_circuits_of_device_type_controller__device_type__get
+      parameters:
+      - name: device_type
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: di|ro|do|ai|ao|sensor|led|watchdog|modbus_slave|owpower|register|data_point|owbus|device_info
+          title: Device Type
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ai:
+    get:
+      tags:
+      - controller
+      summary: Get All
+      operationId: get_all_controller_ai_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogInput'
+                type: array
+                title: Response Get All Controller Ai Get
+    post:
+      tags:
+      - controller
+      summary: Set All
+      operationId: set_all_controller_ai_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogInputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogInput'
+                type: array
+                title: Response Set All Controller Ai Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ai/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get
+      operationId: get_controller_ai__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set
+      operationId: set_controller_ai__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogInputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ao:
+    get:
+      tags:
+      - controller
+      summary: Get All
+      operationId: get_all_controller_ao_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogOutput'
+                type: array
+                title: Response Get All Controller Ao Get
+    post:
+      tags:
+      - controller
+      summary: Set All
+      operationId: set_all_controller_ao_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogOutputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogOutput'
+                type: array
+                title: Response Set All Controller Ao Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ao/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get
+      operationId: get_controller_ao__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set
+      operationId: set_controller_ao__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogOutputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/di:
+    get:
+      tags:
+      - controller
+      summary: Get All
+      operationId: get_all_controller_di_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalInput'
+                type: array
+                title: Response Get All Controller Di Get
+    post:
+      tags:
+      - controller
+      summary: Set All
+      operationId: set_all_controller_di_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalInputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalInput'
+                type: array
+                title: Response Set All Controller Di Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/di/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get
+      operationId: get_controller_di__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set
+      operationId: set_controller_di__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalInputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/do:
+    get:
+      tags:
+      - controller
+      summary: Get All
+      operationId: get_all_controller_do_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalOutput'
+                type: array
+                title: Response Get All Controller Do Get
+    post:
+      tags:
+      - controller
+      summary: Set All
+      operationId: set_all_controller_do_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalOutputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalOutput'
+                type: array
+                title: Response Set All Controller Do Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/do/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get
+      operationId: get_controller_do__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set
+      operationId: set_controller_do__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalOutputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/led:
+    get:
+      tags:
+      - controller
+      summary: Get All
+      operationId: get_all_controller_led_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Led'
+                type: array
+                title: Response Get All Controller Led Get
+    post:
+      tags:
+      - controller
+      summary: Set All
+      operationId: set_all_controller_led_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Led'
+                type: array
+                title: Response Set All Controller Led Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/led/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get
+      operationId: get_controller_led__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Led'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set
+      operationId: set_controller_led__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Led'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      summary: Hello Robopipe
+      operationId: hello_robopipe__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
 components:
   schemas:
+    AnalogInput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        modes:
+          additionalProperties:
+            $ref: '#/components/schemas/AnalogInputMode'
+          propertyNames:
+            $ref: '#/components/schemas/AnalogInputModeType'
+          type: object
+          title: Modes
+        mode:
+          $ref: '#/components/schemas/AnalogInputModeType'
+          default: Voltage
+      type: object
+      required:
+      - dev
+      - circuit
+      - modes
+      title: AnalogInput
+    AnalogInputMode:
+      properties:
+        value:
+          type: integer
+          title: Value
+        unit:
+          type: string
+          title: Unit
+        range:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Range
+      type: object
+      required:
+      - value
+      - unit
+      - range
+      title: AnalogInputMode
+    AnalogInputModeType:
+      type: string
+      enum:
+      - Disabled
+      - Voltage
+      - Voltage2V5
+      - Current
+      - Resistance3W
+      - Resistance2W
+      title: AnalogInputModeType
+    AnalogInputUpdate:
+      properties:
+        mode:
+          $ref: '#/components/schemas/AnalogInputModeType'
+      type: object
+      required:
+      - mode
+      title: AnalogInputUpdate
+    AnalogOutput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        modes:
+          additionalProperties:
+            $ref: '#/components/schemas/AnalogOutputMode'
+          propertyNames:
+            $ref: '#/components/schemas/AnalogOutputModeType'
+          type: object
+          title: Modes
+        value:
+          type: number
+          title: Value
+        mode:
+          $ref: '#/components/schemas/AnalogOutputModeType'
+          default: Voltage
+      type: object
+      required:
+      - dev
+      - circuit
+      - modes
+      - value
+      title: AnalogOutput
+    AnalogOutputMode:
+      properties:
+        value:
+          type: integer
+          title: Value
+        unit:
+          type: string
+          title: Unit
+        range:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Range
+      type: object
+      required:
+      - value
+      - unit
+      - range
+      title: AnalogOutputMode
+    AnalogOutputModeType:
+      type: string
+      enum:
+      - Voltage
+      - Current
+      - Resistance
+      title: AnalogOutputModeType
+    AnalogOutputUpdate:
+      properties:
+        value:
+          type: number
+          title: Value
+        mode:
+          $ref: '#/components/schemas/AnalogOutputModeType'
+      type: object
+      required:
+      - value
+      - mode
+      title: AnalogOutputUpdate
     Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post:
       properties:
         model:
@@ -722,6 +1403,146 @@ components:
       - X_LINK_FLASH_BOOTED
       - X_LINK_UNBOOTED
       title: DeviceState
+    DigitalInput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        counter_modes:
+          items:
+            $ref: '#/components/schemas/DigitalInputCounterMode'
+          type: array
+          title: Counter Modes
+        modes:
+          items:
+            $ref: '#/components/schemas/DigitalInputMode'
+          type: array
+          title: Modes
+        value:
+          type: integer
+          enum:
+          - 0
+          - 1
+          title: Value
+        counter:
+          type: integer
+          title: Counter
+        counter_mode:
+          $ref: '#/components/schemas/DigitalInputCounterMode'
+        mode:
+          $ref: '#/components/schemas/DigitalInputMode'
+        debounce:
+          type: integer
+          title: Debounce
+          default: 50
+      type: object
+      required:
+      - dev
+      - circuit
+      - counter_modes
+      - modes
+      - value
+      - counter
+      - counter_mode
+      - mode
+      title: DigitalInput
+    DigitalInputCounterMode:
+      type: string
+      enum:
+      - Enabled
+      - Disabled
+      title: DigitalInputCounterMode
+    DigitalInputMode:
+      type: string
+      enum:
+      - Simple
+      - DirectSwitch
+      title: DigitalInputMode
+    DigitalInputUpdate:
+      properties:
+        counter:
+          type: integer
+          title: Counter
+        counter_mode:
+          $ref: '#/components/schemas/DigitalInputCounterMode'
+          default: Enabled
+        mode:
+          $ref: '#/components/schemas/DigitalInputMode'
+          default: Simple
+        debounce:
+          type: integer
+          title: Debounce
+          default: 50
+      type: object
+      required:
+      - counter
+      title: DigitalInputUpdate
+    DigitalOutput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        modes:
+          items:
+            $ref: '#/components/schemas/DigitalOutputMode'
+          type: array
+          title: Modes
+        pwm_freq:
+          type: integer
+          title: Pwm Freq
+        pwm_duty:
+          type: integer
+          title: Pwm Duty
+        value:
+          anyOf:
+          - type: integer
+          - type: string
+          - type: boolean
+          title: Value
+        mode:
+          $ref: '#/components/schemas/DigitalOutputMode'
+      type: object
+      required:
+      - dev
+      - circuit
+      - modes
+      - pwm_freq
+      - pwm_duty
+      - value
+      - mode
+      title: DigitalOutput
+    DigitalOutputMode:
+      type: string
+      enum:
+      - Simple
+      - PWM
+      title: DigitalOutputMode
+    DigitalOutputUpdate:
+      properties:
+        pwm_freq:
+          type: integer
+          title: Pwm Freq
+        pwm_duty:
+          type: integer
+          title: Pwm Duty
+        value:
+          anyOf:
+          - type: integer
+          - type: string
+          - type: boolean
+          title: Value
+      type: object
+      required:
+      - pwm_freq
+      - pwm_duty
+      - value
+      title: DigitalOutputUpdate
     HTTPValidationError:
       properties:
         detail:
@@ -731,6 +1552,38 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    Led:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        value:
+          anyOf:
+          - type: string
+          - type: integer
+          - type: boolean
+          title: Value
+      type: object
+      required:
+      - dev
+      - circuit
+      - value
+      title: Led
+    LedUpdate:
+      properties:
+        value:
+          anyOf:
+          - type: string
+          - type: integer
+          - type: boolean
+          title: Value
+      type: object
+      required:
+      - value
+      title: LedUpdate
     MemoryInfo:
       properties:
         total:
