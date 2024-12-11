@@ -576,8 +576,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All
-      operationId: get_all_controller_ai_get
+      summary: Get All Analog Inputs
+      operationId: Get_all_analog_inputs_controller_ai_get
       responses:
         '200':
           description: Successful Response
@@ -587,12 +587,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/AnalogInput'
                 type: array
-                title: Response Get All Controller Ai Get
+                title: Response Get All Analog Inputs Controller Ai Get
     post:
       tags:
       - controller
-      summary: Set All
-      operationId: set_all_controller_ai_post
+      summary: Set All Analog Inputs
+      operationId: Set_all_analog_inputs_controller_ai_post
       requestBody:
         content:
           application/json:
@@ -608,7 +608,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AnalogInput'
                 type: array
-                title: Response Set All Controller Ai Post
+                title: Response Set All Analog Inputs Controller Ai Post
         '422':
           description: Validation Error
           content:
@@ -619,8 +619,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get
-      operationId: get_controller_ai__circuit__get
+      summary: Get Analog Input
+      operationId: Get_analog_input_controller_ai__circuit__get
       parameters:
       - name: circuit
         in: path
@@ -644,8 +644,8 @@ paths:
     post:
       tags:
       - controller
-      summary: Set
-      operationId: set_controller_ai__circuit__post
+      summary: Set Analog Input
+      operationId: Set_analog_input_controller_ai__circuit__post
       parameters:
       - name: circuit
         in: path
@@ -676,8 +676,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All
-      operationId: get_all_controller_ao_get
+      summary: Get All Analog Outputs
+      operationId: Get_all_analog_outputs_controller_ao_get
       responses:
         '200':
           description: Successful Response
@@ -687,12 +687,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/AnalogOutput'
                 type: array
-                title: Response Get All Controller Ao Get
+                title: Response Get All Analog Outputs Controller Ao Get
     post:
       tags:
       - controller
-      summary: Set All
-      operationId: set_all_controller_ao_post
+      summary: Set All Analog Outputs
+      operationId: Set_all_analog_outputs_controller_ao_post
       requestBody:
         content:
           application/json:
@@ -708,7 +708,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AnalogOutput'
                 type: array
-                title: Response Set All Controller Ao Post
+                title: Response Set All Analog Outputs Controller Ao Post
         '422':
           description: Validation Error
           content:
@@ -719,8 +719,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get
-      operationId: get_controller_ao__circuit__get
+      summary: Get Analog Output
+      operationId: Get_analog_output_controller_ao__circuit__get
       parameters:
       - name: circuit
         in: path
@@ -744,8 +744,8 @@ paths:
     post:
       tags:
       - controller
-      summary: Set
-      operationId: set_controller_ao__circuit__post
+      summary: Set Analog Output
+      operationId: Set_analog_output_controller_ao__circuit__post
       parameters:
       - name: circuit
         in: path
@@ -776,8 +776,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All
-      operationId: get_all_controller_di_get
+      summary: Get All Digital Inputs
+      operationId: Get_all_digital_inputs_controller_di_get
       responses:
         '200':
           description: Successful Response
@@ -787,12 +787,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/DigitalInput'
                 type: array
-                title: Response Get All Controller Di Get
+                title: Response Get All Digital Inputs Controller Di Get
     post:
       tags:
       - controller
-      summary: Set All
-      operationId: set_all_controller_di_post
+      summary: Set All Digital Inputs
+      operationId: Set_all_digital_inputs_controller_di_post
       requestBody:
         content:
           application/json:
@@ -808,7 +808,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/DigitalInput'
                 type: array
-                title: Response Set All Controller Di Post
+                title: Response Set All Digital Inputs Controller Di Post
         '422':
           description: Validation Error
           content:
@@ -819,8 +819,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get
-      operationId: get_controller_di__circuit__get
+      summary: Get Digital Input
+      operationId: Get_digital_input_controller_di__circuit__get
       parameters:
       - name: circuit
         in: path
@@ -844,8 +844,8 @@ paths:
     post:
       tags:
       - controller
-      summary: Set
-      operationId: set_controller_di__circuit__post
+      summary: Set Digital Input
+      operationId: Set_digital_input_controller_di__circuit__post
       parameters:
       - name: circuit
         in: path
@@ -876,8 +876,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All
-      operationId: get_all_controller_do_get
+      summary: Get All Digital Outputs
+      operationId: Get_all_digital_outputs_controller_do_get
       responses:
         '200':
           description: Successful Response
@@ -887,12 +887,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/DigitalOutput'
                 type: array
-                title: Response Get All Controller Do Get
+                title: Response Get All Digital Outputs Controller Do Get
     post:
       tags:
       - controller
-      summary: Set All
-      operationId: set_all_controller_do_post
+      summary: Set All Digital Outputs
+      operationId: Set_all_digital_outputs_controller_do_post
       requestBody:
         content:
           application/json:
@@ -908,7 +908,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/DigitalOutput'
                 type: array
-                title: Response Set All Controller Do Post
+                title: Response Set All Digital Outputs Controller Do Post
         '422':
           description: Validation Error
           content:
@@ -919,8 +919,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get
-      operationId: get_controller_do__circuit__get
+      summary: Get Digital Output
+      operationId: Get_digital_output_controller_do__circuit__get
       parameters:
       - name: circuit
         in: path
@@ -944,8 +944,8 @@ paths:
     post:
       tags:
       - controller
-      summary: Set
-      operationId: set_controller_do__circuit__post
+      summary: Set Digital Output
+      operationId: Set_digital_output_controller_do__circuit__post
       parameters:
       - name: circuit
         in: path
@@ -976,8 +976,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All
-      operationId: get_all_controller_led_get
+      summary: Get All Leds
+      operationId: Get_all_leds_controller_led_get
       responses:
         '200':
           description: Successful Response
@@ -987,12 +987,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/Led'
                 type: array
-                title: Response Get All Controller Led Get
+                title: Response Get All Leds Controller Led Get
     post:
       tags:
       - controller
-      summary: Set All
-      operationId: set_all_controller_led_post
+      summary: Set All Leds
+      operationId: Set_all_leds_controller_led_post
       requestBody:
         content:
           application/json:
@@ -1008,7 +1008,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/Led'
                 type: array
-                title: Response Set All Controller Led Post
+                title: Response Set All Leds Controller Led Post
         '422':
           description: Validation Error
           content:
@@ -1019,8 +1019,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get
-      operationId: get_controller_led__circuit__get
+      summary: Get Led
+      operationId: Get_led_controller_led__circuit__get
       parameters:
       - name: circuit
         in: path
@@ -1044,8 +1044,8 @@ paths:
     post:
       tags:
       - controller
-      summary: Set
-      operationId: set_controller_led__circuit__post
+      summary: Set Led
+      operationId: Set_led_controller_led__circuit__post
       parameters:
       - name: circuit
         in: path
@@ -1072,16 +1072,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /:
-    get:
-      summary: Hello Robopipe
-      operationId: hello_robopipe__get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
 components:
   schemas:
     AnalogInput:
