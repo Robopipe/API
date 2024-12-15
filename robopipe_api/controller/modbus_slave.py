@@ -258,36 +258,30 @@ class ModbusSlave(object):
     async def scan_boards(self, invoc=False):
         if self.is_scanning and invoc:
             return
-        try:
-            if self.modbus_cache_map is not None:
-                if (
-                    await self.modbus_cache_map.do_scan(slave=self.modbus_address)
-                    is True
-                ):
-                    if self.scan_errors:
-                        logger.info(
-                            f"Communication with device is back: '{self.circuit}'"
-                        )
-                    self.scan_errors = 0
-        except Exception as E:
-            if not self.scan_errors:
-                logger.error(f"{self.circuit}: Error while scanning: {E}")
-                if logger.level == logging.DEBUG:
-                    traceback.print_exc()
-                logger.warning(f"Slowing down device: '{self.circuit}'")
-            self.scan_errors += 1
 
-        if self.do_scanning and (self.scan_interval != 0):
-            interval = min(
-                self.scan_interval * (2**self.scan_errors), 120
-            )  # exponential growth with limitation [s]
-            # TODO: this creates infinite recursion which then prevents graceful shutdown
-            async with anyio.create_task_group() as tg:
-                await anyio.sleep(interval)
-                tg.start_soon(self.scan_boards)
-                self.is_scanning = True
-        else:
-            self.is_scanning = False
+        self.is_scanning = True
+
+        while self.do_scanning and (self.scan_interval != 0):
+            try:
+                if self.modbus_cache_map is not None:
+                    if await self.modbus_cache_map.do_scan(slave=self.modbus_address):
+                        if self.scan_errors:
+                            logger.info(
+                                f"Communication with device is back: '{self.circuit}'"
+                            )
+                        self.scan_errors = 0
+            except Exception as E:
+                if not self.scan_errors:
+                    logger.error(f"{self.circuit}: Error while scanning: {E}")
+                    if logger.level == logging.DEBUG:
+                        traceback.print_exc()
+                    logger.warning(f"Slowing down device: '{self.circuit}'")
+                self.scan_errors += 1
+
+            interval = min(self.scan_interval * (2**self.scan_errors), 120)
+            await anyio.sleep(interval)
+
+        self.is_scanning = False
 
     def full(self):
         ret = {
