@@ -80,7 +80,7 @@ def global_exception_handler(request: Request, exc: Exception):
 
 
 def setup():
-    load_dotenv()
+    load_dotenv(os.environ.get("ROBOPIPE_API_ENV"), override=True)
 
     app.add_middleware(
         CORSMiddleware,
