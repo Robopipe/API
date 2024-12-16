@@ -120,13 +120,14 @@ async def get_sensor_stream(
         async with tg:
             tg.start_soon(anyio.sleep_forever)
 
+    def on_close():
+        tg.cancel_scope.cancel()
+        stream_service.unsubscribe((mxid, sensor_name), ws_adapter)
+
     ws_adapter = WsAdapter(ws)
     await ws_adapter.accept()
-    await stream_service.subscribe(
-        (mxid, sensor_name), ws_adapter, lambda: tg.cancel_scope.cancel()
-    )
+    await stream_service.subscribe((mxid, sensor_name), ws_adapter, lambda: on_close())
     await sleep()
-    stream_service.unsubscribe((mxid, sensor_name), ws_adapter)
 
 
 router.include_router(sensor_router)
