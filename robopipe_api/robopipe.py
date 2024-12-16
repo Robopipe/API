@@ -98,5 +98,5 @@ def main():
     uvicorn.run(
         app,
         host=os.environ.get("HOST") or "0.0.0.0",
-        port=int(os.environ.get("PORT") or "8000"),
+        port=int(os.environ.get("PORT") or "8080"),
     )
