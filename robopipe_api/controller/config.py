@@ -1,8 +1,6 @@
 import os
 from typing import List, Dict, Union
 
-import anyio
-
 from .modbus_unipi import EvokModbusSerialClient, EvokModbusTcpClient
 from .modbus_slave import ModbusSlave
 from . import owdevice
