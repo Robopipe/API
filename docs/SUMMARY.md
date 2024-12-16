@@ -8,19 +8,23 @@
 * [Connection](getting-started/connection.md)
 * [Hello world](getting-started/hello-world.md)
 
-## API
+## Examples
 
-* [Setup](api/setup.md)
-* [Configuration](api/configuration.md)
-* [API Reference](api/api-reference/README.md)
-  * [Cameras](api/api-reference/cameras.md)
-  * [Sensors](api/api-reference/sensors.md)
-  * [Stream](api/api-reference/stream.md)
-  * [Neural Network](api/api-reference/neural-network.md)
-  * [Controller](api/api-reference/controller/README.md)
-    * [Analog I/O](api/api-reference/controller/analog-i-o.md)
-    * [Digital I/O](api/api-reference/controller/digital-i-o.md)
-    * [Led](api/api-reference/controller/led.md)
+* [Capsule counting](examples/capsule-counting.md)
+
+***
+
+* [API Reference](api-reference/README.md)
+  * [Cameras](api-reference/cameras.md)
+  * [Sensors](api-reference/sensors.md)
+  * [Stream](api-reference/stream.md)
+  * [Neural Network](api-reference/neural-network.md)
+  * [Controller](api-reference/controller/README.md)
+    * [Analog I/O](api-reference/controller/analog-i-o.md)
+    * [Digital I/O](api-reference/controller/digital-i-o.md)
+    * [Led](api-reference/controller/led.md)
+* [Configuration](configuration.md)
+* [Getting Started (Generic Devices)](getting-started-generic-devices.md)
 
 ## Other
 
