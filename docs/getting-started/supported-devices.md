@@ -10,6 +10,7 @@ To use Robopipe, you need a Robopipe controller and at least one Luxonis camera.
 
 * Robopipe controller 1
 * Robopipe controller 2
+* ...
 
 ## Luxonis cameras
 
