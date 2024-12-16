@@ -24,28 +24,34 @@ async def lifespan(app: FastAPI):
     camera_manager = camera_manager_factory()
     camera_manager.boot_cameras()
     stream_service = stream_service_factory(camera_manager)
-    evok_config = EvokConfig("/etc/evok")
-    hw_dict = HWDict(["/etc/evok/hw_definitions/"])
-    create_devices(evok_config, hw_dict)
-    Devices.register_device(RUN, Devices.aliases)
+    controller_config_path = os.environ.get("CONTROLLER_CONFIG")
 
-    async with anyio.create_task_group() as tg:
-        for owbus in Devices.by_int(OWBUS):
-            tg.start_soon(owbus.bus_driver.switch_to_async)
+    if controller_config_path is not None and os.path.exists(controller_config_path):
+        hw_dict = HWDict([f"{controller_config_path}/hw_definitions/"])
+        controller_config = EvokConfig(controller_config_path)
 
-        for bustype in [TCPBUS, SERIALBUS]:
-            for device in Devices.by_int(bustype):
-                tg.start_soon(device.switch_to_async)
+        create_devices(controller_config, hw_dict)
+        Devices.register_device(RUN, Devices.aliases)
 
-        for modbus_slave in Devices.by_int(MODBUS_SLAVE):
-            tg.start_soon(modbus_slave.switch_to_async)
+        async with anyio.create_task_group() as tg:
+            for owbus in Devices.by_int(OWBUS):
+                tg.start_soon(owbus.bus_driver.switch_to_async)
 
-            if modbus_slave.scan_enabled:
-                tg.start_soon(modbus_slave.start_scanning)
+            for bustype in [TCPBUS, SERIALBUS]:
+                for device in Devices.by_int(bustype):
+                    tg.start_soon(device.switch_to_async)
 
+            for modbus_slave in Devices.by_int(MODBUS_SLAVE):
+                tg.start_soon(modbus_slave.switch_to_async)
+
+                if modbus_slave.scan_enabled:
+                    tg.start_soon(modbus_slave.start_scanning)
+
+            yield
+
+            tg.cancel_scope.cancel()
+    else:
         yield
-
-        tg.cancel_scope.cancel()
 
     stream_service.stop()
 
