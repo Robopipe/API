@@ -132,7 +132,7 @@ class EvokConfig:
             files = os.listdir(conf_dir_path)
             if "config.yaml" not in files:
                 raise EvokConfigError(
-                    f"Missing 'config.yaml' in evok configuration directory ({conf_dir_path})"
+                    f"Missing 'config.yaml' in robopipe configuration directory ({conf_dir_path})"
                 )
             scope = files
         final_conf = {}
@@ -145,7 +145,7 @@ class EvokConfig:
                 logger.warning(f"Config file {path} not found!")
         if check_autogen and final_conf.get("autogen", False):
             return self.__get_final_conf(
-                scope=["/etc/evok/autogen.yaml", *scope], check_autogen=False
+                scope=["/etc/robopipe/autogen.yaml", *scope], check_autogen=False
             )
         return final_conf
 
