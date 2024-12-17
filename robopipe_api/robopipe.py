@@ -19,12 +19,19 @@ from .routers import cameras, sensors, controller
 from .stream import stream_service_factory
 
 
+def setup():
+    load_dotenv(os.getenv("ROBOPIPE_API_ENV"), override=True)
+
+
+setup()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     camera_manager = camera_manager_factory()
     camera_manager.boot_cameras()
     stream_service = stream_service_factory(camera_manager)
-    controller_config_path = os.environ.get("CONTROLLER_CONFIG")
+    controller_config_path = os.getenv("CONTROLLER_CONFIG")
 
     if controller_config_path is not None and os.path.exists(controller_config_path):
         hw_dict = HWDict([f"{controller_config_path}/hw_definitions/"])
@@ -60,7 +67,27 @@ app = FastAPI(
     lifespan=lifespan,
     title="Robopipe API",
     description="API for the Robopipe application",
+    servers=[
+        {
+            "url": f"http://localhost:{os.getenv('PORT') or '8080'}",
+            "description": "Locally running server",
+        },
+    ],
 )
+
+controller_hostname = os.getenv("HOSTNAME")
+
+if (
+    controller_hostname is not None
+    and controller_hostname.startswith("robopipe-controller")
+) or os.getenv("GITHUB_ACTIONS") is not None:
+    app.servers.insert(
+        0,
+        {
+            "url": f"https://{controller_hostname or 'robopipe-controller-1'}.local",
+            "description": "Robopipe controller running on local network",
+        },
+    )
 
 app.include_router(cameras.router)
 app.include_router(sensors.router)
@@ -79,24 +106,22 @@ def global_exception_handler(request: Request, exc: Exception):
         return JSONResponse(status_code=404, content=None)
 
 
-def setup():
-    load_dotenv(os.environ.get("ROBOPIPE_API_ENV"), override=True)
-
+def app_setup():
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=(os.environ.get("CORS_ORIGINS") or "*").split(","),
+        allow_origins=(os.getenv("CORS_ORIGINS") or "*").split(","),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
 
-setup()
+app_setup()
 
 
 def main():
     uvicorn.run(
         app,
-        host=os.environ.get("HOST") or "0.0.0.0",
-        port=int(os.environ.get("PORT") or "8080"),
+        host=os.getenv("HOST") or "0.0.0.0",
+        port=int(os.getenv("PORT") or "8080"),
     )
