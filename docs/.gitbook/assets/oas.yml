@@ -4,8 +4,12 @@ info:
   description: API for the Robopipe application
   version: 0.1.0
 servers:
-- url: https://robopipe-controller-1.local
+- url: https://robopipe-controller-{controllerId}.local
   description: Robopipe controller running on local network
+  variables:
+    controllerId:
+      default: '1'
+      description: Robopipe controller ID
 - url: http://localhost:8080
   description: Locally running server
 paths:
