@@ -15,7 +15,7 @@ Please note that changing the **CORS\_ORIGINS** to a value that does _not_ inclu
 * **HOST** - domain name or IP address of the host that serves the API
   * _DEFAULT_ - 0.0.0.0
 * **PORT** - Por on which the API is running
-  * DEFAULT - 8000
+  * DEFAULT - 8080
 * **CORS\_ORIGINS** - comma separated list of allowed origins for the CORS preflight requests
   * DEFAULT - \*
 
