@@ -1,4 +1,4 @@
-import anyio.to_thread
+import anyio
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,15 +77,29 @@ app = FastAPI(
 
 controller_hostname = os.getenv("HOSTNAME")
 
-if (
-    controller_hostname is not None
-    and controller_hostname.startswith("robopipe-controller")
-) or os.getenv("GITHUB_ACTIONS") is not None:
+if controller_hostname is not None and controller_hostname.startswith(
+    "robopipe-controller"
+):
     app.servers.insert(
         0,
         {
-            "url": f"https://{controller_hostname or 'robopipe-controller-1'}.local",
+            "url": f"https://{controller_hostname}.local",
             "description": "Robopipe controller running on local network",
+        },
+    )
+
+if os.getenv("GITHUB_ACTIONS") is not None:
+    app.servers.insert(
+        0,
+        {
+            "url": "https://robopipe-controller-{controllerId}.local",
+            "description": "Robopipe controller running on local network",
+            "variables": {
+                "controllerId": {
+                    "default": "1",
+                    "description": "Robopipe controller ID",
+                }
+            },
         },
     )
 
