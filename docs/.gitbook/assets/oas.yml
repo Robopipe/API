@@ -3,6 +3,11 @@ info:
   title: Robopipe API
   description: API for the Robopipe application
   version: 0.1.0
+servers:
+- url: https://robopipe-controller-1.local
+  description: Robopipe controller running on local network
+- url: http://localhost:8080
+  description: Locally running server
 paths:
   /cameras/:
     get:
