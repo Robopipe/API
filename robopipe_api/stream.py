@@ -86,10 +86,12 @@ class StreamService:
             try:
                 frame = next(video_encoder)
             except StopIteration:
-                video_encoder = self.encoders[key] = VideoEncoder(
-                    self.camera_manager[key[0]].sensors[key[1]]
-                )
-                continue
+                for subscriber, on_close in subscribers:
+                    if on_close is not None:
+                        on_close()
+
+                    self.unsubscribe(key, subscriber)
+                break
 
             anyio.from_thread.run(broadcast, frame)
 
