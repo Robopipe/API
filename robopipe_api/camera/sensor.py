@@ -64,7 +64,9 @@ class Sensor:
         return img_frame_to_pil_image(img_frame)
 
     def get_video_frame(self):
-        video_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.VIDEO].get()
+        video_frame: dai.ImgFrame = self.output_queues[
+            PipelineQueueType.VIDEO
+        ].getAll()[-1]
         frame_type = video_frame.getType()
 
         if frame_type == dai.RawImgFrame.Type.NV12:
@@ -72,7 +74,7 @@ class Sensor:
         elif frame_type == dai.RawImgFrame.Type.BGR888i:
             return av.VideoFrame.from_ndarray(video_frame.getFrame()[..., ::-1], "rbg")
         elif frame_type == dai.RawImgFrame.Type.RAW8:
-            return av.VideoFrame.from_image(img_frame_to_pil_image(video_frame))
+            return av.VideoFrame.from_ndarray(video_frame.getFrame(), "gray")
 
     def get_nn_frame(self):
         try:
