@@ -13,7 +13,7 @@ description: Run the API locally on your own device
 ### Controllers
 
 {% hint style="info" %}
-You only need a controller in case you wish to use the [controller API](api-reference/controller/). Other APIs are fully functional without the controller.
+You only need a controller in case you wish to use the [controller API](api/api-reference/controller.md). Other APIs are fully functional without the controller.
 {% endhint %}
 
 * Any [Unipi](https://www.unipi.technology/) controller from the [Patron](https://www.unipi.technology/products/unipi-patron-374?categoryId=30\&categorySlug=unipi-patron) or [Neuron](https://www.unipi.technology/products/unipi-neuron-3?categoryId=2\&categorySlug=unipi-neuron) series.
@@ -29,7 +29,7 @@ Before you run Robopipe API on your device, make sure you have the following pre
 * You have cloned the [Robopipe API GitHub repository](https://github.com/Koala42/io.robopipe.api).
 * You have [Python](https://www.python.org/) 3.11.10 or higher installed.
 * Though it is not a requirement for running the API, you should be able to connect to a Luxonis device, otherwise the things you can do with the API are greatly limited.
-* If you also wish to use the [controller API,](api-reference/controller/) you need to run the API on a Unipi device.
+* If you also wish to use the [controller API,](api/api-reference/controller.md) you need to run the API on a Unipi device.
 
 ### Running the API
 
@@ -52,7 +52,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-Configure the API according to [configuration reference](configuration.md).
+Configure the API according to [configuration reference](api/configuration.md).
 
 Install dependencies.
 
