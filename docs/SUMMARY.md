@@ -12,18 +12,21 @@
 
 * [Capsule counting](examples/capsule-counting.md)
 
+## API
+
+* [API Reference](api/api-reference/README.md)
+  * [Cameras](api/api-reference/cameras.md)
+  * [Sensors](api/api-reference/sensors.md)
+  * [Stream](api/api-reference/stream.md)
+  * [Neural Network](api/api-reference/neural-network.md)
+  * [Controller](api/api-reference/controller.md)
+  * [Analog I/O](api/api-reference/analog-i-o.md)
+  * [Digital I/O](api/api-reference/digital-i-o.md)
+  * [Led](api/api-reference/led.md)
+* [Configuration](api/configuration.md)
+
 ***
 
-* [API Reference](api-reference/README.md)
-  * [Cameras](api-reference/cameras.md)
-  * [Sensors](api-reference/sensors.md)
-  * [Stream](api-reference/stream.md)
-  * [Neural Network](api-reference/neural-network.md)
-  * [Controller](api-reference/controller/README.md)
-    * [Analog I/O](api-reference/controller/analog-i-o.md)
-    * [Digital I/O](api-reference/controller/digital-i-o.md)
-    * [Led](api-reference/controller/led.md)
-* [Configuration](configuration.md)
 * [Getting Started (Generic Devices)](getting-started-generic-devices.md)
 
 ## Other
