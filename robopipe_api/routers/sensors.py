@@ -129,5 +129,10 @@ async def get_sensor_stream(
     await stream_service.subscribe((mxid, sensor_name), ws_adapter, lambda: on_close())
     await sleep()
 
+    try:
+        await ws_adapter.close()
+    except:
+        pass
+
 
 router.include_router(sensor_router)

@@ -13,7 +13,7 @@ class WsAdapter(WebSocket):
         return self.ws.accept()
 
     def close(self):
-        return self.close()
+        return self.ws.close()
 
     def send(self, data: str | bytes | dict | Any):
         if isinstance(data, str):
