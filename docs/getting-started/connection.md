@@ -7,20 +7,20 @@ description: Connecting your devices
 ## Controller
 
 {% hint style="danger" %}
-In case of any manipulation with the controller, first turn off all power sources as theres is a risk of electrocution or damage. Improper handling can result in significant property damage, bodily injury or death. Please refer to [Unipi Patron manual](https://kb.unipi.technology/_media/en:files:products:unipi-patron-manual-en.pdf) to read all safety instructions.&#x20;
+In case of any manipulation with the controller, first turn off all power sources as there is a risk of electrocution or damage. Improper handling can result in significant property damage, bodily injury or death. Please refer to [Unipi Patron manual](https://kb.unipi.technology/_media/en:files:products:unipi-patron-manual-en.pdf) to read all safety instructions.&#x20;
 {% endhint %}
 
 ### Connection using router
 
 Connect the controller and luxonis camera to a router with running DHCP server (most routers have DHCP server on by default) and then connect the controller to a power supply as shown in the diagram below.
 
-<div data-full-width="true"><figure><img src="../.gitbook/assets/plc-router-luxonis-pc.png" alt=""><figcaption></figcaption></figure></div>
+<div data-full-width="false"><figure><img src="../.gitbook/assets/plc-router-luxonis-pc.png" alt=""><figcaption></figcaption></figure></div>
 
 ### Direct connection
 
 Connect the luxonis camera directly to the controller via USB and then connect the controller to your PC via ethernet as shown in the diagram below.
 
-<figure><img src="../.gitbook/assets/plc-pc-luxonis.png" alt=""><figcaption></figcaption></figure>
+<div data-full-width="false"><figure><img src="../.gitbook/assets/plc-pc-luxonis.png" alt=""><figcaption></figcaption></figure></div>
 
 ### Accessing the controller
 

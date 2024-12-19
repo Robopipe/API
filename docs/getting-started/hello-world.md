@@ -1,14 +1,18 @@
 ---
-description: Capture images, label data, train model, and deploy it on Robopipe controller
+description: Quick Start Guide
 ---
 
 # Hello world
 
 ## Description
 
-In this example we will learn the basics of working with Robopipe API. We will list all devices and select one we want to use. Then we will capture the training data, label them and build a simple neural network which we will then deploy on a device. Then we will run inference directly on the device and observe the results.
+This guide walks you through the basics of working with your Robopipe device. You'll learn how to:
 
-The model we will build will be an image classification model detecting 2 classes - _black_ and _other._ It will simply say whether the object it sees is black or no&#x74;_._
+* Capture images from a connected device
+* Label data for training an AI model
+* Build and deploy a simple neural network co classify objects as "black" or "other"
+
+By the end you'll have a fully functioning AI model running directly on a Robopipe device.
 
 The complete example with all the python code is available below. The jupyter notebook used for training the model and the model conversion is also available below.
 
@@ -27,6 +31,7 @@ import requests
 ID = 1 # substitue with the id of your controller
 API_BASE = f"http://robopipe-controller-{ID}.local"
 
+# fetch connected devices from the robopipe controller
 def get_devices():
     return requests.get(f"{API_BASE}/cameras").json()
 
@@ -45,6 +50,7 @@ mxid = devices[0].get("mxid")
 We will also need to select a camera. To list all cameras you can use the function below.
 
 ```python
+# retrieve the list of cameras associated with the selected device (mxid)
 def get_cameras(mxid: str):
     return requests(f"{API_BASE}/cameras/{mxid}/sensors").json()
 ```
@@ -61,8 +67,6 @@ In order to train our model we first need to get the training data. These data w
 
 ```python
 import os
-import time
-
 
 def save_image(path: str, image: bytes):
     dirname = os.path.dirname(path)
@@ -100,6 +104,10 @@ def configure_camera(width: int, height: int):
         f"{API_BASE}/cameras/{mxid}/sensors/{sensor_name}/config", data
     ).json()
 ```
+
+{% hint style="info" %}
+Capturing images in high resolution may require more processing power and storage. Use appropriate resolutions for your application.
+{% endhint %}
 
 ## Data labeling
 
@@ -279,4 +287,11 @@ async def main():
 anyio.run(main)
 ```
 
-Congratulations! You have successfully captured and labeled data, trained your own AI model and deployed it on Robopipe device. For more complex examples continue to our [examples page](broken-reference).
+**Congratulations!**\
+You've successfully:
+
+* Captured and labeled data.
+* Trained a custom AI model.
+* Deployed it to a Robopipe device.
+
+Explore our [Examples Page](broken-reference) for more advanced projects and ideas.
