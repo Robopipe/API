@@ -44,6 +44,6 @@ class DeviceInfo:
             device_info.name,
             DevicePlatform[device_info.platform.name],
             DeviceProtocol[device_info.protocol.name],
-            device_info.state.name,
+            DeviceState[device_info.state.name],
             device_info.status.name,
         )
