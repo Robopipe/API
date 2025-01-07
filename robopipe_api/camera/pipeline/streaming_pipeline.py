@@ -52,7 +52,7 @@ class StreamingPipeline(Pipeline):
             cam_config = self.create_x_link(sensor_name, PipelineQueueType.CONFIG, True)
 
             cam = self.pipeline.createColorCamera()
-            cam.setNumFramesPool(2, 2, 3, 3, 0)
+            cam.setNumFramesPool(2, 2, 3, 3, 2)
             cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
             cam.setPreviewSize(cam.getStillSize())
 
@@ -62,7 +62,7 @@ class StreamingPipeline(Pipeline):
         elif dai.CameraSensorType.MONO in sensor.supportedTypes:
             cam = self.pipeline.createMonoCamera()
             cam.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
-            cam.setNumFramesPool(10)
+            cam.setNumFramesPool(3)
 
             cam_still.input.setBlocking(False)
             cam_still.input.setQueueSize(1)
