@@ -89,7 +89,7 @@ class Sensor:
 
         return (passthrough_frame, detections)
 
-    def get_nn_detections(self) -> dai.NNData:
+    def get_nn_detections(self) -> dai.NNData | dai.ImgDetections:
         detections = self.output_queues[PipelineQueueType.NN].get()
 
         return detections
