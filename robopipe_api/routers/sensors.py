@@ -5,11 +5,19 @@ from fastapi.responses import Response
 
 from io import BytesIO
 
-from ..camera.nn import CameraNNConfig
+from ..camera.nn import CameraNNConfig, CameraNNYoloConfig, CameraNNMobileNetConfig
 from ..camera.sensor_config import SensorConfigProperties
 from ..camera.sensor_control import SensorControl
+from ..models.nn_config import NNConfig, NNType
 from ..utils.ws_adapter import WsAdapter
-from .common import CameraDep, SensorDep, Mxid, SensorName, StreamServiceDep
+from .common import (
+    CameraDep,
+    SensorDep,
+    Mxid,
+    SensorName,
+    StreamServiceDep,
+    NNConfigDep,
+)
 
 router = APIRouter(
     prefix="/cameras/{mxid}/sensors",
@@ -84,12 +92,30 @@ def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Respo
 
 @sensor_router.post("/nn", status_code=status.HTTP_201_CREATED, tags=["nn"])
 async def deploy_neural_network(
-    camera: CameraDep, sensor_name: SensorName, model: UploadFile
+    camera: CameraDep, sensor_name: SensorName, model: UploadFile, config: NNConfigDep
 ):
+    sensor = camera.all_sensors[sensor_name]
     model_bytes = await model.read()
     blob = dai.OpenVINO.Blob(list(model_bytes))
 
-    camera.deploy_nn(CameraNNConfig(camera.all_sensors[sensor_name], blob))
+    if config.type == NNType.Generic:
+        nn_config = CameraNNConfig(sensor, blob, config.num_inference_threads)
+    elif config.type == NNType.YOLO:
+        nn_config = CameraNNYoloConfig(
+            sensor,
+            blob,
+            config.num_inference_threads,
+            **config.nn_config.model_dump(),
+        )
+    elif config.type == NNType.MobileNet:
+        nn_config = CameraNNMobileNetConfig(
+            sensor,
+            blob,
+            config.num_inference_threads,
+            **config.nn_config.model_dump(),
+        )
+
+    camera.deploy_nn(nn_config)
 
 
 @sensor_router.delete("/nn", status_code=status.HTTP_202_ACCEPTED, tags=["nn"])
@@ -104,7 +130,23 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
     try:
         while True:
             detections = sensor.get_nn_detections()
-            await ws.send_json({"detections": detections.getFirstLayerFp16()})
+
+            if isinstance(detections, dai.NNData):
+                await ws.send_json(detections.getFirstLayerFp16())
+            else:
+                parsed_detections = list(
+                    map(
+                        lambda x: {
+                            "label": x.label,
+                            "confidence": x.confidence,
+                            "coords": [x.xmin, x.ymin, x.xmax, x.ymax],
+                        },
+                        detections.detections,
+                    )
+                )
+
+                await ws.send_json(parsed_detections)
+
             await anyio.sleep(0.001)
     except WebSocketDisconnect:
         return
