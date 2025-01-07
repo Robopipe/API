@@ -12,12 +12,12 @@ Deploying an AI model on the camera takes some time (usually \~20s, but may take
 
 ## API Reference
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/nn" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/nn" method="post" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/nn" method="delete" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/nn" method="delete" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
 ## Running inference

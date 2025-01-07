@@ -4,36 +4,36 @@ Each camera contains a number of sensors of different types. Our API currently s
 
 ## API Reference
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/" method="post" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/" method="delete" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/" method="delete" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/" method="get" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/config" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/config" method="get" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/config" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/config" method="post" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/control" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/control" method="get" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/control" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/control" method="post" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/sensors/{sensor_name}/still" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/still" method="get" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
 [^1]: This means that there are up to **8**
