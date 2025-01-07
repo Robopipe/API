@@ -8,6 +8,16 @@
 * [Connection](getting-started/connection.md)
 * [Hello world](getting-started/hello-world.md)
 
+## Controller
+
+* [Description](controller/description.md)
+* [Inputs/Outputs](controller/inputs-outputs/README.md)
+  * [Digital inputs](controller/inputs-outputs/digital-inputs.md)
+  * [Digital outputs](controller/inputs-outputs/digital-outputs.md)
+  * [Relay outputs](controller/inputs-outputs/relay-outputs.md)
+  * [Analog inputs](controller/inputs-outputs/analog-inputs.md)
+  * [Analog outputs](controller/inputs-outputs/analog-outputs.md)
+
 ## Examples
 
 * [Capsule counting](examples/capsule-counting.md)
@@ -37,5 +47,7 @@
 
 ## Resources
 
+* [Robopipe Reddit](https://www.reddit.com/r/robopipe/)
+* [Robopipe GitHub](https://github.com/robopipe)
 * [Luxonis](https://www.luxonis.com/)
 * [Unipi](https://www.unipi.technology/)

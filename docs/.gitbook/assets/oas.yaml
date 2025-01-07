@@ -1222,13 +1222,9 @@ components:
           type: string
           format: binary
           title: Model
-        nn_config:
-          type: string
-          title: Nn Config
       type: object
       required:
       - model
-      - nn_config
       title: Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post
     CameraConfigProperties:
       properties:
@@ -1622,66 +1618,49 @@ components:
         exposure_time:
           type: integer
           title: Exposure Time
-          description: Exposure time in microseconds. Ignored if auto_exposure_enable
-            is set to true.
         sensitivity_iso:
           type: integer
-          maximum: 1600.0
-          minimum: 100.0
           title: Sensitivity Iso
         auto_exposure_enable:
           type: boolean
           title: Auto Exposure Enable
         auto_exposure_compensation:
           type: integer
-          maximum: 9.0
-          minimum: -9.0
           title: Auto Exposure Compensation
-          default: 0
         auto_exposure_limit:
           type: integer
           title: Auto Exposure Limit
-          description: Maximum exposure time limit for auto-exposure in microseconds
         auto_exposure_lock:
           type: boolean
           title: Auto Exposure Lock
         contrast:
           type: integer
-          maximum: 10.0
-          minimum: -10.0
           title: Contrast
-          default: 0
         brightness:
           type: integer
-          maximum: 10.0
-          minimum: -10.0
           title: Brightness
-          default: 0
         saturation:
           type: integer
-          maximum: 10.0
-          minimum: -10.0
           title: Saturation
-          default: 0
         chroma_denoise:
           type: integer
-          maximum: 4.0
-          minimum: 0.0
           title: Chroma Denoise
-          default: 1
         luma_denoise:
           type: integer
-          maximum: 4.0
-          minimum: 0.0
           title: Luma Denoise
-          default: 1
       type: object
       required:
       - exposure_time
       - sensitivity_iso
       - auto_exposure_enable
+      - auto_exposure_compensation
       - auto_exposure_limit
       - auto_exposure_lock
+      - contrast
+      - brightness
+      - saturation
+      - chroma_denoise
+      - luma_denoise
       title: SensorControl
     ValidationError:
       properties:
