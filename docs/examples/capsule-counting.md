@@ -6,7 +6,7 @@ description: Real world usage example of counting capsules in manufacturing
 
 ## Problem description
 
-We want to count capsules placed in a special holder in a machine to see if the holder is full or not. We then want to indicate to the machine that the holder is full which triggers an action on the machine side. We will do this by capturing and labeling our data as we did in our [hello world example](../getting-started/hello-world.md). The we will build a more advanced neural network, deploy it, and link the output to the controller for sending signals to the machine.
+We want to count capsules placed in a special holder in a machine to see if the holder is full or not. This will be then used to indicate to the machine that the holder is full which triggers an action on the machine side. We will do this by capturing and labeling our data as we did in our [hello world example](../getting-started/hello-world.md). The AI model we will use will be a more advanced one used for object detection, which we'll deploy and link its output to the controller for sending signals to the machine.
 
 <figure><img src="../.gitbook/assets/capsules.jpg" alt=""><figcaption><p>The machine containing 3 holders for capsules</p></figcaption></figure>
 
@@ -70,7 +70,7 @@ For the model we will use [YOLOv8](https://docs.ultralytics.com/models/yolov8/),
 
 ### Configuration
 
-&#x20;In order to use this model, we must create a configuration file describing our data.
+&#x20;In order to use this model, we must create a configuration file describing our data. We will save this in a file named `dataset.yaml`, which we will reference below, you can use any filename but be sure to change the code accordingly.
 
 ```yaml
 path: /path/to/our/exported/dataset
@@ -113,13 +113,24 @@ os.rename(blob_path, "model.blob")
 
 ## Deployment
 
-To deploy the model we will use our API.
+To deploy the model we will use our API. We will laverage the fact the we use a YOLO model and use configuration specific to this type of model. The benefit is that when reading the model's output from the API, we will get already interpreted results, which are easy to work with.
 
 ```python
+import json
+
 def deploy_model(path="model.blob"):
-    requests.post(
+    nn_config = {
+        "type": "YOLO",
+        "nn_config": {
+            "confidence_threshold": 0.5,
+            "num_classes": 1,
+            "coordinate_size": 4,
+        },
+    }
+    return requests.post(
         f"{API_BASE}/cameras/{mxid}/sensors/{sensor_name}/nn",
         files={"model": open(path, "rb")},
+        data={"nn_config": json.dumps(nn_config)},
     )
 ```
 
@@ -129,7 +140,11 @@ The model is already running on the device from the point we deployed it. Now we
 
 ### Reading the model output
 
-Before we connect to our API and start reading the model's output, we need to define a function that can properly interpret the results, since the data we get from the API is the &#x72;_&#x61;w output of the model's last layer_.
+The data received from the websocket is an array, containing objects, each of which has the following fields:
+
+* label - an integer indicating the label of the detection, e.g. 0 for capsule in our case, as we specified in the `dataset.yaml` above
+* confidence - a floating point number in the range \[0;1] indicating the model's confidence about the detection, higher number means larger confidence indicating that the detection is more accurate.
+* coords - array of 4 floats, representing the bounding box for the detection
 
 ```python
 import anyio
@@ -145,6 +160,44 @@ async def main():
             msg = await ws.recv()
             print(msg)
 
+anyio.run(main)
+```
+
+### Connecting to the machine
+
+Robopipe controller is not just an ordinary controller, but a fully fledged PLC, which means that we can use it to controll our machine's behaviour. For the purpose of this example, we will indicate the result using all LEDs on the controller, but the use cases can be far beyond that. For example, you can have all sorts of devices connected to analog or digital I/O of the controller, and controll them using the API.
+
+In this example, we will simply turn on the led when a specified number of capsules has been detected, and turn it off when the number gets below that. We will define a function which we will use in our `main` function above, which will do this.
+
+```python
+import json
+
+THRESHOLD = 50
+
+def process_detections(detections: str):
+    parsed_detections = json.loads(detections)
+    
+    if len(parsed_detections) >= THRESHOLD:
+        requests.post(f"{API_BASE}/controller/led", data={"value": True})
+    else:
+        requests.post(f"{API_BASE}/controller/led", data={"value": False})
+```
+
+All that's left is to modify our `main` function to call `process_detections` and let it run.
+
+```python
+import anyio
+import websockets
+
+WS_BASE=f"ws://robopipe-controller-{ID}.local"
+
+async def main():
+    async with websockets.connect(
+        f"{WS_BASE}/cameras/{mxid}/sensors/{sensor_name}/nn"
+    ) as ws:
+        while True:
+            msg = await ws.recv()
+            process_detections(msg)
 
 anyio.run(main)
 ```
