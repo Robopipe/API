@@ -1222,9 +1222,13 @@ components:
           type: string
           format: binary
           title: Model
+        nn_config:
+          type: string
+          title: Nn Config
       type: object
       required:
       - model
+      - nn_config
       title: Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post
     CameraConfigProperties:
       properties:
