@@ -69,7 +69,7 @@ class NNPipeline(StreamingPipeline):
         if still_queue is not None:
             camera.preview.unlink(still_queue.input)
             camera.still.link(still_queue.input)
-            camera.setNumFramesPool(2, 2, 3, 3, 2)
+        camera.setNumFramesPool(2, 2, 3, 3, 2)
 
         camera.preview.link(nn_node.input)
 
@@ -77,15 +77,14 @@ class NNPipeline(StreamingPipeline):
         sensor_name = nn.sensor.socket.name
 
         if sensor_name in self.neural_networks:
-            nn_node = self.neural_networks[sensor_name]
-            nn.configure_node(nn_node)
-        else:
-            nn_node = nn.create_node(self.pipeline)
-            self.neural_networks[sensor_name] = nn_node
-            cam_nn_out = self.create_x_link(
-                sensor_name, PipelineQueueType.NN, False, False, 1
-            )
-            nn_node.out.link(cam_nn_out.input)
+            self.remove_nn(sensor_name)
+
+        nn_node = nn.create_node(self.pipeline)
+        self.neural_networks[sensor_name] = nn_node
+        cam_nn_out = self.create_x_link(
+            sensor_name, PipelineQueueType.NN, False, False, 1
+        )
+        nn_node.out.link(cam_nn_out.input)
 
         if sensor_name not in self.cameras:
             self.add_sensor(nn.sensor)
@@ -107,16 +106,16 @@ class NNPipeline(StreamingPipeline):
             PipelineQueueType.STILL.get_queue_name(sensor_name)
         )
 
-        self.pipeline.remove(nn_node)
-        del self.neural_networks[sensor_name]
-        self.del_queue(sensor_name, PipelineQueueType.NN)
-
         if not isinstance(cam, dai.node.MonoCamera) and still_queue is not None:
             cam.preview.unlink(nn_node.input)
             cam.still.unlink(still_queue.input)
             cam.preview.link(still_queue.input)
             cam.setPreviewSize(cam.getStillSize())
             cam.setNumFramesPool(2, 2, 3, 3, 0)
+
+        self.pipeline.remove(nn_node)
+        del self.neural_networks[sensor_name]
+        self.del_queue(sensor_name, PipelineQueueType.NN)
 
     def remove_sensor(self, sensor):
         self.remove_nn(sensor)
