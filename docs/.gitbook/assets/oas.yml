@@ -1317,8 +1317,7 @@ components:
     ColorCameraConfigProperties:
       properties:
         resolution:
-          type: integer
-          title: Resolution
+          $ref: '#/components/schemas/ColorCameraResolution'
         still_size:
           prefixItems:
           - type: integer
@@ -1343,6 +1342,14 @@ components:
           maxItems: 2
           minItems: 2
           title: Video Size
+        sensor_crop:
+          prefixItems:
+          - type: number
+          - type: number
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Sensor Crop
         fps:
           type: number
           title: Fps
@@ -1352,8 +1359,27 @@ components:
       - still_size
       - preview_size
       - video_size
+      - sensor_crop
       - fps
       title: ColorCameraConfigProperties
+    ColorCameraResolution:
+      type: string
+      enum:
+      - THE_1080_P
+      - THE_1200_P
+      - THE_12_MP
+      - THE_1352X1012
+      - THE_13_MP
+      - THE_1440X1080
+      - THE_2024X1520
+      - THE_4000X3000
+      - THE_48_MP
+      - THE_4_K
+      - THE_5312X6000
+      - THE_5_MP
+      - THE_720_P
+      - THE_800_P
+      title: ColorCameraResolution
     DeviceInfo:
       properties:
         mxid:
@@ -1607,8 +1633,7 @@ components:
     MonoCameraConfigProperties:
       properties:
         resolution:
-          type: integer
-          title: Resolution
+          $ref: '#/components/schemas/MonoCameraResolution'
         fps:
           type: number
           title: Fps
@@ -1617,6 +1642,15 @@ components:
       - resolution
       - fps
       title: MonoCameraConfigProperties
+    MonoCameraResolution:
+      type: string
+      enum:
+      - THE_1200_P
+      - THE_400_P
+      - THE_480_P
+      - THE_720_P
+      - THE_800_P
+      title: MonoCameraResolution
     SensorControl:
       properties:
         exposure_time:
