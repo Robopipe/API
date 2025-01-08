@@ -8,7 +8,8 @@ from io import BytesIO
 from ..camera.nn import CameraNNConfig, CameraNNYoloConfig, CameraNNMobileNetConfig
 from ..camera.sensor_config import SensorConfigProperties
 from ..camera.sensor_control import SensorControl
-from ..models.nn_config import NNConfig, NNType
+from ..models.nn_config import NNType
+from ..models.sensor_control import SensorControlUpdate
 from ..utils.ws_adapter import WsAdapter
 from .common import (
     CameraDep,
@@ -71,8 +72,13 @@ def get_sensor_control(sensor: SensorDep) -> SensorControl:
 
 
 @sensor_router.post("/control")
-def update_sensor_control(sensor: SensorDep, control: SensorControl) -> SensorControl:
-    sensor.control = control
+def update_sensor_control(
+    sensor: SensorDep, control: SensorControlUpdate
+) -> SensorControl:
+    updated_control = sensor.control.model_copy(
+        update=control.model_dump(exclude_unset=True, exclude_none=True)
+    )
+    sensor.control = updated_control
 
     return sensor.control
 
