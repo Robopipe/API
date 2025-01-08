@@ -33,14 +33,28 @@ class SensorControlMF(BaseModel):
     manual_focus: Annotated[int, Field(strict=True, ge=0, le=255)]
 
 
+class AutoWhiteBalanceMode(Enum):
+    AUTO = dai.RawCameraControl.AutoWhiteBalanceMode.AUTO.name
+    CLOUDY_DAYLIGHT = dai.RawCameraControl.AutoWhiteBalanceMode.CLOUDY_DAYLIGHT.name
+    DAYLIGHT = dai.RawCameraControl.AutoWhiteBalanceMode.DAYLIGHT.name
+    FLUORESCENT = dai.RawCameraControl.AutoWhiteBalanceMode.FLUORESCENT.name
+    INCANDESCENT = dai.RawCameraControl.AutoWhiteBalanceMode.INCANDESCENT.name
+    OFF = dai.RawCameraControl.AutoWhiteBalanceMode.OFF.name
+    SHADE = dai.RawCameraControl.AutoWhiteBalanceMode.SHADE.name
+    TWILIGHT = dai.RawCameraControl.AutoWhiteBalanceMode.TWILIGHT.name
+    WARM_FLUORESCENT = dai.RawCameraControl.AutoWhiteBalanceMode.WARM_FLUORESCENT.name
+
+
 class SensorControl(BaseModel):
     exposure_time: Annotated[
         int,
         Field(
-            description="Exposure time in microseconds. Ignored if auto_exposure_enable is set to true."
+            description="Exposure time in microseconds. Ignored if auto_exposure_enable is set to true.",
+            ge=1,
+            le=33000,
         ),
     ]
-    sensitivity_iso: Annotated[int, Field(strict=True, ge=100, le=1600)]
+    sensitivity_iso: Annotated[int, Field(strict=True, ge=100, le=5000)]
     auto_exposure_enable: bool
     auto_exposure_compensation: Annotated[int, Field(strict=True, ge=-9, le=9)] = 0
     auto_exposure_limit: Annotated[
@@ -55,6 +69,9 @@ class SensorControl(BaseModel):
     saturation: Annotated[int, Field(strict=True, ge=-10, le=10)] = 0
     chroma_denoise: Annotated[int, Field(strict=True, ge=0, le=4)] = 1
     luma_denoise: Annotated[int, Field(strict=True, ge=0, le=4)] = 1
+    auto_whitebalance_lock: bool
+    auto_whitebalance_mode: AutoWhiteBalanceMode = AutoWhiteBalanceMode.AUTO
+    manual_whitebalance: Annotated[int, Field(strict=True, ge=1000, le=12000)]
 
     @classmethod
     def from_camera_control(cls, ctrl: dai.CameraControl):
@@ -65,12 +82,14 @@ class SensorControl(BaseModel):
             "saturation": raw_ctrl.saturation,
             "chroma_denoise": raw_ctrl.chromaDenoise,
             "luma_denoise": raw_ctrl.lumaDenoise,
-            "exposure_time": math.floor(ctrl.getExposureTime().total_seconds() * 1000),
+            "exposure_time": 1,
             "sensitivity_iso": 850,
             "auto_exposure_enable": ctrl.getExposureTime().total_seconds() == 0,
             "auto_exposure_limit": raw_ctrl.aeMaxExposureTimeUs,
             "auto_exposure_compensation": raw_ctrl.expCompensation,
             "auto_exposure_lock": raw_ctrl.aeLockMode,
+            "auto_whitebalance_lock": raw_ctrl.awbLockMode,
+            "manual_whitebalance": 6500,
         }
 
         return cls.model_validate(properties)
@@ -90,5 +109,15 @@ class SensorControl(BaseModel):
             ctrl.setAutoExposureLock(self.auto_exposure_lock)
         elif self.exposure_time > 0:
             ctrl.setManualExposure(self.exposure_time, self.sensitivity_iso)
+
+        if self.auto_whitebalance_mode != AutoWhiteBalanceMode.OFF:
+            ctrl.setAutoWhiteBalanceLock(self.auto_whitebalance_lock)
+            ctrl.setAutoWhiteBalanceMode(
+                dai.RawCameraControl.AutoWhiteBalanceMode.__members__[
+                    self.auto_whitebalance_mode.name
+                ]
+            )
+        else:
+            ctrl.setManualWhiteBalance(self.manual_whitebalance)
 
         return ctrl
