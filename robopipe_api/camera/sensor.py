@@ -3,6 +3,7 @@ import depthai as dai
 from PIL import Image
 import numpy as np
 
+import math
 from typing import Callable
 
 from ..utils.image import img_frame_to_pil_image
@@ -47,17 +48,25 @@ class Sensor:
         control_queue = self.input_queues[PipelineQueueType.CONTROL]
         control_queue.send(self._control.to_camera_control())
 
+    def __extract_img_properties(self, img: dai.ImgFrame):
+        self._control.sensitivity_iso = img.getSensitivity()
+        self._control.exposure_time = math.floor(
+            img.getExposureTime().total_seconds() * 1000
+        )
+        self._control.manual_whitebalance = img.getColorTemperature()
+
     def capture_still(self):
-        control_queue = self.input_queues[PipelineQueueType.CONTROL]
-
-        ctrl = dai.CameraControl()
-        ctrl.setCaptureStill(True)
-        control_queue.send(ctrl)
-
         try:
-            img_frame: dai.ImgFrame = self.output_queues[
-                PipelineQueueType.STILL
-            ].getAll()[-1]
+            if PipelineQueueType.NN not in self.output_queues:
+                self.output_queues[PipelineQueueType.STILL].getAll()
+            else:
+                control_queue = self.input_queues[PipelineQueueType.CONTROL]
+                ctrl = dai.CameraControl()
+                ctrl.setCaptureStill(True)
+                control_queue.send(ctrl)
+
+            img_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.STILL].get()
+            self.__extract_img_properties(img_frame)
         except:
             return
 
