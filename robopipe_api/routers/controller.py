@@ -15,7 +15,7 @@ router = APIRouter(prefix="/controller", tags=["controller"])
 
 
 @router.get("/")
-def get_all_circuits(devices: DevicesDep):
+def list_all_circuits(devices: DevicesDep):
     return [
         device.full()
         for device_type in DEVICE_TYPES
@@ -24,7 +24,7 @@ def get_all_circuits(devices: DevicesDep):
 
 
 @router.get(r"/{device_type:int}")
-def get_all_circuits_of_device_type(devices: DevicesDep, device_type: DeviceType):
+def list_all_circuits_of_device_type(devices: DevicesDep, device_type: DeviceType):
     return [device.full() for device in devices.by_name(device_type)]
 
 
@@ -70,7 +70,7 @@ def register_device_endpoints(endpoints: list[tuple[str, Any, Any, str]]):
         plural_name = name + "s"
 
         router.add_api_route(
-            rf"/{path}", get_all, name=f"Get all {plural_name}", methods=["GET"]
+            rf"/{path}", get_all, name=f"List all {plural_name}", methods=["GET"]
         )
         router.add_api_route(
             rf"/{path}", set_all, name=f"Set all {plural_name}", methods=["POST"]
