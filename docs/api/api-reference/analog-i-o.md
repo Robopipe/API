@@ -6,10 +6,6 @@
 [oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ai" method="post" %}
-[oas.yaml](../../.gitbook/assets/oas.yaml)
-{% endswagger %}
-
 {% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ai/{circuit}" method="get" %}
 [oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
@@ -18,11 +14,11 @@
 [oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ao" method="get" %}
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ai" method="post" %}
 [oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ao" method="post" %}
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ao" method="get" %}
 [oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}
 
@@ -31,5 +27,9 @@
 {% endswagger %}
 
 {% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ao/{circuit}" method="post" %}
+[oas.yaml](../../.gitbook/assets/oas.yaml)
+{% endswagger %}
+
+{% swagger src="../../.gitbook/assets/oas.yaml" path="/controller/ao" method="post" %}
 [oas.yaml](../../.gitbook/assets/oas.yaml)
 {% endswagger %}

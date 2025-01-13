@@ -402,7 +402,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SensorControl'
+              $ref: '#/components/schemas/SensorControlUpdate'
       responses:
         '200':
           description: Successful Response
@@ -1216,6 +1216,19 @@ components:
       - value
       - mode
       title: AnalogOutputUpdate
+    AutoWhiteBalanceMode:
+      type: string
+      enum:
+      - AUTO
+      - CLOUDY_DAYLIGHT
+      - DAYLIGHT
+      - FLUORESCENT
+      - INCANDESCENT
+      - 'OFF'
+      - SHADE
+      - TWILIGHT
+      - WARM_FLUORESCENT
+      title: AutoWhiteBalanceMode
     Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post:
       properties:
         model:
@@ -1655,12 +1668,14 @@ components:
       properties:
         exposure_time:
           type: integer
+          maximum: 33000.0
+          minimum: 1.0
           title: Exposure Time
           description: Exposure time in microseconds. Ignored if auto_exposure_enable
             is set to true.
         sensitivity_iso:
           type: integer
-          maximum: 1600.0
+          maximum: 5000.0
           minimum: 100.0
           title: Sensitivity Iso
         auto_exposure_enable:
@@ -1709,6 +1724,17 @@ components:
           minimum: 0.0
           title: Luma Denoise
           default: 1
+        auto_whitebalance_lock:
+          type: boolean
+          title: Auto Whitebalance Lock
+        auto_whitebalance_mode:
+          $ref: '#/components/schemas/AutoWhiteBalanceMode'
+          default: AUTO
+        manual_whitebalance:
+          type: integer
+          maximum: 12000.0
+          minimum: 1000.0
+          title: Manual Whitebalance
       type: object
       required:
       - exposure_time
@@ -1716,7 +1742,75 @@ components:
       - auto_exposure_enable
       - auto_exposure_limit
       - auto_exposure_lock
+      - auto_whitebalance_lock
+      - manual_whitebalance
       title: SensorControl
+    SensorControlUpdate:
+      properties:
+        exposure_time:
+          type: integer
+          maximum: 33000.0
+          minimum: 1.0
+          title: Exposure Time
+          description: Exposure time in microseconds. Ignored if auto_exposure_enable
+            is set to true.
+        sensitivity_iso:
+          type: integer
+          maximum: 5000.0
+          minimum: 100.0
+          title: Sensitivity Iso
+        auto_exposure_enable:
+          type: boolean
+          title: Auto Exposure Enable
+        auto_exposure_compensation:
+          type: integer
+          maximum: 9.0
+          minimum: -9.0
+          title: Auto Exposure Compensation
+        auto_exposure_limit:
+          type: integer
+          title: Auto Exposure Limit
+          description: Maximum exposure time limit for auto-exposure in microseconds
+        auto_exposure_lock:
+          type: boolean
+          title: Auto Exposure Lock
+        contrast:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Contrast
+        brightness:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Brightness
+        saturation:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Saturation
+        chroma_denoise:
+          type: integer
+          maximum: 4.0
+          minimum: 0.0
+          title: Chroma Denoise
+        luma_denoise:
+          type: integer
+          maximum: 4.0
+          minimum: 0.0
+          title: Luma Denoise
+        auto_whitebalance_lock:
+          type: boolean
+          title: Auto Whitebalance Lock
+        auto_whitebalance_mode:
+          $ref: '#/components/schemas/AutoWhiteBalanceMode'
+        manual_whitebalance:
+          type: integer
+          maximum: 12000.0
+          minimum: 1000.0
+          title: Manual Whitebalance
+      type: object
+      title: SensorControlUpdate
     ValidationError:
       properties:
         loc:
