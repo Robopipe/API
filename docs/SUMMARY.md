@@ -41,8 +41,6 @@
 
 ## Other
 
-* [FAQ](other/faq/README.md)
-  * [Page 1](other/faq/page-1.md)
 * [Troubleshooting](other/troubleshooting.md)
 
 ## Resources
