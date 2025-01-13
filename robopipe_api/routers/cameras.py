@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from ..camera.camera_stats import CameraStats
 from ..camera.device_info import DeviceInfo
+from ..camera.ir import IRConfig
 from .common import CameraManagerDep, Mxid, CameraDep
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
@@ -41,6 +42,18 @@ def delete_camera(camera_manager: CameraManagerDep, mxid: Mxid) -> DeviceInfo:
 @camera_router.get("/stats")
 def get_camera_stats(camera: CameraDep) -> CameraStats:
     return camera.stats
+
+
+@camera_router.get("/ir")
+def get_infrared_config(camera: CameraDep) -> IRConfig | None:
+    return camera.ir_config
+
+
+@camera_router.post("/ir")
+def set_infrared_config(camera: CameraDep, ir_config: IRConfig) -> IRConfig | None:
+    camera.ir_config = ir_config
+
+    return camera.ir_config
 
 
 router.include_router(camera_router)
