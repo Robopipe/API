@@ -39,7 +39,7 @@ devices = get_devices()
 ```
 {% endcode %}
 
-Devices will contain an array of connected devices, containing their MXID along with other information. To find out more about devices API head over to the [API reference](../api/api-reference/cameras.md#cameras).
+Devices will contain an array of connected devices, containing their MXID along with other information. To find out more about devices API head over to the [API reference](../api/rest-api-reference/cameras.md#cameras).
 
 We will use the first device.
 
@@ -95,7 +95,7 @@ def capture_data():
             break
 ```
 
-To capture data we simply call `capture_data()`. This will, however, capture the data in full camera resolution, which might not be desired. In our case, the model will be trained on images of size 200x200. We can create another function, which will properly configure the camera, so that the captured images are the right size. There are numerous options which you can configure via the [config](../api/api-reference/sensors.md#cameras-mxid-sensors-sensor_name-config) and [control](../api/api-reference/sensors.md#cameras-mxid-sensors-sensor_name-control) API.
+To capture data we simply call `capture_data()`. This will, however, capture the data in full camera resolution, which might not be desired. In our case, the model will be trained on images of size 200x200. We can create another function, which will properly configure the camera, so that the captured images are the right size. There are numerous options which you can configure via the [config](../api/rest-api-reference/sensors.md#cameras-mxid-sensors-sensor_name-config) and [control](../api/rest-api-reference/sensors.md#cameras-mxid-sensors-sensor_name-control) API.
 
 ```python
 def configure_camera(width: int, height: int):
