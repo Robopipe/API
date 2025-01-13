@@ -1,4 +1,4 @@
-# Stream
+# Video Stream
 
 Each sensor provides its own video stream. If there are no subscribers, no data is streamed to prevent additional resource usage. The streams starts when the first subscriber connects to the websocket endpoint and ends when the last subscriber disconnects. Each stream is capable of handling multiple subscribers with some [caveats](stream.md#multiple-subscribers).
 
@@ -6,13 +6,13 @@ Each sensor provides its own video stream. If there are no subscribers, no data 
 
 ### Receiving segments
 
-The data obtained via websockets is MP4 fragments encoded using H.264 codec. To start receiving data, simply open a websocket at `ws://host:port/camera/MXID/sensors/SENSOR_NAME/stream`.
+The data obtained via websockets is MP4 fragments encoded using H.264 codec. To start receiving data, simply open a websocket at `ws://host:port/camera/MXID/sensors/SENSOR_NAME/video`.
 
 ### Playing the video
 
 The easiest way to play the video from the stream, is to use our embedded player right here. You are free to edit the source code to modify it to your needs.
 
-{% embed url="https://codepen.io/adamberkes/pen/MYggMWX" fullWidth="false" %}
+{% embed url="https://codepen.io/robopipe/pen/YPKLyRG" %}
 
 ## Multiple subscribers
 

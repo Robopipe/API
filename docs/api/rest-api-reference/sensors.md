@@ -1,6 +1,6 @@
 # Sensors
 
-Each camera contains a number of sensors of different types. Our API currently supports manipulation of color and monochromatic image sensors. Each sensor produces image data in various formats and is configurable independently of other sensor on the same device. Sensors are addressed bi their socket name which is in the format [_CAM\_(A-H)_](#user-content-fn-1)[^1]_._
+Each camera contains a number of sensors of different types. Our API currently supports manipulation of color and monochromatic image sensors. Each sensor produces image data in various formats and is configurable independently of other sensor on the same device. Sensors are addressed by their socket name which is in the format [_CAM\_(A-H)_](#user-content-fn-1)[^1]_._
 
 ## API Reference
 

@@ -4,8 +4,7 @@
 
 ## Getting started
 
-* [Supported devices](getting-started/supported-devices.md)
-* [Connection](getting-started/connection.md)
+* [Setup](getting-started/connection.md)
 * [Hello world](getting-started/hello-world.md)
 
 ## Controller
@@ -17,6 +16,7 @@
   * [Relay outputs](controller/inputs-outputs/relay-outputs.md)
   * [Analog inputs](controller/inputs-outputs/analog-inputs.md)
   * [Analog outputs](controller/inputs-outputs/analog-outputs.md)
+* [OS](controller/os.md)
 
 ## Examples
 
@@ -24,23 +24,23 @@
 
 ## API
 
-* [API Reference](api/api-reference/README.md)
-  * [Cameras](api/api-reference/cameras.md)
-  * [Sensors](api/api-reference/sensors.md)
-  * [Stream](api/api-reference/stream.md)
-  * [Neural Network](api/api-reference/neural-network.md)
-  * [Controller](api/api-reference/controller.md)
-  * [Analog I/O](api/api-reference/analog-i-o.md)
-  * [Digital I/O](api/api-reference/digital-i-o.md)
-  * [Led](api/api-reference/led.md)
+* [REST API Reference](api/rest-api-reference/README.md)
+  * [Cameras](api/rest-api-reference/cameras.md)
+  * [Sensors](api/rest-api-reference/sensors.md)
+  * [Neural Network](api/rest-api-reference/neural-network.md)
+  * [Controller](api/rest-api-reference/controller.md)
+  * [Analog I/O](api/rest-api-reference/analog-i-o.md)
+  * [Digital I/O](api/rest-api-reference/digital-i-o.md)
+  * [Led](api/rest-api-reference/led.md)
+* [WebSocket API Reference](api/websocket-api-reference/README.md)
+  * [Video Stream](api/websocket-api-reference/stream.md)
+  * [NN Inference](api/websocket-api-reference/nn-inference.md)
 * [Configuration](api/configuration.md)
-
-***
-
-* [Getting Started (Generic Devices)](getting-started-generic-devices.md)
 
 ## Other
 
+* [Supported devices](other/supported-devices.md)
+* [Generic Devices](other/generic-devices.md)
 * [Troubleshooting](other/troubleshooting.md)
 
 ## Resources
