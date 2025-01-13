@@ -22,11 +22,11 @@ def get_camera(camera_manager: CameraManagerDep, mxid: Mxid):
 
 
 CameraDep = Annotated[Camera, Depends(get_camera)]
-SensorName = Annotated[str, Path(regex=r"CAM_[A-H]")]
+StreamName = Annotated[str, Path(regex=r"CAM_[A-H]")]
 
 
-def get_sensor(camera: CameraDep, sensor_name: SensorName):
-    return camera.sensors[sensor_name]
+def get_sensor(camera: CameraDep, stream_name: StreamName):
+    return camera.sensors[stream_name]
 
 
 SensorDep = Annotated[Sensor, Depends(get_sensor)]
