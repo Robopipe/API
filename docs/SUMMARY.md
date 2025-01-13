@@ -26,7 +26,7 @@
 
 * [REST API Reference](api/rest-api-reference/README.md)
   * [Cameras](api/rest-api-reference/cameras.md)
-  * [Sensors](api/rest-api-reference/sensors.md)
+  * [Streams](api/rest-api-reference/streams.md)
   * [Neural Network](api/rest-api-reference/neural-network.md)
   * [Controller](api/rest-api-reference/controller.md)
   * [Analog I/O](api/rest-api-reference/analog-i-o.md)
