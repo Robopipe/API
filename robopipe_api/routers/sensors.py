@@ -28,7 +28,7 @@ router = APIRouter(
 
 
 @router.get("/")
-def get_sensors(camera: CameraDep):
+def list_all_sensors(camera: CameraDep):
     return {
         sensor: {"active": sensor in camera.sensors}
         for sensor in camera.all_sensors.keys()
