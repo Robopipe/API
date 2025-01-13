@@ -147,12 +147,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /cameras/{mxid}/sensors/:
+  /cameras/{mxid}/ir:
     get:
       tags:
-      - sensors
-      summary: Get Sensors
-      operationId: get_sensors_cameras__mxid__sensors__get
+      - cameras
+      - cameras
+      summary: Get Infrared Config
+      operationId: get_infrared_config_cameras__mxid__ir_get
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/IRConfig'
+                - type: 'null'
+                title: Response Get Infrared Config Cameras  Mxid  Ir Get
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - cameras
+      - cameras
+      summary: Set Infrared Config
+      operationId: set_infrared_config_cameras__mxid__ir_post
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IRConfig'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/IRConfig'
+                - type: 'null'
+                title: Response Set Infrared Config Cameras  Mxid  Ir Post
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/streams/:
+    get:
+      tags:
+      - streams
+      summary: List All Streams
+      operationId: list_all_streams_cameras__mxid__streams__get
       parameters:
       - name: mxid
         in: path
@@ -175,21 +246,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /cameras/{mxid}/sensors/{sensor_name}/:
+  /cameras/{mxid}/streams/{stream_name}/:
     post:
       tags:
-      - sensors
-      - sensors
-      summary: Activate Sensor
-      operationId: activate_sensor_cameras__mxid__sensors__sensor_name___post
+      - streams
+      - streams
+      summary: Activate Stream
+      operationId: activate_stream_cameras__mxid__streams__stream_name___post
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -204,7 +275,7 @@ paths:
             application/json:
               schema: {}
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
@@ -213,18 +284,18 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     delete:
       tags:
-      - sensors
-      - sensors
-      summary: Deactivate Sensor
-      operationId: deactivate_sensor_cameras__mxid__sensors__sensor_name___delete
+      - streams
+      - streams
+      summary: Deactivate Stream
+      operationId: deactivate_stream_cameras__mxid__streams__stream_name___delete
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -239,28 +310,28 @@ paths:
             application/json:
               schema: {}
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /cameras/{mxid}/sensors/{sensor_name}/config:
+  /cameras/{mxid}/streams/{stream_name}/config:
     get:
       tags:
-      - sensors
-      - sensors
-      summary: Get Sensor Config
-      operationId: get_sensor_config_cameras__mxid__sensors__sensor_name__config_get
+      - streams
+      - streams
+      summary: Get Stream Config
+      operationId: get_stream_config_cameras__mxid__streams__stream_name__config_get
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -278,10 +349,10 @@ paths:
                 - $ref: '#/components/schemas/CameraConfigProperties'
                 - $ref: '#/components/schemas/ColorCameraConfigProperties'
                 - $ref: '#/components/schemas/MonoCameraConfigProperties'
-                title: Response Get Sensor Config Cameras  Mxid  Sensors  Sensor Name  Config
+                title: Response Get Stream Config Cameras  Mxid  Streams  Stream Name  Config
                   Get
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
@@ -290,18 +361,18 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
-      - sensors
-      - sensors
-      summary: Update Sensor Config
-      operationId: update_sensor_config_cameras__mxid__sensors__sensor_name__config_post
+      - streams
+      - streams
+      summary: Update Stream Config
+      operationId: update_stream_config_cameras__mxid__streams__stream_name__config_post
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -329,31 +400,31 @@ paths:
                 - $ref: '#/components/schemas/CameraConfigProperties'
                 - $ref: '#/components/schemas/ColorCameraConfigProperties'
                 - $ref: '#/components/schemas/MonoCameraConfigProperties'
-                title: Response Update Sensor Config Cameras  Mxid  Sensors  Sensor
+                title: Response Update Stream Config Cameras  Mxid  Streams  Stream
                   Name  Config Post
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /cameras/{mxid}/sensors/{sensor_name}/control:
+  /cameras/{mxid}/streams/{stream_name}/control:
     get:
       tags:
-      - sensors
-      - sensors
-      summary: Get Sensor Control
-      operationId: get_sensor_control_cameras__mxid__sensors__sensor_name__control_get
+      - streams
+      - streams
+      summary: Get Stream Control
+      operationId: get_stream_control_cameras__mxid__streams__stream_name__control_get
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -369,7 +440,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SensorControl'
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
@@ -378,18 +449,18 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
-      - sensors
-      - sensors
-      summary: Update Sensor Control
-      operationId: update_sensor_control_cameras__mxid__sensors__sensor_name__control_post
+      - streams
+      - streams
+      summary: Update Stream Control
+      operationId: update_stream_control_cameras__mxid__streams__stream_name__control_post
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -411,28 +482,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/SensorControl'
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /cameras/{mxid}/sensors/{sensor_name}/still:
+  /cameras/{mxid}/streams/{stream_name}/still:
     get:
       tags:
-      - sensors
-      - sensors
+      - streams
+      - streams
       summary: Capture Still Image
-      operationId: capture_still_image_cameras__mxid__sensors__sensor_name__still_get
+      operationId: capture_still_image_cameras__mxid__streams__stream_name__still_get
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -457,29 +528,29 @@ paths:
               schema:
                 type: string
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /cameras/{mxid}/sensors/{sensor_name}/nn:
+  /cameras/{mxid}/streams/{stream_name}/nn:
     post:
       tags:
-      - sensors
-      - sensors
+      - streams
+      - streams
       - nn
       summary: Deploy Neural Network
-      operationId: deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post
+      operationId: deploy_neural_network_cameras__mxid__streams__stream_name__nn_post
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -492,7 +563,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post'
+              $ref: '#/components/schemas/Body_deploy_neural_network_cameras__mxid__streams__stream_name__nn_post'
       responses:
         '201':
           description: Successful Response
@@ -500,7 +571,7 @@ paths:
             application/json:
               schema: {}
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
@@ -509,19 +580,19 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     delete:
       tags:
-      - sensors
-      - sensors
+      - streams
+      - streams
       - nn
       summary: Delete Neural Network
-      operationId: delete_neural_network_cameras__mxid__sensors__sensor_name__nn_delete
+      operationId: delete_neural_network_cameras__mxid__streams__stream_name__nn_delete
       parameters:
-      - name: sensor_name
+      - name: stream_name
         in: path
         required: true
         schema:
           type: string
           pattern: CAM_[A-H]
-          title: Sensor Name
+          title: Stream Name
       - name: mxid
         in: path
         required: true
@@ -536,7 +607,7 @@ paths:
             application/json:
               schema: {}
         '404':
-          description: Camera or sensor not found
+          description: Camera or stream not found
         '422':
           description: Validation Error
           content:
@@ -547,8 +618,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All Circuits
-      operationId: get_all_circuits_controller__get
+      summary: List All Circuits
+      operationId: list_all_circuits_controller__get
       responses:
         '200':
           description: Successful Response
@@ -559,8 +630,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All Circuits Of Device Type
-      operationId: get_all_circuits_of_device_type_controller__device_type__get
+      summary: List All Circuits Of Device Type
+      operationId: list_all_circuits_of_device_type_controller__device_type__get
       parameters:
       - name: device_type
         in: path
@@ -585,8 +656,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All Analog Inputs
-      operationId: Get_all_analog_inputs_controller_ai_get
+      summary: List All Analog Inputs
+      operationId: List_all_analog_inputs_controller_ai_get
       responses:
         '200':
           description: Successful Response
@@ -596,7 +667,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AnalogInput'
                 type: array
-                title: Response Get All Analog Inputs Controller Ai Get
+                title: Response List All Analog Inputs Controller Ai Get
     post:
       tags:
       - controller
@@ -685,8 +756,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All Analog Outputs
-      operationId: Get_all_analog_outputs_controller_ao_get
+      summary: List All Analog Outputs
+      operationId: List_all_analog_outputs_controller_ao_get
       responses:
         '200':
           description: Successful Response
@@ -696,7 +767,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/AnalogOutput'
                 type: array
-                title: Response Get All Analog Outputs Controller Ao Get
+                title: Response List All Analog Outputs Controller Ao Get
     post:
       tags:
       - controller
@@ -785,8 +856,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All Digital Inputs
-      operationId: Get_all_digital_inputs_controller_di_get
+      summary: List All Digital Inputs
+      operationId: List_all_digital_inputs_controller_di_get
       responses:
         '200':
           description: Successful Response
@@ -796,7 +867,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/DigitalInput'
                 type: array
-                title: Response Get All Digital Inputs Controller Di Get
+                title: Response List All Digital Inputs Controller Di Get
     post:
       tags:
       - controller
@@ -885,8 +956,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All Digital Outputs
-      operationId: Get_all_digital_outputs_controller_do_get
+      summary: List All Digital Outputs
+      operationId: List_all_digital_outputs_controller_do_get
       responses:
         '200':
           description: Successful Response
@@ -896,7 +967,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/DigitalOutput'
                 type: array
-                title: Response Get All Digital Outputs Controller Do Get
+                title: Response List All Digital Outputs Controller Do Get
     post:
       tags:
       - controller
@@ -985,8 +1056,8 @@ paths:
     get:
       tags:
       - controller
-      summary: Get All Leds
-      operationId: Get_all_leds_controller_led_get
+      summary: List All Leds
+      operationId: List_all_leds_controller_led_get
       responses:
         '200':
           description: Successful Response
@@ -996,7 +1067,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/Led'
                 type: array
-                title: Response Get All Leds Controller Led Get
+                title: Response List All Leds Controller Led Get
     post:
       tags:
       - controller
@@ -1229,7 +1300,7 @@ components:
       - TWILIGHT
       - WARM_FLUORESCENT
       title: AutoWhiteBalanceMode
-    Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post:
+    Body_deploy_neural_network_cameras__mxid__streams__stream_name__nn_post:
       properties:
         model:
           type: string
@@ -1242,7 +1313,7 @@ components:
       required:
       - model
       - nn_config
-      title: Body_deploy_neural_network_cameras__mxid__sensors__sensor_name__nn_post
+      title: Body_deploy_neural_network_cameras__mxid__streams__stream_name__nn_post
     CameraConfigProperties:
       properties:
         resolution:
@@ -1594,6 +1665,22 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    IRConfig:
+      properties:
+        flood_light:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Flood Light
+          default: 0.0
+        dot_projector:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Dot Projector
+          default: 0.0
+      type: object
+      title: IRConfig
     Led:
       properties:
         dev:
