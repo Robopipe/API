@@ -15,50 +15,50 @@ from .common import (
     CameraDep,
     SensorDep,
     Mxid,
-    SensorName,
+    StreamName,
     StreamServiceDep,
     NNConfigDep,
 )
 
 router = APIRouter(
-    prefix="/cameras/{mxid}/sensors",
-    tags=["sensors"],
+    prefix="/cameras/{mxid}/streams",
+    tags=["streams"],
     responses={404: {"description": "Camera not found"}},
 )
 
 
 @router.get("/")
-def list_all_sensors(camera: CameraDep):
+def list_all_streams(camera: CameraDep):
     return {
         sensor: {"active": sensor in camera.sensors}
         for sensor in camera.all_sensors.keys()
     }
 
 
-sensor_router = APIRouter(
-    prefix="/{sensor_name}",
-    tags=["sensors"],
-    responses={404: {"description": "Camera or sensor not found"}},
+stream_router = APIRouter(
+    prefix="/{stream_name}",
+    tags=["streams"],
+    responses={404: {"description": "Camera or stream not found"}},
 )
 
 
-@sensor_router.post("/", status_code=status.HTTP_201_CREATED)
-def activate_sensor(camera: CameraDep, sensor_name: SensorName):
-    camera.activate_sensor(sensor_name)
+@stream_router.post("/", status_code=status.HTTP_201_CREATED)
+def activate_stream(camera: CameraDep, stream_name: StreamName):
+    camera.activate_sensor(stream_name)
 
 
-@sensor_router.delete("/", status_code=status.HTTP_202_ACCEPTED)
-def deactivate_sensor(camera: CameraDep, sensor_name: SensorName):
-    camera.deactivate_sensor(sensor_name)
+@stream_router.delete("/", status_code=status.HTTP_202_ACCEPTED)
+def deactivate_stream(camera: CameraDep, stream_name: StreamName):
+    camera.deactivate_sensor(stream_name)
 
 
-@sensor_router.get("/config")
-def get_sensor_config(sensor: SensorDep) -> SensorConfigProperties:
+@stream_router.get("/config")
+def get_stream_config(sensor: SensorDep) -> SensorConfigProperties:
     return sensor.config
 
 
-@sensor_router.post("/config")
-def update_sensor_config(
+@stream_router.post("/config")
+def update_stream_config(
     sensor: SensorDep, config: SensorConfigProperties
 ) -> SensorConfigProperties:
     sensor.config = config
@@ -66,13 +66,13 @@ def update_sensor_config(
     return sensor.config
 
 
-@sensor_router.get("/control")
-def get_sensor_control(sensor: SensorDep) -> SensorControl:
+@stream_router.get("/control")
+def get_stream_control(sensor: SensorDep) -> SensorControl:
     return sensor.control
 
 
-@sensor_router.post("/control")
-def update_sensor_control(
+@stream_router.post("/control")
+def update_stream_control(
     sensor: SensorDep, control: SensorControlUpdate
 ) -> SensorControl:
     updated_control = sensor.control.model_copy(
@@ -83,7 +83,7 @@ def update_sensor_control(
     return sensor.control
 
 
-@sensor_router.get(
+@stream_router.get(
     "/still",
     response_description="Image bytes in the selected format",
     response_model=bytes,
@@ -96,11 +96,11 @@ def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Respo
     return Response(img_buffer.getvalue(), media_type=f"image/{format}")
 
 
-@sensor_router.post("/nn", status_code=status.HTTP_201_CREATED, tags=["nn"])
+@stream_router.post("/nn", status_code=status.HTTP_201_CREATED, tags=["nn"])
 async def deploy_neural_network(
-    camera: CameraDep, sensor_name: SensorName, model: UploadFile, config: NNConfigDep
+    camera: CameraDep, stream_name: StreamName, model: UploadFile, config: NNConfigDep
 ):
-    sensor = camera.all_sensors[sensor_name]
+    sensor = camera.all_sensors[stream_name]
     model_bytes = await model.read()
     blob = dai.OpenVINO.Blob(list(model_bytes))
 
@@ -124,12 +124,12 @@ async def deploy_neural_network(
     camera.deploy_nn(nn_config)
 
 
-@sensor_router.delete("/nn", status_code=status.HTTP_202_ACCEPTED, tags=["nn"])
-async def delete_neural_network(camera: CameraDep, sensor_name: SensorName):
-    camera.delete_nn(sensor_name)
+@stream_router.delete("/nn", status_code=status.HTTP_202_ACCEPTED, tags=["nn"])
+async def delete_neural_network(camera: CameraDep, stream_name: StreamName):
+    camera.delete_nn(stream_name)
 
 
-@sensor_router.websocket("/nn")
+@stream_router.websocket("/nn")
 async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
     await ws.accept()
 
@@ -158,9 +158,9 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
         return
 
 
-@sensor_router.websocket("/stream")
-async def get_sensor_stream(
-    ws: WebSocket, mxid: Mxid, sensor_name: SensorName, stream_service: StreamServiceDep
+@stream_router.websocket("/video")
+async def get_stream_video(
+    ws: WebSocket, mxid: Mxid, stream_name: StreamName, stream_service: StreamServiceDep
 ):
     tg = anyio.create_task_group()
 
@@ -170,11 +170,11 @@ async def get_sensor_stream(
 
     def on_close():
         tg.cancel_scope.cancel()
-        stream_service.unsubscribe((mxid, sensor_name), ws_adapter)
+        stream_service.unsubscribe((mxid, stream_name), ws_adapter)
 
     ws_adapter = WsAdapter(ws)
     await ws_adapter.accept()
-    await stream_service.subscribe((mxid, sensor_name), ws_adapter, lambda: on_close())
+    await stream_service.subscribe((mxid, stream_name), ws_adapter, on_close)
     await sleep()
 
     try:
@@ -183,4 +183,4 @@ async def get_sensor_stream(
         pass
 
 
-router.include_router(sensor_router)
+router.include_router(stream_router)
