@@ -12,22 +12,10 @@ Deploying an AI model on the camera takes some time (usually \~20s, but may take
 
 ## API Reference
 
-{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/nn" method="post" %}
-[oas.yaml](../../.gitbook/assets/oas.yaml)
+{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/streams/{stream_name}/nn" method="post" %}
+[oas.yml](../../.gitbook/assets/oas.yml)
 {% endswagger %}
 
-{% swagger src="../../.gitbook/assets/oas.yaml" path="/cameras/{mxid}/sensors/{sensor_name}/nn" method="delete" %}
-[oas.yaml](../../.gitbook/assets/oas.yaml)
+{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/streams/{stream_name}/nn" method="delete" %}
+[oas.yml](../../.gitbook/assets/oas.yml)
 {% endswagger %}
-
-## Running inference
-
-The neural network starts at the point it is uploaded to the camera. The output from the model can be read by subscribing to a websocket endpoint `ws://host:port/cameras/{mxid}/sensors/{sensor_name}/nn`. The outputted data will be a json in the format:
-
-```json
-{
-    "detections": ...
-}
-```
-
-where detections will contain whetever you is your model's output.

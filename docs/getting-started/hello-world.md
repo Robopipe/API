@@ -95,7 +95,7 @@ def capture_data():
             break
 ```
 
-To capture data we simply call `capture_data()`. This will, however, capture the data in full camera resolution, which might not be desired. In our case, the model will be trained on images of size 200x200. We can create another function, which will properly configure the camera, so that the captured images are the right size. There are numerous options which you can configure via the [config](../api/rest-api-reference/sensors.md#cameras-mxid-sensors-sensor_name-config) and [control](../api/rest-api-reference/sensors.md#cameras-mxid-sensors-sensor_name-control) API.
+To capture data we simply call `capture_data()`. This will, however, capture the data in full camera resolution, which might not be desired. In our case, the model will be trained on images of size 200x200. We can create another function, which will properly configure the camera, so that the captured images are the right size. There are numerous options which you can configure via the [config](../api/rest-api-reference/streams.md#cameras-mxid-sensors-sensor_name-config) and [control](../api/rest-api-reference/streams.md#cameras-mxid-sensors-sensor_name-control) API.
 
 ```python
 def configure_camera(width: int, height: int):
