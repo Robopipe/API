@@ -15,7 +15,7 @@ from .error import (
     CameraNotFoundException,
     SensorNotFoundException,
 )
-from .routers import cameras, sensors, controller
+from .routers import cameras, controller, streams
 from .stream import stream_service_factory
 
 
@@ -104,7 +104,7 @@ if os.getenv("GITHUB_ACTIONS") is not None:
     )
 
 app.include_router(cameras.router)
-app.include_router(sensors.router)
+app.include_router(streams.router)
 controller.register_device_endpoints(controller.DEVICE_ENDPOINTS)
 app.include_router(controller.router)
 
