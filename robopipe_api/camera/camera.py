@@ -6,6 +6,7 @@ from ..error import CameraShutDownException
 from ..log import logger
 from .camera_stats import CameraStats
 from .device_info import DeviceInfo
+from .ir import IRConfig
 from .pipeline.pipeline import Pipeline
 from .pipeline.streaming_pipeline import StreamingPipeline
 from .pipeline.nn_pipeline import NNPipeline
@@ -25,6 +26,9 @@ class Camera:
             sensor.socket.name: sensor
             for sensor in self.camera_handle.getConnectedCameraFeatures()
         }
+        self._ir_config = (
+            IRConfig() if len(self.camera_handle.getIrDrivers()) >= 1 else None
+        )
         self.close()
 
         if pipeline is not None:
@@ -148,3 +152,20 @@ class Camera:
             raise CameraShutDownException()
 
         return CameraStats.from_device(self.camera_handle)
+
+    @property
+    def ir_config(self):
+        return self._ir_config
+
+    @ir_config.setter
+    def ir_config(self, ir_config: IRConfig):
+        if self._ir_config is None:
+            return
+
+        self._ir_config = ir_config
+
+        if self.camera_handle is not None:
+            self.camera_handle.setIrFloodLightIntensity(self._ir_config.flood_light)
+            self.camera_handle.setIrLaserDotProjectorIntensity(
+                self._ir_config.dot_projector
+            )
