@@ -2,7 +2,7 @@
 description: Connecting your devices
 ---
 
-# Connection
+# Setup
 
 ## Controller
 
@@ -24,23 +24,23 @@ Connect the luxonis camera directly to the controller via USB and then connect t
 
 ### Accessing the controller
 
-The easiest way to check if everything is running is to head over to `http://robopipe-controller-<id>.local`, where _id_ is the a number assigned to each controller on startup, based on the order in which you start the controllers, e.g. the first controller you connect will have id 1, the next will have id 2 and so on. You should see output:&#x20;
+The easiest way to check if everything is running is to head over to `http://robopipe-controller-<id>.local`, where _id_ is the a number assigned to each controller on startup, based on the order in which you start the controllers, e.g. the first controller you connect will have id `1`, the next will have id `2` and so on. You should see output:&#x20;
 
 ```
 Hello from Robopipe API!
 ```
 
-The controller is also accesible via [SSH](https://en.wikipedia.org/wiki/Secure_Shell). The default hostname is set to `robopipe-controller-<id>.local`. The default user is `robopipe` with password `robopipe.io`. Enter this command into your terminal to connect to the controller, enter `robopipe.io` when prompted for password:
+The controller is also accesible via [SSH](https://en.wikipedia.org/wiki/Secure_Shell). The default hostname is set to `robopipe-controller-<id>.local`. The default user is `admin` with password `robopipe.io`. Enter this command into your terminal to connect to the controller, enter `robopipe.io` when prompted for password:
 
 ```bash
-ssh robopipe@robopipe-controller-<id>.local
+ssh admin@robopipe-controller-1.local
 ```
 
 When connecting for the first time, you will be asked to verify the authenticity of the controller's key. Enter `yes` and press enter.
 
 ## Accepting the controller's certificate
 
-In order to be able to use the [API Reference](../api/api-reference/) in full, you first need to accept the controller's self signed certificate. For each controller you have started, navigate to https://robopipe-controller-\<id>.local in your browser. You will be asked to accept security risks.
+In order to be able to use the [API Reference](../api/rest-api-reference/) in full, you first need to accept the controller's self signed certificate. For each controller you have started, navigate to https://robopipe-controller-\<id>.local in your browser. You will be asked to accept security risks.
 
 {% tabs %}
 {% tab title="Chrome" %}
@@ -55,3 +55,5 @@ Click on "**Advanced...**", then click on "**Accept the Risk and Continue**" (it
 Click on "**Show Details**", then click on "**visit this website**" and lastly click on "**Visit Website**".
 {% endtab %}
 {% endtabs %}
+
+{% embed url="https://codepen.io/robopipe/pen/emOrpbX" %}
