@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from pydantic import BaseModel
+
 from enum import Enum
 
 from .device import Device
@@ -10,21 +11,18 @@ class AnalogOutputModeType(Enum):
     Resistance = "Resistance"
 
 
-@dataclass
-class AnalogOutputMode:
+class AnalogOutputMode(BaseModel):
     value: int
     unit: str
     range: tuple[int, int]
 
 
-@dataclass
 class AnalogOutput(Device):
     modes: dict[AnalogOutputModeType, AnalogOutputMode]
     value: float
     mode: AnalogOutputModeType = AnalogOutputModeType.Voltage
 
 
-@dataclass
-class AnalogOutputUpdate:
+class AnalogOutputUpdate(BaseModel):
     value: float
-    mode: AnalogOutputModeType
+    mode: AnalogOutputModeType = AnalogOutputModeType.Voltage

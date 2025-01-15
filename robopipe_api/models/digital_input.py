@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from pydantic import BaseModel
+
 from enum import Enum
 from typing import Literal
 
@@ -15,7 +16,6 @@ class DigitalInputCounterMode(Enum):
     Disabled = "Disabled"
 
 
-@dataclass
 class DigitalInput(Device):
     counter_modes: list[DigitalInputCounterMode]
     modes: list[DigitalInputMode]
@@ -26,8 +26,7 @@ class DigitalInput(Device):
     debounce: int = 50
 
 
-@dataclass
-class DigitalInputUpdate:
+class DigitalInputUpdate(BaseModel):
     counter: int
     counter_mode: DigitalInputCounterMode = DigitalInputCounterMode.Enabled
     mode: DigitalInputMode = DigitalInputMode.Simple

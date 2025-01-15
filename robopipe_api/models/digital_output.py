@@ -1,5 +1,7 @@
-from dataclasses import dataclass
+from pydantic import BaseModel, Field
+
 from enum import Enum
+from typing import Annotated
 
 from .device import Device
 
@@ -9,17 +11,20 @@ class DigitalOutputMode(Enum):
     PWM = "PWM"
 
 
-@dataclass
 class DigitalOutput(Device):
     modes: list[DigitalOutputMode]
-    pwm_freq: int
-    pwm_duty: int
-    value: int | str | bool
+    pwm_freq: float
+    pwm_duty: Annotated[
+        int, Field(ge=0, le=100, description="Mutually exclusive with value")
+    ]
+    value: int
+    modes: list[DigitalOutputMode]
     mode: DigitalOutputMode
 
 
-@dataclass
-class DigitalOutputUpdate:
-    pwm_freq: int
-    pwm_duty: int
-    value: int | str | bool
+class DigitalOutputUpdate(BaseModel):
+    pwm_freq: float
+    pwm_duty: Annotated[
+        int, Field(ge=0, le=100, description="Mutually exclusive with value")
+    ]
+    value: int

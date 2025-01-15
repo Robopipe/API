@@ -1,7 +1,6 @@
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class Device:
+class Device(BaseModel):
     dev: str
     circuit: str
