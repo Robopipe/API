@@ -77,9 +77,7 @@ app = FastAPI(
 
 controller_hostname = os.getenv("HOSTNAME")
 
-if controller_hostname is not None and controller_hostname.startswith(
-    "robopipe-controller"
-):
+if controller_hostname is not None and controller_hostname.startswith("robopipe"):
     app.servers.insert(
         0,
         {
@@ -92,7 +90,7 @@ if os.getenv("GITHUB_ACTIONS") is not None:
     app.servers.insert(
         0,
         {
-            "url": "https://robopipe-controller-{controllerId}.local",
+            "url": "https://robopipe-{controllerId}.local",
             "description": "Robopipe controller running on local network",
             "variables": {
                 "controllerId": {
