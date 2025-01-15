@@ -1,19 +1,13 @@
-from dataclasses import dataclass
-from enum import Enum
+from pydantic import BaseModel, Field
+
+from typing import Annotated
 
 from .device import Device
 
 
-class DigitalOutputMode(Enum):
-    Simple = "Simple"
-    PWM = "PWM"
-
-
-@dataclass
 class Led(Device):
-    value: str | int | bool
+    value: Annotated[int, Field(ge=0, le=1)]
 
 
-@dataclass
-class LedUpdate:
-    value: str | int | bool
+class LedUpdate(BaseModel):
+    value: Annotated[int, Field(ge=0, le=1)]
