@@ -4,7 +4,7 @@ info:
   description: API for the Robopipe application
   version: 0.1.0
 servers:
-- url: https://robopipe-controller-{controllerId}.local
+- url: https://robopipe-{controllerId}.local
   description: Robopipe controller running on local network
   variables:
     controllerId:
@@ -1152,6 +1152,308 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owpower:
+    get:
+      tags:
+      - controller
+      summary: List All One-Wire Power Supplies
+      operationId: List_all_one_wire_power_supplies_controller_owpower_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWPower'
+                type: array
+                title: Response List All One Wire Power Supplies Controller Owpower
+                  Get
+    post:
+      tags:
+      - controller
+      summary: Set All One-Wire Power Supplies
+      operationId: Set_all_one_wire_power_supplies_controller_owpower_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWPowerUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWPower'
+                type: array
+                title: Response Set All One Wire Power Supplies Controller Owpower
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owpower/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get One-Wire Power Supply
+      operationId: Get_one_wire_power_supply_controller_owpower__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWPower'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set One-Wire Power Supply
+      operationId: Set_one_wire_power_supply_controller_owpower__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWPowerUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWPower'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owbus:
+    get:
+      tags:
+      - controller
+      summary: List All One-Wire Buses
+      operationId: List_all_one_wire_buses_controller_owbus_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWBus'
+                type: array
+                title: Response List All One Wire Buses Controller Owbus Get
+    post:
+      tags:
+      - controller
+      summary: Set All One-Wire Buses
+      operationId: Set_all_one_wire_buses_controller_owbus_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWBusUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWBus'
+                type: array
+                title: Response Set All One Wire Buses Controller Owbus Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owbus/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get One-Wire Bus
+      operationId: Get_one_wire_bus_controller_owbus__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWBus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set One-Wire Bus
+      operationId: Set_one_wire_bus_controller_owbus__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWBusUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWBus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/register:
+    get:
+      tags:
+      - controller
+      summary: List All Modbus Registers
+      operationId: List_all_modbus_registers_controller_register_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Modbus'
+                type: array
+                title: Response List All Modbus Registers Controller Register Get
+    post:
+      tags:
+      - controller
+      summary: Set All Modbus Registers
+      operationId: Set_all_modbus_registers_controller_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModbusUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Modbus'
+                type: array
+                title: Response Set All Modbus Registers Controller Register Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/register/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get Modbus Register
+      operationId: Get_modbus_register_controller_register__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Modbus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set Modbus Register
+      operationId: Set_modbus_register_controller_register__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModbusUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Modbus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     AnalogInput:
@@ -1214,9 +1516,8 @@ components:
       properties:
         mode:
           $ref: '#/components/schemas/AnalogInputModeType'
+          default: Voltage
       type: object
-      required:
-      - mode
       title: AnalogInputUpdate
     AnalogOutput:
       properties:
@@ -1282,10 +1583,10 @@ components:
           title: Value
         mode:
           $ref: '#/components/schemas/AnalogOutputModeType'
+          default: Voltage
       type: object
       required:
       - value
-      - mode
       title: AnalogOutputUpdate
     AutoWhiteBalanceMode:
       type: string
@@ -1607,16 +1908,16 @@ components:
           type: array
           title: Modes
         pwm_freq:
-          type: integer
+          type: number
           title: Pwm Freq
         pwm_duty:
           type: integer
+          maximum: 100.0
+          minimum: 0.0
           title: Pwm Duty
+          description: Mutually exclusive with value
         value:
-          anyOf:
-          - type: integer
-          - type: string
-          - type: boolean
+          type: integer
           title: Value
         mode:
           $ref: '#/components/schemas/DigitalOutputMode'
@@ -1639,16 +1940,16 @@ components:
     DigitalOutputUpdate:
       properties:
         pwm_freq:
-          type: integer
+          type: number
           title: Pwm Freq
         pwm_duty:
           type: integer
+          maximum: 100.0
+          minimum: 0.0
           title: Pwm Duty
+          description: Mutually exclusive with value
         value:
-          anyOf:
-          - type: integer
-          - type: string
-          - type: boolean
+          type: integer
           title: Value
       type: object
       required:
@@ -1690,10 +1991,9 @@ components:
           type: string
           title: Circuit
         value:
-          anyOf:
-          - type: string
-          - type: integer
-          - type: boolean
+          type: integer
+          maximum: 1.0
+          minimum: 0.0
           title: Value
       type: object
       required:
@@ -1704,10 +2004,9 @@ components:
     LedUpdate:
       properties:
         value:
-          anyOf:
-          - type: string
-          - type: integer
-          - type: boolean
+          type: integer
+          maximum: 1.0
+          minimum: 0.0
           title: Value
       type: object
       required:
@@ -1730,6 +2029,38 @@ components:
       - used
       - remaining
       title: MemoryInfo
+    Modbus:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        value:
+          type: integer
+          maximum: 65535.0
+          minimum: 0.0
+          title: Value
+        save:
+          type: boolean
+          title: Save
+          default: true
+      type: object
+      required:
+      - dev
+      - circuit
+      - value
+      title: Modbus
+    ModbusUpdate:
+      properties:
+        value:
+          type: number
+          title: Value
+      type: object
+      required:
+      - value
+      title: ModbusUpdate
     MonoCameraConfigProperties:
       properties:
         resolution:
@@ -1751,6 +2082,91 @@ components:
       - THE_720_P
       - THE_800_P
       title: MonoCameraResolution
+    OWBus:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        bus:
+          type: string
+          title: Bus
+        interval:
+          type: integer
+          title: Interval
+          default: 10
+        do_scan:
+          type: boolean
+          title: Do Scan
+        do_reset:
+          type: boolean
+          title: Do Reset
+        scan_interval:
+          type: integer
+          title: Scan Interval
+          default: 60
+      type: object
+      required:
+      - dev
+      - circuit
+      - bus
+      - do_scan
+      - do_reset
+      title: OWBus
+    OWBusUpdate:
+      properties:
+        interval:
+          type: integer
+          title: Interval
+          default: 10
+        do_scan:
+          type: boolean
+          title: Do Scan
+          default: false
+        do_reset:
+          type: boolean
+          title: Do Reset
+          default: false
+        scan_interval:
+          type: integer
+          title: Scan Interval
+          default: 60
+      type: object
+      title: OWBusUpdate
+    OWPower:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        value:
+          type: integer
+          enum:
+          - 0
+          - 1
+          title: Value
+      type: object
+      required:
+      - dev
+      - circuit
+      - value
+      title: OWPower
+    OWPowerUpdate:
+      properties:
+        value:
+          type: integer
+          enum:
+          - 0
+          - 1
+          title: Value
+      type: object
+      required:
+      - value
+      title: OWPowerUpdate
     SensorControl:
       properties:
         exposure_time:
