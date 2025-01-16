@@ -15,6 +15,7 @@ from .sensor_control import SensorControl
 class Sensor:
     def __init__(
         self,
+        sensor_features: dai.CameraFeatures,
         sensor_node: dai.node.Camera | dai.node.ColorCamera | dai.node.MonoCamera,
         input_queues: dict[PipelineQueueType, dai.DataInputQueue],
         output_queues: dict[PipelineQueueType, dai.DataOutputQueue],
@@ -26,7 +27,7 @@ class Sensor:
         self.restart_pipeline = restart_pipeline
         self._config = SensorConfig(self.sensor_node)
         self._control = SensorControl.from_camera_control(
-            self.sensor_node.initialControl
+            self.sensor_node.initialControl, sensor_features.hasAutofocusIC
         )
 
     @property
@@ -54,6 +55,9 @@ class Sensor:
             img.getExposureTime().total_seconds() * 1000
         )
         self._control.manual_whitebalance = img.getColorTemperature()
+
+        if self._control.focus is not None:
+            self._control.focus.lens_position = img.getLensPositionRaw()
 
     def capture_still(self):
         try:

@@ -1,9 +1,7 @@
 import depthai as dai
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
-from dataclasses import dataclass
 from enum import Enum
-import math
 from typing import Annotated
 
 
@@ -23,14 +21,12 @@ class AutoFocusMode(Enum):
         return dai.CameraControl.AutoFocusMode.__members__[self.name]
 
 
-class SensorControlAF(BaseModel):
-    auto_focus_mode: AutoFocusMode
-    auto_focus_trigger: bool = False
-    auto_focus_region: tuple[int, int, int, int] | None = None
-
-
-class SensorControlMF(BaseModel):
-    manual_focus: Annotated[int, Field(strict=True, ge=0, le=255)]
+class SensorFocus(BaseModel):
+    auto_focus_mode: Annotated[
+        AutoFocusMode, Field(default=AutoFocusMode.CONTINUOUS_VIDEO)
+    ]
+    auto_focus_trigger: Annotated[bool, Field(default=False)]
+    lens_position: Annotated[float, Field(ge=0.0, le=1.0, default=0.0)]
 
 
 class AutoWhiteBalanceMode(Enum):
@@ -49,14 +45,24 @@ class SensorControl(BaseModel):
     exposure_time: Annotated[
         int,
         Field(
-            description="Exposure time in microseconds. Ignored if auto_exposure_enable is set to true.",
+            description="Exposure time in microseconds. Ignored if auto_exposure_enable is set to true. Must be a value between 1 and 33000",
             ge=1,
             le=33000,
         ),
     ]
-    sensitivity_iso: Annotated[int, Field(strict=True, ge=100, le=5000)]
+    sensitivity_iso: Annotated[
+        int,
+        Field(
+            strict=True,
+            ge=100,
+            le=5000,
+            description="Must be a value between 100 and 5000",
+        ),
+    ]
     auto_exposure_enable: bool
-    auto_exposure_compensation: Annotated[int, Field(strict=True, ge=-9, le=9)] = 0
+    auto_exposure_compensation: Annotated[
+        int, Field(ge=-9, le=9, description="Must be a value between -9 and 9")
+    ]
     auto_exposure_limit: Annotated[
         int,
         Field(
@@ -64,17 +70,33 @@ class SensorControl(BaseModel):
         ),
     ]
     auto_exposure_lock: bool
-    contrast: Annotated[int, Field(strict=True, ge=-10, le=10)] = 0
-    brightness: Annotated[int, Field(strict=True, ge=-10, le=10)] = 0
-    saturation: Annotated[int, Field(strict=True, ge=-10, le=10)] = 0
-    chroma_denoise: Annotated[int, Field(strict=True, ge=0, le=4)] = 1
-    luma_denoise: Annotated[int, Field(strict=True, ge=0, le=4)] = 1
+    contrast: Annotated[
+        int, Field(ge=-10, le=10, description="Must be a value between -10 and 10")
+    ]
+    brightness: Annotated[
+        int, Field(ge=-10, le=10, description="Must be a value between -10 and 10")
+    ]
+    saturation: Annotated[
+        int, Field(ge=-10, le=10, description="Must be a value between -10 and 10")
+    ]
+    chroma_denoise: Annotated[
+        int, Field(ge=0, le=4, description="Must be a value between 0 and 4")
+    ]
+    luma_denoise: Annotated[
+        int, Field(ge=0, le=4, description="Must be a value between 0 and 4")
+    ]
     auto_whitebalance_lock: bool
     auto_whitebalance_mode: AutoWhiteBalanceMode = AutoWhiteBalanceMode.AUTO
-    manual_whitebalance: Annotated[int, Field(strict=True, ge=1000, le=12000)]
+    manual_whitebalance: Annotated[
+        int,
+        Field(ge=1000, le=12000, description="Must be a value between 1000 and 12000"),
+    ]
+    focus: Annotated[SensorFocus | None, Field(default=None)]
+
+    model_config = ConfigDict(revalidate_instances="always")
 
     @classmethod
-    def from_camera_control(cls, ctrl: dai.CameraControl):
+    def from_camera_control(cls, ctrl: dai.CameraControl, has_af: bool):
         raw_ctrl = ctrl.get()
         properties = {
             "contrast": raw_ctrl.contrast,
@@ -90,6 +112,7 @@ class SensorControl(BaseModel):
             "auto_exposure_lock": raw_ctrl.aeLockMode,
             "auto_whitebalance_lock": raw_ctrl.awbLockMode,
             "manual_whitebalance": 6500,
+            "focus": SensorFocus() if has_af else None,
         }
 
         return cls.model_validate(properties)
@@ -119,5 +142,14 @@ class SensorControl(BaseModel):
             )
         else:
             ctrl.setManualWhiteBalance(self.manual_whitebalance)
+
+        if self.focus is not None:
+            ctrl.setAutoFocusMode(self.focus.auto_focus_mode.to_dai_af_mode())
+
+            if self.focus.auto_focus_trigger:
+                ctrl.setAutoFocusTrigger()
+
+            if self.focus.auto_focus_mode == AutoFocusMode.OFF:
+                ctrl.setManualFocusRaw(self.focus.lens_position)
 
         return ctrl
