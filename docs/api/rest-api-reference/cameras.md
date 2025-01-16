@@ -35,3 +35,31 @@ If you're using PoE devices, make sure that they are connected to a network with
 {% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/ir" method="post" %}
 [oas.yml](../../.gitbook/assets/oas.yml)
 {% endswagger %}
+
+## IR Perception
+
+The PRO line-up of Luxonis devices has notch IR filters at 940nm on the stereo camera pair, which allows both visible light and IR light from illumination LED/laser dot projector to be perceived by the camera.
+
+{% hint style="warning" %}
+This product is classified as a **Class 1 Laser Product** under the **EN/IEC 60825-1, Edition 3 (2014)** internationally. You should take safety precautions when working with this product.
+{% endhint %}
+
+{% hint style="info" %}
+RGB cameras do not perceive IR light, only monochromatic sensors have IR perception.
+{% endhint %}
+
+### Dot Projector
+
+A laser dot projector emits numerous tiny dots in front of the device, aiding in disparity matching, particularly on surfaces with low visual features or texture, such as walls or floors. This method, known as ASV (Active Stereo Vision), functions similarly to passive stereo vision but incorporates active depth enhancement.
+
+### Flood IR (Led)
+
+LED lighting enables visibility in environments with minimal or no light. It allows you to execute AI or computer vision (CV) tasks on frames illuminated by the infrared (IR) LED.
+
+{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/ir" method="get" %}
+[oas.yml](../../.gitbook/assets/oas.yml)
+{% endswagger %}
+
+{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/ir" method="post" %}
+[oas.yml](../../.gitbook/assets/oas.yml)
+{% endswagger %}

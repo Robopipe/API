@@ -20,45 +20,45 @@ The complete example with all the python code is available below. The jupyter no
 
 {% file src="../.gitbook/assets/hello_world_train.ipynb" %}
 
-## Listing devices
+## Listing cameras
 
-In order to capture training data we need to specify device from which to capture from. To do this we will list all devices.
+In order to capture training data we need to specify camera and specific stream from which to capture images. To do this we will first list all cameras and streams.
 
 {% code fullWidth="false" %}
 ```python
 import requests
 
 ID = 1 # substitue with the id of your controller
-API_BASE = f"http://robopipe-controller-{ID}.local"
+API_BASE = f"http://robopipe-{ID}.local"
 
 # fetch connected devices from the robopipe controller
-def get_devices():
+def get_cameras():
     return requests.get(f"{API_BASE}/cameras").json()
 
-devices = get_devices()
+cameras = get_cameras()
 ```
 {% endcode %}
 
-Devices will contain an array of connected devices, containing their MXID along with other information. To find out more about devices API head over to the [API reference](../api/rest-api-reference/cameras.md#cameras).
+Cameras will contain an array of connected cameras, containing their MXID along with other information. To find out more about cameras API head over to the [API reference](../api/rest-api-reference/cameras.md#cameras).
 
-We will use the first device.
+We will use the first camera.
 
 ```python
-mxid = devices[0].get("mxid")
+mxid = cameras[0].get("mxid")
 ```
 
-We will also need to select a camera. To list all cameras you can use the function below.
+We will also need to select a stream. Stream is either a single sensor on the camera or a combination of multiple sensors, usually used in detecting depth. To list all streams you can use the function below.
 
 ```python
-# retrieve the list of cameras associated with the selected device (mxid)
-def get_cameras(mxid: str):
-    return requests(f"{API_BASE}/cameras/{mxid}/sensors").json()
+# retrieve the list of streams associated with the selected camera (mxid)
+def get_streams(mxid: str):
+    return requests(f"{API_BASE}/cameras/{mxid}/streams").json()
 ```
 
-In my case, I will choose the first returned camera, which is _CAM\_A_. _CAM\_A_ is usually the RGB camera on most devices.
+In my case, I will choose the first returned stream, which is _CAM\_A_. _CAM\_A_ is usually the RGB camera on most cameras.
 
 ```python
-sensor_name = list(get_cameras().keys())[0]
+stream_name = list(get_streams().keys())[0]
 ```
 
 ## Capturing images
@@ -86,7 +86,7 @@ def capture_data():
 
         if key == "s":
             image_response = requests.get(
-                f"{API_BASE}/cameras/{mxid}/sensors/{sensor_name}/still"
+                f"{API_BASE}/cameras/{mxid}/streams/{stream_name}/still"
             )
             image = image_response.content
             save_image(f"data/{i}.jpeg", image)
@@ -95,10 +95,10 @@ def capture_data():
             break
 ```
 
-To capture data we simply call `capture_data()`. This will, however, capture the data in full camera resolution, which might not be desired. In our case, the model will be trained on images of size 200x200. We can create another function, which will properly configure the camera, so that the captured images are the right size. There are numerous options which you can configure via the [config](../api/rest-api-reference/streams.md#cameras-mxid-sensors-sensor_name-config) and [control](../api/rest-api-reference/streams.md#cameras-mxid-sensors-sensor_name-control) API.
+To capture data we simply call `capture_data()`. This will, however, capture the data in full camera resolution, which might not be desired. In our case, the model will be trained on images of size 200x200. We can create another function, which will properly configure the camera, so that the captured images are the right size. There are numerous options which you can configure via the [config](../api/rest-api-reference/streams.md#cameras-mxid-sensors-sensor_name-config) and [control](../api/rest-api-reference/streams.md#cameras-mxid-sensors-sensor_name-control) APIs.
 
 ```python
-def configure_camera(width: int, height: int):
+def configure_stream(width: int, height: int):
     data = {"still_size": (width, height)}
     return requests.post(
         f"{API_BASE}/cameras/{mxid}/sensors/{sensor_name}/config", data
@@ -262,8 +262,9 @@ To deploy out model we will use our API.
 ```python
 def deploy_model(path="model.blob"):
     requests.post(
-        f"{API_BASE}/cameras/{mxid}/sensors/{sensor_name}/nn",
+        f"{API_BASE}/cameras/{mxid}/streams/{sensor_name}/nn",
         files={"model": open(path, "rb")},
+        data={"nn_config": }
     )
 ```
 
@@ -273,11 +274,11 @@ Calling this function will take a few seconds, since the camera needs to load th
 import anyio
 import websockets
 
-WS_BASE=f"ws://robopipe-controller-{ID}.local"
+WS_BASE=f"ws://robopipe-{ID}.local"
 
 async def main():
     async with websockets.connect(
-        f"{WS_BASE}/cameras/{mxid}/sensors/{sensor_name}/nn"
+        f"{WS_BASE}/cameras/{mxid}/stream/{sensor_name}/nn"
     ) as ws:
         while True:
             msg = await ws.recv()
