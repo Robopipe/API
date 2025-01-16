@@ -1,10 +1,8 @@
-import depthai as dai
 import av
 
 import fractions
 import io
 import math
-import time
 
 
 from .camera.sensor import Sensor
@@ -59,7 +57,6 @@ class VideoEncoder:
         return self.next()
 
     def next(self):
-        time.sleep((1 / self.sensor.config.fps))
         try:
             frame = self.sensor.get_video_frame()
         except:
