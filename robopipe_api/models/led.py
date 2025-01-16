@@ -10,4 +10,6 @@ class Led(Device):
 
 
 class LedUpdate(BaseModel):
-    value: Annotated[int, Field(ge=0, le=1)]
+    value: Annotated[
+        int, Field(ge=0, le=1, description="Must be a value between 0 and 1")
+    ]

@@ -25,6 +25,11 @@ class DigitalOutput(Device):
 class DigitalOutputUpdate(BaseModel):
     pwm_freq: float
     pwm_duty: Annotated[
-        int, Field(ge=0, le=100, description="Mutually exclusive with value")
+        int,
+        Field(
+            ge=0,
+            le=100,
+            description="Mutually exclusive with value. Must be a value between 0 and 100",
+        ),
     ]
     value: int
