@@ -1,7 +1,5 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
 
-from dataclasses import asdict
 from typing import Any, TypeVar
 
 from ..controller.devices import AI, AO, DI, DO, LED, OWPOWER, OWBUS, REGISTER
