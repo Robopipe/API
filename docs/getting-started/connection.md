@@ -24,16 +24,16 @@ Connect the luxonis camera directly to the controller via USB and then connect t
 
 ### Accessing the controller
 
-The easiest way to check if everything is running is to head over to `http://robopipe-controller-<id>.local`, where _id_ is the a number assigned to each controller on startup, based on the order in which you start the controllers, e.g. the first controller you connect will have id `1`, the next will have id `2` and so on. You should see output:&#x20;
+The easiest way to check if everything is running is to head over to `http://robopipe-<id>.local`, where _id_ is the a number assigned to each controller on startup, based on the order in which you start the controllers, e.g. the first controller you connect will have id `1`, the next will have id `2` and so on. You should see output:&#x20;
 
 ```
 Hello from Robopipe API!
 ```
 
-The controller is also accesible via [SSH](https://en.wikipedia.org/wiki/Secure_Shell). The default hostname is set to `robopipe-controller-<id>.local`. The default user is `admin` with password `robopipe.io`. Enter this command into your terminal to connect to the controller, enter `robopipe.io` when prompted for password:
+The controller is also accesible via [SSH](https://en.wikipedia.org/wiki/Secure_Shell). The default hostname is set to `robopipe-<id>.local`. The default user is `admin` with password `robopipe.io`. Enter this command into your terminal to connect to the controller, enter `robopipe.io` when prompted for password:
 
 ```bash
-ssh admin@robopipe-controller-1.local
+ssh admin@robopipe-1.local
 ```
 
 When connecting for the first time, you will be asked to verify the authenticity of the controller's key. Enter `yes` and press enter.
