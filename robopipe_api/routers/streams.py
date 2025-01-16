@@ -78,7 +78,7 @@ def update_stream_control(
     updated_control = sensor.control.model_copy(
         update=control.model_dump(exclude_unset=True, exclude_none=True)
     )
-    sensor.control = updated_control
+    sensor.control = SensorControl.model_validate(updated_control)
 
     return sensor.control
 

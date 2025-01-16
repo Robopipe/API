@@ -79,6 +79,7 @@ class Camera:
                 output_queues = self.__get_sensor_queues(sensor_name, False)
 
                 self.sensors[sensor_name] = Sensor(
+                    sensor_features,
                     self.pipeline.cameras[sensor_name],
                     self.__get_sensor_queues(sensor_name, True),
                     output_queues,
