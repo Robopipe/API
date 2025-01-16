@@ -1588,6 +1588,16 @@ components:
       required:
       - value
       title: AnalogOutputUpdate
+    AutoFocusMode:
+      type: string
+      enum:
+      - 'OFF'
+      - AUTO
+      - MACRO
+      - CONTINUOUS_VIDEO
+      - CONTINUOUS_PICTURE
+      - EDOF
+      title: AutoFocusMode
     AutoWhiteBalanceMode:
       type: string
       enum:
@@ -1947,7 +1957,8 @@ components:
           maximum: 100.0
           minimum: 0.0
           title: Pwm Duty
-          description: Mutually exclusive with value
+          description: Mutually exclusive with value. Must be a value between 0 and
+            100
         value:
           type: integer
           title: Value
@@ -1973,12 +1984,14 @@ components:
           maximum: 1.0
           minimum: 0.0
           title: Flood Light
+          description: IR LED intensity. Value must be between 0.0 and 1.0
           default: 0.0
         dot_projector:
           type: number
           maximum: 1.0
           minimum: 0.0
           title: Dot Projector
+          description: Dot projector intensity. Value must be between 0.0 and 1.0
           default: 0.0
       type: object
       title: IRConfig
@@ -2008,6 +2021,7 @@ components:
           maximum: 1.0
           minimum: 0.0
           title: Value
+          description: Must be a value between 0 and 1
       type: object
       required:
       - value
@@ -2175,12 +2189,13 @@ components:
           minimum: 1.0
           title: Exposure Time
           description: Exposure time in microseconds. Ignored if auto_exposure_enable
-            is set to true.
+            is set to true. Must be a value between 1 and 33000
         sensitivity_iso:
           type: integer
           maximum: 5000.0
           minimum: 100.0
           title: Sensitivity Iso
+          description: Must be a value between 100 and 5000
         auto_exposure_enable:
           type: boolean
           title: Auto Exposure Enable
@@ -2189,7 +2204,7 @@ components:
           maximum: 9.0
           minimum: -9.0
           title: Auto Exposure Compensation
-          default: 0
+          description: Must be a value between -9 and 9
         auto_exposure_limit:
           type: integer
           title: Auto Exposure Limit
@@ -2202,31 +2217,31 @@ components:
           maximum: 10.0
           minimum: -10.0
           title: Contrast
-          default: 0
+          description: Must be a value between -10 and 10
         brightness:
           type: integer
           maximum: 10.0
           minimum: -10.0
           title: Brightness
-          default: 0
+          description: Must be a value between -10 and 10
         saturation:
           type: integer
           maximum: 10.0
           minimum: -10.0
           title: Saturation
-          default: 0
+          description: Must be a value between -10 and 10
         chroma_denoise:
           type: integer
           maximum: 4.0
           minimum: 0.0
           title: Chroma Denoise
-          default: 1
+          description: Must be a value between 0 and 4
         luma_denoise:
           type: integer
           maximum: 4.0
           minimum: 0.0
           title: Luma Denoise
-          default: 1
+          description: Must be a value between 0 and 4
         auto_whitebalance_lock:
           type: boolean
           title: Auto Whitebalance Lock
@@ -2238,13 +2253,24 @@ components:
           maximum: 12000.0
           minimum: 1000.0
           title: Manual Whitebalance
+          description: Must be a value between 1000 and 12000
+        focus:
+          anyOf:
+          - $ref: '#/components/schemas/SensorFocus'
+          - type: 'null'
       type: object
       required:
       - exposure_time
       - sensitivity_iso
       - auto_exposure_enable
+      - auto_exposure_compensation
       - auto_exposure_limit
       - auto_exposure_lock
+      - contrast
+      - brightness
+      - saturation
+      - chroma_denoise
+      - luma_denoise
       - auto_whitebalance_lock
       - manual_whitebalance
       title: SensorControl
@@ -2256,12 +2282,13 @@ components:
           minimum: 1.0
           title: Exposure Time
           description: Exposure time in microseconds. Ignored if auto_exposure_enable
-            is set to true.
+            is set to true. Must be a value between 1 and 33000
         sensitivity_iso:
           type: integer
           maximum: 5000.0
           minimum: 100.0
           title: Sensitivity Iso
+          description: Must be a value between 100 and 5000
         auto_exposure_enable:
           type: boolean
           title: Auto Exposure Enable
@@ -2270,6 +2297,7 @@ components:
           maximum: 9.0
           minimum: -9.0
           title: Auto Exposure Compensation
+          description: Must be a value between -9 and 9
         auto_exposure_limit:
           type: integer
           title: Auto Exposure Limit
@@ -2282,26 +2310,31 @@ components:
           maximum: 10.0
           minimum: -10.0
           title: Contrast
+          description: Must be a value between -10 and 10
         brightness:
           type: integer
           maximum: 10.0
           minimum: -10.0
           title: Brightness
+          description: Must be a value between -10 and 10
         saturation:
           type: integer
           maximum: 10.0
           minimum: -10.0
           title: Saturation
+          description: Must be a value between -10 and 10
         chroma_denoise:
           type: integer
           maximum: 4.0
           minimum: 0.0
           title: Chroma Denoise
+          description: Must be a value between 0 and 4
         luma_denoise:
           type: integer
           maximum: 4.0
           minimum: 0.0
           title: Luma Denoise
+          description: Must be a value between 0 and 4
         auto_whitebalance_lock:
           type: boolean
           title: Auto Whitebalance Lock
@@ -2312,8 +2345,30 @@ components:
           maximum: 12000.0
           minimum: 1000.0
           title: Manual Whitebalance
+          description: Must be a value between 1000 and 12000
+        focus:
+          anyOf:
+          - $ref: '#/components/schemas/SensorFocus'
+          - type: 'null'
       type: object
       title: SensorControlUpdate
+    SensorFocus:
+      properties:
+        auto_focus_mode:
+          $ref: '#/components/schemas/AutoFocusMode'
+          default: CONTINUOUS_VIDEO
+        auto_focus_trigger:
+          type: boolean
+          title: Auto Focus Trigger
+          default: false
+        lens_position:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Lens Position
+          default: 0.0
+      type: object
+      title: SensorFocus
     ValidationError:
       properties:
         loc:
