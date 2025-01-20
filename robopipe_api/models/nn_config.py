@@ -1,7 +1,9 @@
-from pydantic import BaseModel, model_validator
+from pydantic import model_validator
 
 from enum import Enum
 from typing import Any
+
+from .base_model import BaseModel
 
 
 class NNType(Enum):

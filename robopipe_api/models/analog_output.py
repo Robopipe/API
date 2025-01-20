@@ -1,7 +1,6 @@
-from pydantic import BaseModel
-
 from enum import Enum
 
+from .base_model import BaseModel
 from .device import Device
 
 

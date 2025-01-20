@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from typing import Annotated
 
+from .base_model import BaseModel
 from .device import Device
 
 

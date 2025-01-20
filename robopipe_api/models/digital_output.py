@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from enum import Enum
 from typing import Annotated
 
+from .base_model import BaseModel
 from .device import Device
 
 
@@ -26,10 +27,6 @@ class DigitalOutputUpdate(BaseModel):
     pwm_freq: float
     pwm_duty: Annotated[
         int,
-        Field(
-            ge=0,
-            le=100,
-            description="Mutually exclusive with value. Must be a value between 0 and 100",
-        ),
+        Field(ge=0, le=100, description="Mutually exclusive with value"),
     ]
     value: int

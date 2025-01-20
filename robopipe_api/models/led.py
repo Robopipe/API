@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from typing import Annotated
 
+from .base_model import BaseModel
 from .device import Device
 
 
@@ -10,6 +11,4 @@ class Led(Device):
 
 
 class LedUpdate(BaseModel):
-    value: Annotated[
-        int, Field(ge=0, le=1, description="Must be a value between 0 and 1")
-    ]
+    value: Annotated[int, Field(ge=0, le=1)]

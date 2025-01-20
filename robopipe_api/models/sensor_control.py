@@ -2,7 +2,7 @@ from pydantic import Field
 
 from typing import Annotated
 
-from ..camera.sensor_control import SensorControl
+from ..camera.sensor.sensor_control import SensorControl
 
 
 class SensorControlUpdate(SensorControl):
