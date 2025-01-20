@@ -1,7 +1,6 @@
-from pydantic import BaseModel
-
 from typing import Literal
 
+from .base_model import BaseModel
 from .device import Device
 
 
