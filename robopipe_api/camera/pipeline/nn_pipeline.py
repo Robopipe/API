@@ -1,11 +1,11 @@
 import depthai as dai
 
 from ..nn import CameraNNConfig
+from .depth_pipeline import DepthPipeline
 from .pipeline_queue_type import PipelineQueueType
-from .streaming_pipeline import StreamingPipeline
 
 
-class NNPipeline(StreamingPipeline):
+class NNPipeline(DepthPipeline):
     def __init__(
         self, networks: list[CameraNNConfig], pipeline: dai.Pipeline | None = None
     ):
@@ -73,8 +73,13 @@ class NNPipeline(StreamingPipeline):
 
         camera.preview.link(nn_node.input)
 
+    def __setup_stereo_camera(
+        self, nn: CameraNNConfig, nn_node: dai.node.NeuralNetwork
+    ):
+        self.scripts[nn.sensor_name].outputs["preview"].link(nn_node.input)
+
     def add_nn(self, nn: CameraNNConfig):
-        sensor_name = nn.sensor.socket.name
+        sensor_name = nn.sensor_name
 
         if sensor_name in self.neural_networks:
             self.remove_nn(sensor_name)
@@ -85,6 +90,12 @@ class NNPipeline(StreamingPipeline):
             sensor_name, PipelineQueueType.NN, False, False, 1
         )
         nn_node.out.link(cam_nn_out.input)
+
+        if sensor_name.startswith("DEPTH"):
+            left, right = sensor_name.split("_")[1:]
+            self.add_stereo_pair(f"CAM_{left}", f"CAM_{right}")
+            self.__setup_stereo_camera(nn, nn_node)
+            return
 
         if sensor_name not in self.cameras:
             self.add_sensor(nn.sensor)

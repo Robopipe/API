@@ -5,7 +5,7 @@ import io
 import math
 
 
-from .camera.sensor import Sensor
+from .camera.sensor.sensor_base import SensorBase
 
 
 class VideoEncoder:
@@ -21,7 +21,7 @@ class VideoEncoder:
 
     def __init__(
         self,
-        sensor: Sensor,
+        sensor: SensorBase,
         container_options: dict = CONTAINER_OPTIONS,
         encoder_options: dict = ENCODER_OPTIONS,
     ):

@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from ..error import CameraNotFoundException
 from .camera import Camera
+from .pipeline.depth_pipeline import DepthPipeline
 from .pipeline.streaming_pipeline import StreamingPipeline
 
 
@@ -44,7 +45,7 @@ class CameraManager:
     def boot_camera(self, mxid: str):
         camera = self.cameras[mxid]
         camera.open(
-            StreamingPipeline([sensor for sensor in camera.all_sensors.values()])
+            DepthPipeline(None, [sensor for sensor in camera.all_sensors.values()])
         )
 
     def shutdown_camera(self, mxid: str):

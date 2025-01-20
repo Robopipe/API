@@ -20,3 +20,7 @@ class ENoCacheRegister(ModbusSlaveError):
 
 class DeviceNotFound(Exception):
     pass
+
+
+class CameraException(Exception):
+    pass

@@ -2,24 +2,27 @@ import depthai as dai
 
 import time
 
-from ..error import CameraShutDownException
+from ..error import CameraShutDownException, CameraException
 from ..log import logger
 from .camera_stats import CameraStats
 from .device_info import DeviceInfo
 from .ir import IRConfig
+from .pipeline.depth_pipeline import DEPTH_SENSOR_NAME, DepthPipeline
 from .pipeline.pipeline import Pipeline
 from .pipeline.streaming_pipeline import StreamingPipeline
 from .pipeline.nn_pipeline import NNPipeline
 from .nn import CameraNNConfig
-from .sensor import Sensor
+from .sensor.depth_sensor import DepthSensor
+from .sensor.sensor_base import SensorBase
+from .sensor.sensor import Sensor
 
 
 class Camera:
-    camera_handle: dai.Device | None = None
+    DEFAULT_POE_IP = "169.254.1.222"
 
     def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
         self.mxid = mxid
-        self.boot_name = name if name == "169.254.1.222" else mxid
+        self.boot_name = name if name == Camera.DEFAULT_POE_IP else mxid
 
         self.camera_handle = dai.Device(self.boot_name)
         self.all_sensors = {
@@ -29,6 +32,15 @@ class Camera:
         self._ir_config = (
             IRConfig() if len(self.camera_handle.getIrDrivers()) >= 1 else None
         )
+
+        for stereo_pair in self.camera_handle.getAvailableStereoPairs():
+            format_stereo_name = (
+                lambda x, y: f"DEPTH_{x.split('_')[-1]}_{y.split('_')[-1]}"
+            )
+            self.all_sensors[
+                format_stereo_name(stereo_pair.left.name, stereo_pair.right.name)
+            ] = dai.CameraFeatures()
+
         self.close()
 
         if pipeline is not None:
@@ -37,17 +49,22 @@ class Camera:
     def __del__(self):
         self.close()
 
-    def __boot_camera(self, retries: int = 5, timeout_base: float = 1):
+    def __boot_camera(self, retries: int = 1, timeout_base: float = 1):
         timeout = timeout_base
+        last_exception = None
+
         for _ in range(retries):
             try:
                 self.camera_handle = dai.Device(
                     self.pipeline.pipeline, dai.DeviceInfo(self.boot_name)
                 )
                 return
-            except:
+            except Exception as e:
+                last_exception = e
                 time.sleep(timeout)
                 timeout *= 2
+
+        raise CameraException(last_exception)
 
     def __get_sensor_queues(self, sensor_name: str, q_type_input: bool):
         get_queue = (
@@ -69,22 +86,37 @@ class Camera:
         }
 
     def reload_sensors(self):
-        self.sensors: dict[str, Sensor] = {}
+        self.sensors: dict[str, SensorBase] = {}
 
         if self.camera_handle is None:
             return
 
+        restart_pipeline = lambda: self.open(self.pipeline)
+
         for [sensor_name, sensor_features] in self.all_sensors.items():
             if sensor_name in self.pipeline.cameras:
-                output_queues = self.__get_sensor_queues(sensor_name, False)
-
                 self.sensors[sensor_name] = Sensor(
                     sensor_features,
                     self.pipeline.cameras[sensor_name],
                     self.__get_sensor_queues(sensor_name, True),
-                    output_queues,
-                    lambda: self.open(self.pipeline),
+                    self.__get_sensor_queues(sensor_name, False),
+                    restart_pipeline,
                 )
+
+        if (
+            not any(map(lambda x: x.startswith("DEPTH"), self.all_sensors.keys()))
+            or not isinstance(self.pipeline, DepthPipeline)
+            or self.pipeline.stereo_node is None
+        ):
+            return
+
+        depth_name = self.pipeline.get_depth_name()
+        self.sensors[depth_name] = DepthSensor(
+            (self.pipeline.cam_left_node, self.pipeline.cam_right_node),
+            self.__get_sensor_queues(depth_name, True),
+            self.__get_sensor_queues(depth_name, False),
+            restart_pipeline,
+        )
 
     def close(self):
         if self.camera_handle is not None:
@@ -109,7 +141,17 @@ class Camera:
         if not isinstance(self.pipeline, StreamingPipeline):
             raise RuntimeError("Serve is in invalid state")
 
-        self.pipeline.add_sensor(self.all_sensors[sensor_name])
+        if sensor_name.startswith("DEPTH"):
+            left, right = sensor_name.split("_")[1:]
+            stereo_pair = (f"CAM_{left}", f"CAM_{right}")
+
+            if isinstance(self.pipeline, DepthPipeline):
+                self.pipeline.add_stereo_pair(*stereo_pair)
+            else:
+                self.pipeline = DepthPipeline(stereo_pair, [], self.pipeline.pipeline)
+        else:
+            self.pipeline.add_sensor(self.all_sensors[sensor_name])
+
         self.open(self.pipeline)
 
     def deactivate_sensor(self, sensor_name: str):

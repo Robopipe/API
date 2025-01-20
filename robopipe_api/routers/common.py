@@ -7,7 +7,7 @@ from typing import Annotated
 
 from ..camera.camera import Camera
 from ..camera.camera_manager import CameraManager, camera_manager_factory
-from ..camera.sensor import Sensor
+from ..camera.sensor.sensor_base import SensorBase
 from ..models.nn_config import NNConfig, NNType, NNYoloConfig, NNMobileNetConfig
 from ..stream import StreamService, stream_service_factory
 from ..controller.devices import DeviceList, Devices, Device
@@ -22,14 +22,14 @@ def get_camera(camera_manager: CameraManagerDep, mxid: Mxid):
 
 
 CameraDep = Annotated[Camera, Depends(get_camera)]
-StreamName = Annotated[str, Path(regex=r"CAM_[A-H]")]
+StreamName = Annotated[str, Path(regex=r"CAM_[A-H]|DEPTH_[A-H]_[A-H]")]
 
 
 def get_sensor(camera: CameraDep, stream_name: StreamName):
     return camera.sensors[stream_name]
 
 
-SensorDep = Annotated[Sensor, Depends(get_sensor)]
+SensorDep = Annotated[SensorBase, Depends(get_sensor)]
 
 
 def get_stream_service(camera_manager: CameraManagerDep):

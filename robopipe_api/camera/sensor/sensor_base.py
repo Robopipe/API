@@ -1,63 +1,46 @@
 import av
 import depthai as dai
-from PIL import Image
 import numpy as np
+from PIL import Image
 
-import math
+from abc import ABC, abstractmethod
 from typing import Callable
 
-from ..utils.image import img_frame_to_pil_image
-from .pipeline.pipeline_queue_type import PipelineQueueType
-from .sensor_config import SensorConfig, SensorConfigProperties
+from ...utils.image import img_frame_to_pil_image
+from ..pipeline.pipeline_queue_type import PipelineQueueType
+from .sensor_config import SensorConfigProperties
 from .sensor_control import SensorControl
 
 
-class Sensor:
+class SensorBase(ABC):
     def __init__(
         self,
-        sensor_features: dai.CameraFeatures,
-        sensor_node: dai.node.Camera | dai.node.ColorCamera | dai.node.MonoCamera,
         input_queues: dict[PipelineQueueType, dai.DataInputQueue],
         output_queues: dict[PipelineQueueType, dai.DataOutputQueue],
         restart_pipeline: Callable[[], None],
     ):
-        self.sensor_node = sensor_node
         self.input_queues = input_queues
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
-        self._config = SensorConfig(self.sensor_node)
-        self._control = SensorControl.from_camera_control(
-            self.sensor_node.initialControl, sensor_features.hasAutofocusIC
-        )
 
     @property
-    def config(self) -> SensorConfigProperties:
-        return self._config.properties
+    @abstractmethod
+    def config(self) -> SensorConfigProperties: ...
 
     @config.setter
-    def config(self, value: SensorConfigProperties):
-        self._config.properties = value
-        self.restart_pipeline()
+    @abstractmethod
+    def config(self, value: SensorConfigProperties) -> SensorConfigProperties: ...
 
     @property
-    def control(self) -> SensorControl:
-        return self._control
+    @abstractmethod
+    def control(self) -> SensorControl: ...
 
     @control.setter
-    def control(self, value: SensorControl):
-        self._control = value
-        control_queue = self.input_queues[PipelineQueueType.CONTROL]
-        control_queue.send(self._control.to_camera_control())
+    @abstractmethod
+    def control(self, value: SensorControl) -> SensorControl: ...
 
     def __extract_img_properties(self, img: dai.ImgFrame):
-        self._control.sensitivity_iso = img.getSensitivity()
-        self._control.exposure_time = math.floor(
-            img.getExposureTime().total_seconds() * 1000
-        )
-        self._control.manual_whitebalance = img.getColorTemperature()
-
-        if self._control.focus is not None:
-            self._control.focus.lens_position = img.getLensPositionRaw()
+        pass
 
     def capture_still(self):
         try:
@@ -69,7 +52,10 @@ class Sensor:
                 ctrl.setCaptureStill(True)
                 control_queue.send(ctrl)
 
-            img_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.STILL].get()
+            img_frame: dai.ImgFrame = self.output_queues[
+                PipelineQueueType.STILL
+            ].getAll()[-1]
+
             self.__extract_img_properties(img_frame)
         except:
             return
@@ -81,6 +67,8 @@ class Sensor:
             PipelineQueueType.VIDEO
         ].getAll()[-1]
         frame_type = video_frame.getType()
+
+        self.__extract_img_properties(video_frame)
 
         if frame_type == dai.RawImgFrame.Type.NV12:
             return av.VideoFrame.from_ndarray(video_frame.getFrame(), "nv12").to_rgb()
