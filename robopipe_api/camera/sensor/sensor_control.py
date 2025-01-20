@@ -1,8 +1,10 @@
 import depthai as dai
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import Field, ConfigDict
 
 from enum import Enum
 from typing import Annotated
+
+from ...models.base_model import BaseModel
 
 
 class AutoFocusMode(Enum):
@@ -45,24 +47,17 @@ class SensorControl(BaseModel):
     exposure_time: Annotated[
         int,
         Field(
-            description="Exposure time in microseconds. Ignored if auto_exposure_enable is set to true. Must be a value between 1 and 33000",
+            description="Exposure time in microseconds. Ignored if auto_exposure_enable is set to true.",
             ge=1,
             le=33000,
         ),
     ]
     sensitivity_iso: Annotated[
         int,
-        Field(
-            strict=True,
-            ge=100,
-            le=5000,
-            description="Must be a value between 100 and 5000",
-        ),
+        Field(ge=100, le=5000),
     ]
     auto_exposure_enable: bool
-    auto_exposure_compensation: Annotated[
-        int, Field(ge=-9, le=9, description="Must be a value between -9 and 9")
-    ]
+    auto_exposure_compensation: Annotated[int, Field(ge=-9, le=9)]
     auto_exposure_limit: Annotated[
         int,
         Field(
@@ -70,27 +65,14 @@ class SensorControl(BaseModel):
         ),
     ]
     auto_exposure_lock: bool
-    contrast: Annotated[
-        int, Field(ge=-10, le=10, description="Must be a value between -10 and 10")
-    ]
-    brightness: Annotated[
-        int, Field(ge=-10, le=10, description="Must be a value between -10 and 10")
-    ]
-    saturation: Annotated[
-        int, Field(ge=-10, le=10, description="Must be a value between -10 and 10")
-    ]
-    chroma_denoise: Annotated[
-        int, Field(ge=0, le=4, description="Must be a value between 0 and 4")
-    ]
-    luma_denoise: Annotated[
-        int, Field(ge=0, le=4, description="Must be a value between 0 and 4")
-    ]
+    contrast: Annotated[int, Field(ge=-10, le=10)]
+    brightness: Annotated[int, Field(ge=-10, le=10)]
+    saturation: Annotated[int, Field(ge=-10, le=10)]
+    chroma_denoise: Annotated[int, Field(ge=0, le=4)]
+    luma_denoise: Annotated[int, Field(ge=0, le=4)]
     auto_whitebalance_lock: bool
     auto_whitebalance_mode: AutoWhiteBalanceMode = AutoWhiteBalanceMode.AUTO
-    manual_whitebalance: Annotated[
-        int,
-        Field(ge=1000, le=12000, description="Must be a value between 1000 and 12000"),
-    ]
+    manual_whitebalance: Annotated[int, Field(ge=1000, le=12000)]
     focus: Annotated[SensorFocus | None, Field(default=None)]
 
     model_config = ConfigDict(revalidate_instances="always")

@@ -6,8 +6,8 @@ from fastapi.responses import Response
 from io import BytesIO
 
 from ..camera.nn import CameraNNConfig, CameraNNYoloConfig, CameraNNMobileNetConfig
-from ..camera.sensor_config import SensorConfigProperties
-from ..camera.sensor_control import SensorControl
+from ..camera.sensor.sensor_config import SensorConfigProperties
+from ..camera.sensor.sensor_control import SensorControl
 from ..models.nn_config import NNType
 from ..models.sensor_control import SensorControlUpdate
 from ..utils.ws_adapter import WsAdapter
@@ -105,9 +105,12 @@ async def deploy_neural_network(
     blob = dai.OpenVINO.Blob(list(model_bytes))
 
     if config.type == NNType.Generic:
-        nn_config = CameraNNConfig(sensor, blob, config.num_inference_threads)
+        nn_config = CameraNNConfig(
+            stream_name, sensor, blob, config.num_inference_threads
+        )
     elif config.type == NNType.YOLO:
         nn_config = CameraNNYoloConfig(
+            stream_name,
             sensor,
             blob,
             config.num_inference_threads,
@@ -115,6 +118,7 @@ async def deploy_neural_network(
         )
     elif config.type == NNType.MobileNet:
         nn_config = CameraNNMobileNetConfig(
+            stream_name,
             sensor,
             blob,
             config.num_inference_threads,

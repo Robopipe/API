@@ -6,10 +6,12 @@ import pathlib
 class CameraNNConfig:
     def __init__(
         self,
+        sensor_name: str,
         sensor: dai.CameraFeatures,
         blob: dai.OpenVINO.Blob | pathlib.Path,
         num_inference_threads: int = 2,
     ):
+        self.sensor_name = sensor_name
         self.sensor = sensor
         self.blob = (
             blob if isinstance(blob, dai.OpenVINO.Blob) else dai.OpenVINO.Blob(blob)
@@ -38,6 +40,7 @@ class CameraNNConfig:
 class CameraNNYoloConfig(CameraNNConfig):
     def __init__(
         self,
+        sensor_name: str,
         sensor: dai.CameraFeatures,
         blob: dai.OpenVINO.Blob | pathlib.Path,
         num_inference_threads: int = 2,
@@ -48,7 +51,7 @@ class CameraNNYoloConfig(CameraNNConfig):
         iou_threshold: float | None = None,
         num_classes: int | None = None,
     ):
-        super().__init__(sensor, blob, num_inference_threads)
+        super().__init__(sensor_name, sensor, blob, num_inference_threads)
 
         self.anchor_masks = anchor_masks
         self.anchors = anchors
@@ -82,12 +85,13 @@ class CameraNNYoloConfig(CameraNNConfig):
 class CameraNNMobileNetConfig(CameraNNConfig):
     def __init__(
         self,
+        sensor_name: str,
         sensor: dai.CameraFeatures,
         blob: dai.OpenVINO.Blob | pathlib.Path,
         num_inference_threads: int = 2,
         confidence_threshold: float | None = None,
     ):
-        super().__init__(sensor, blob, num_inference_threads)
+        super().__init__(sensor_name, sensor, blob, num_inference_threads)
 
         self.confidence_threshold = confidence_threshold
 
