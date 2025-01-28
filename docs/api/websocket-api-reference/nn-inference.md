@@ -37,7 +37,7 @@ In case you have chosen either a YOLO or MobilenetSSD model, the output format w
 
 * label - number indicating the label it detected
 * confidence - float in the range \[0, 1] indicating the confidence level of the detection
-* coords - four element tuple, containing the coordinates of the detection in the image \[x\_min, y\_min, x\_max, y\_max]
+* coords - four element tuple, containing the coordinates of the detection in the image \[x\_min, y\_min, x\_max, y\_max], these values are [_normalized_](#user-content-fn-1)[^1], this means that if you want to get the real bounding box, you need to multiply both **X** roodinates by image width and both **Y** coordinates by image height
 
 ```json
 {
@@ -50,4 +50,24 @@ In case you have chosen either a YOLO or MobilenetSSD model, the output format w
 
 #### Depth
 
-In case a depth stream is active and running at the same time a neural network is deployed, each detection object will also contain information regarding its depth position.
+In case a depth stream is active and running at the same time a neural network is deployed, each detection object will also contain information regarding its depth position (in millimeters) in addition to the information above.
+
+```json
+{
+  "detections": [
+    {
+      "label": 0,
+      "confidence": 0.765,
+      "coords": [0.5, 0.1, 0.6, 0.23],
+      "spatial_coords": {
+        "x": 250,
+        "y": 100,
+        "z": 2500
+      }
+    }
+  ]
+}
+
+```
+
+[^1]: The value is in the range \[0, 1].
