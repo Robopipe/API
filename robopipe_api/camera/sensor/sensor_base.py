@@ -44,13 +44,10 @@ class SensorBase(ABC):
 
     def capture_still(self):
         try:
-            if PipelineQueueType.NN not in self.output_queues:
-                self.output_queues[PipelineQueueType.STILL].getAll()
-            else:
-                control_queue = self.input_queues[PipelineQueueType.CONTROL]
-                ctrl = dai.CameraControl()
-                ctrl.setCaptureStill(True)
-                control_queue.send(ctrl)
+            control_queue = self.input_queues[PipelineQueueType.CONTROL]
+            ctrl = dai.CameraControl()
+            ctrl.setCaptureStill(True)
+            control_queue.send(ctrl)
 
             img_frame: dai.ImgFrame = self.output_queues[
                 PipelineQueueType.STILL
@@ -63,9 +60,7 @@ class SensorBase(ABC):
         return img_frame_to_pil_image(img_frame)
 
     def get_video_frame(self):
-        video_frame: dai.ImgFrame = self.output_queues[
-            PipelineQueueType.VIDEO
-        ].getAll()[-1]
+        video_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.VIDEO].get()
         frame_type = video_frame.getType()
 
         self.__extract_img_properties(video_frame)
@@ -76,6 +71,10 @@ class SensorBase(ABC):
             return av.VideoFrame.from_ndarray(video_frame.getFrame()[..., ::-1], "rbg")
         elif frame_type == dai.RawImgFrame.Type.RAW8:
             return av.VideoFrame.from_ndarray(video_frame.getFrame(), "gray")
+        elif frame_type == dai.RawImgFrame.Type.YUV420p:
+            return av.VideoFrame.from_ndarray(
+                video_frame.getFrame(), "yuv420p"
+            ).to_rgb()
 
     def get_nn_frame(self):
         try:
@@ -90,7 +89,9 @@ class SensorBase(ABC):
 
         return (passthrough_frame, detections)
 
-    def get_nn_detections(self) -> dai.NNData | dai.ImgDetections:
+    def get_nn_detections(
+        self,
+    ) -> dai.NNData | dai.ImgDetections | dai.SpatialImgDetections:
         detections = self.output_queues[PipelineQueueType.NN].get()
 
         return detections

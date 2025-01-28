@@ -48,15 +48,17 @@ class DepthPipeline(StreamingPipeline):
 
                 try:
                     camera.out.unlink(self.stereo_node.left)
-                except:
+                    camera.out.link(self.stereo_node.left)
                     self.cam_left_node = camera
-                    break
+                except:
+                    pass
 
                 try:
                     camera.out.unlink(self.stereo_node.right)
-                except:
+                    camera.out.link(self.stereo_node.right)
                     self.cam_right_node = camera
-                    break
+                except:
+                    pass
 
             self.stereo_pair = (
                 self.cam_left_node.getBoardSocket().name,
@@ -71,20 +73,25 @@ class DepthPipeline(StreamingPipeline):
 
                 try:
                     self.stereo_node.disparity.unlink(script.inputs["in"])
+                    self.stereo_node.disparity.link(script.inputs["in"])
+                    self.scripts[self.get_depth_name()] = script
+                    break
                 except:
                     continue
 
-                self.stereo_node.disparity.link(script.inputs["in"])
-                self.scripts[self.get_depth_name()] = script
-                break
-
     def add_sensor(self, sensor):
-        self.remove_stereo_pair()
+        if self.stereo_pair is not None and sensor.socket.name in self.stereo_pair:
+            self.remove_stereo_pair()
 
         return super().add_sensor(sensor)
 
     def add_stereo_pair(self, left: str, right: str):
-        self.remove_stereo_pair()
+        if self.stereo_pair is not None:
+            if self.stereo_pair == (left, right):
+                return
+            else:
+                self.remove_stereo_pair()
+
         self.stereo_pair = (left, right)
         depth_name = self.get_depth_name()
         left_socket = dai.CameraBoardSocket.__members__[left]
@@ -110,6 +117,7 @@ class DepthPipeline(StreamingPipeline):
         self.stereo_node = stereo_depth
 
         script = self.pipeline.createScript()
+        self.scripts[depth_name] = script
         script.setScript(
             """
                 while True:
@@ -130,12 +138,13 @@ class DepthPipeline(StreamingPipeline):
         script.inputs["in"].setBlocking(False)
         script.inputs["in"].setQueueSize(1)
         stereo_depth.disparity.link(script.inputs["in"])
+        stereo_depth.setNumFramesPool(10)
 
         script.outputs["still"].link(still.input)
         script.outputs["video"].link(video.input)
 
     def remove_stereo_pair(self):
-        if self.stereo_node is None:
+        if self.stereo_pair is None:
             return
 
         depth_name = self.get_depth_name()
