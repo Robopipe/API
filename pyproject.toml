@@ -6,9 +6,30 @@ build-backend = "setuptools.build_meta"
 name = "robopipe-api"
 version = "0.1.0"
 description = "API for the Robopipe application"
-authors = []
+authors = [
+    { name = "Adam Berkes", email = "adam.berkes@koala42.com" },
+    { name = "Filip Molcik", email = "filip.molcik@koala42.com" },
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = [
+    "computer-vision",
+    "cv",
+    "industrial-automation",
+    "machine-vision",
+    "visual-inspection",
+    "machine-vision-camera",
+    "vision-system",
+    "automated-inspection",
+    "industrial-machine-vision",
+]
 requires-python = ">=3.11"
 dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://robopipe.io"
+Documentation = "https://robopipe.gitbook.io/robopipe"
+Repository = "https://github.com/Robopipe/API"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
