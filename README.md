@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="docs/.gitbook/assets/cover-text.png" height="256" />
+    <img src="docs/.gitbook/assets/cover-text.png" />
     <h1 align="center">Robopipe API</h1>
 </p>
 
