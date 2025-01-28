@@ -7,8 +7,8 @@ from ..log import logger
 from .camera_stats import CameraStats
 from .device_info import DeviceInfo
 from .ir import IRConfig
-from .pipeline.depth_pipeline import DEPTH_SENSOR_NAME, DepthPipeline
-from .pipeline.pipeline import Pipeline
+from .pipeline.depth_pipeline import DepthPipeline
+from .pipeline.pipeline import Pipeline, PipelineQueueType
 from .pipeline.streaming_pipeline import StreamingPipeline
 from .pipeline.nn_pipeline import NNPipeline
 from .nn import CameraNNConfig
@@ -25,6 +25,7 @@ class Camera:
         self.boot_name = name if name == Camera.DEFAULT_POE_IP else mxid
 
         self.camera_handle = dai.Device(self.boot_name)
+        self.camera_name = self.camera_handle.getDeviceName()
         self.all_sensors = {
             sensor.socket.name: sensor
             for sensor in self.camera_handle.getConnectedCameraFeatures()
@@ -49,7 +50,7 @@ class Camera:
     def __del__(self):
         self.close()
 
-    def __boot_camera(self, retries: int = 1, timeout_base: float = 1):
+    def __boot_camera(self, retries: int = 5, timeout_base: float = 1):
         timeout = timeout_base
         last_exception = None
 
@@ -67,14 +68,18 @@ class Camera:
         raise CameraException(last_exception)
 
     def __get_sensor_queues(self, sensor_name: str, q_type_input: bool):
-        get_queue = (
-            self.camera_handle.getInputQueue
-            if q_type_input
-            else self.camera_handle.getOutputQueue
-        )
+        def get_queue(q_type: PipelineQueueType, q_name: str):
+            if q_type_input:
+                return self.camera_handle.getInputQueue(q_name)
+            elif q_type == PipelineQueueType.STILL:
+                return self.camera_handle.getOutputQueue(
+                    q_name, blocking=False, maxSize=1
+                )
+            else:
+                return self.camera_handle.getOutputQueue(q_name)
 
         return {
-            k: get_queue(v)
+            k: get_queue(k, v)
             for k, v in (
                 (
                     self.pipeline.input_queues.get(sensor_name)
@@ -177,7 +182,9 @@ class Camera:
     @property
     def info(self) -> DeviceInfo | None:
         if self.camera_handle is not None:
-            return DeviceInfo.from_device_info(self.camera_handle.getDeviceInfo())
+            return DeviceInfo.from_device_info(
+                self.camera_handle.getDeviceInfo(), self.camera_name
+            )
 
         devices = dai.Device.getAllConnectedDevices()
 
@@ -187,7 +194,7 @@ class Camera:
                 break
 
         if device_info:
-            return DeviceInfo.from_device_info(device_info)
+            return DeviceInfo.from_device_info(device_info, self.camera_name)
 
     @property
     def stats(self):

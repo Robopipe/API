@@ -14,6 +14,7 @@ class Pipeline:
         self.inputs: dict[str, dai.node.XLinkIn] = {}
         self.outputs: dict[str, dai.node.XLinkOut] = {}
 
+        self.pipeline.setXLinkChunkSize(0)
         self.extract_properties()
 
     def __add_queue(self, queue_type: PipelineQueueType, sensor_name: str, input: bool):

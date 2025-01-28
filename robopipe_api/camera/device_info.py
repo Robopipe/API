@@ -32,16 +32,18 @@ class DeviceState(Enum):
 class DeviceInfo:
     mxid: str
     name: str
+    camera_name: str
     platform: DevicePlatform
     protocol: DeviceProtocol
     state: DeviceState
     status: str
 
     @classmethod
-    def from_device_info(cls, device_info: dai.DeviceInfo):
+    def from_device_info(cls, device_info: dai.DeviceInfo, camera_name: str):
         return cls(
             device_info.mxid,
             device_info.name,
+            camera_name,
             DevicePlatform[device_info.platform.name],
             DeviceProtocol[device_info.protocol.name],
             DeviceState[device_info.state.name],

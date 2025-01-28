@@ -10,6 +10,7 @@ from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
 from ..models.nn_config import NNType
 from ..models.sensor_control import SensorControlUpdate
+from ..utils.detections_parser import parse_detections
 from ..utils.ws_adapter import WsAdapter
 from .common import (
     CameraDep,
@@ -142,21 +143,11 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
             detections = sensor.get_nn_detections()
 
             if isinstance(detections, dai.NNData):
-                await ws.send_json(detections.getFirstLayerFp16())
+                parsed_detections = detections.getFirstLayerFp16()
             else:
-                parsed_detections = list(
-                    map(
-                        lambda x: {
-                            "label": x.label,
-                            "confidence": x.confidence,
-                            "coords": [x.xmin, x.ymin, x.xmax, x.ymax],
-                        },
-                        detections.detections,
-                    )
-                )
+                parsed_detections = parse_detections(detections)
 
-                await ws.send_json(parsed_detections)
-
+            await ws.send_json({"detections": parsed_detections})
             await anyio.sleep(0.001)
     except WebSocketDisconnect:
         return

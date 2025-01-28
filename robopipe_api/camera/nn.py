@@ -20,7 +20,9 @@ class CameraNNConfig:
         self.output_shape = list(self.blob.networkOutputs.values())[0].dims
         self.num_inference_threads = num_inference_threads
 
-    def create_node(self, pipeline: dai.Pipeline) -> dai.node.NeuralNetwork:
+    def create_node(
+        self, pipeline: dai.Pipeline, with_depth: bool = False
+    ) -> dai.node.NeuralNetwork:
         node = pipeline.createNeuralNetwork()
 
         return self.configure_node(node)
@@ -32,6 +34,7 @@ class CameraNNConfig:
             node.setBlobPath(self.blob)
 
         node.input.setBlocking(False)
+        node.input.setQueueSize(1)
         node.setNumInferenceThreads(self.num_inference_threads)
 
         return node
@@ -60,8 +63,11 @@ class CameraNNYoloConfig(CameraNNConfig):
         self.iou_threshold = iou_threshold
         self.num_classes = num_classes
 
-    def create_node(self, pipeline: dai.Pipeline):
-        node = pipeline.createYoloDetectionNetwork()
+    def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
+        if with_depth:
+            node = pipeline.createYoloSpatialDetectionNetwork()
+        else:
+            node = pipeline.createYoloDetectionNetwork()
 
         return self.configure_node(node)
 
@@ -95,8 +101,11 @@ class CameraNNMobileNetConfig(CameraNNConfig):
 
         self.confidence_threshold = confidence_threshold
 
-    def create_node(self, pipeline: dai.Pipeline):
-        node = pipeline.createMobileNetDetectionNetwork()
+    def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
+        if with_depth:
+            node = pipeline.createMobileNetSpatialDetectionNetwork()
+        else:
+            node = pipeline.createMobileNetDetectionNetwork()
 
         return self.configure_node(node)
 
