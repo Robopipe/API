@@ -1783,6 +1783,9 @@ components:
         name:
           type: string
           title: Name
+        camera_name:
+          type: string
+          title: Camera Name
         platform:
           $ref: '#/components/schemas/DevicePlatform'
         protocol:
@@ -1796,6 +1799,7 @@ components:
       required:
       - mxid
       - name
+      - camera_name
       - platform
       - protocol
       - state
