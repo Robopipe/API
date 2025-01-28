@@ -6,11 +6,11 @@ def parse_detections(detections: dai.ImgDetections | dai.SpatialImgDetections):
         res = {
             "label": detection.label,
             "confidence": detection.confidence,
-            "coord": [detection.xmin, detection.ymin, detection.xmax, detection.ymax],
+            "coords": [detection.xmin, detection.ymin, detection.xmax, detection.ymax],
         }
 
         if isinstance(detection, dai.SpatialImgDetection):
-            res["spatial_coordinates"] = {
+            res["spatial_coords"] = {
                 "x": detection.spatialCoordinates.x,
                 "y": detection.spatialCoordinates.y,
                 "z": detection.spatialCoordinates.z,
