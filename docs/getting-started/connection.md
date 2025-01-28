@@ -14,13 +14,13 @@ In case of any manipulation with the controller, first turn off all power source
 
 Connect the controller and luxonis camera to a router with running DHCP server (most routers have DHCP server on by default) and then connect the controller to a power supply as shown in the diagram below.
 
-<div data-full-width="false"><figure><img src="../.gitbook/assets/plc-router-luxonis-pc.png" alt=""><figcaption></figcaption></figure></div>
+<div data-full-width="false"><figure><img src="../.gitbook/assets/diagram-switch.svg" alt=""><figcaption></figcaption></figure></div>
 
 ### Direct connection
 
 Connect the luxonis camera directly to the controller via USB and then connect the controller to your PC via ethernet as shown in the diagram below.
 
-<div data-full-width="false"><figure><img src="../.gitbook/assets/plc-pc-luxonis.png" alt=""><figcaption></figcaption></figure></div>
+<div data-full-width="false"><figure><img src="../.gitbook/assets/diagram-usb.svg" alt=""><figcaption></figcaption></figure></div>
 
 ### Accessing the controller
 

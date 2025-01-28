@@ -6,7 +6,7 @@ Each sensor provides its own video stream. If there are no subscribers, no data 
 
 ### Receiving segments
 
-The data obtained via websockets is MP4 fragments encoded using H.264 codec. To start receiving data, simply open a websocket at `ws://host:port/camera/MXID/sensors/SENSOR_NAME/video`.
+The data obtained via websockets is MP4 fragments encoded using H.264 codec. To start receiving data, simply open a websocket at `ws://host:port/camera/MXID/streams/SENSOR_NAME/video`.
 
 ### Playing the video
 
