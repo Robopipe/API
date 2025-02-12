@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 import uvicorn
 
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 import os
 
 from .camera.camera_manager import camera_manager_factory
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Robopipe API",
+    version=version("robopipe_api"),
     description="API for the Robopipe application",
     servers=[
         {
