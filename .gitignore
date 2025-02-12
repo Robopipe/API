@@ -185,4 +185,9 @@ pyrightconfig.json
 pyvenv.cfg
 pip-selfcheck.json
 
+# Ignore dynamically generated version files
+**/_version.py
+**/_version.pyi
+**/.version
+
 # End of https://www.toptal.com/developers/gitignore/api/python,venv

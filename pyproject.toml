@@ -1,10 +1,9 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "robopipe-api"
-version = "0.1.0"
 description = "API for the Robopipe application"
 authors = [
     { name = "Adam Berkes", email = "adam.berkes@koala42.com" },
@@ -24,7 +23,7 @@ keywords = [
     "industrial-machine-vision",
 ]
 requires-python = ">=3.11"
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "version"]
 
 [project.urls]
 Homepage = "https://robopipe.io"
@@ -33,6 +32,12 @@ Repository = "https://github.com/Robopipe/API"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
+version = { attr = "robopipe_api._version.__version__" }
+
+[tool.setuptools_scm]
+version_file = "robopipe_api/_version.py"
+local_scheme = "no-local-version"
+
 
 [project.scripts]
 robopipe-api = "robopipe_api.robopipe:main"
