@@ -18,6 +18,7 @@ from .error import (
 )
 from .routers import cameras, controller, streams
 from .stream import stream_service_factory
+from . import __version__
 
 
 def setup():
@@ -67,7 +68,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Robopipe API",
-    version=version("robopipe_api"),
+    version=__version__,
     description="API for the Robopipe application",
     servers=[
         {
