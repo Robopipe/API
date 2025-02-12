@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Robopipe API
   description: API for the Robopipe application
-  version: 0.1.0
+  version: 0.0.0.dev0
 servers:
 - url: https://robopipe-{controllerId}.local
   description: Robopipe controller running on local network
