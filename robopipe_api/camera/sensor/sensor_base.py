@@ -1,4 +1,3 @@
-import av
 import depthai as dai
 import numpy as np
 from PIL import Image
@@ -6,7 +5,7 @@ from PIL import Image
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from ...utils.image import img_frame_to_pil_image
+from ...utils.image import img_frame_to_pil_image, img_frame_to_video_frame
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from .sensor_config import SensorConfigProperties
 from .sensor_control import SensorControl
@@ -60,21 +59,13 @@ class SensorBase(ABC):
         return img_frame_to_pil_image(img_frame)
 
     def get_video_frame(self):
-        video_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.VIDEO].get()
-        frame_type = video_frame.getType()
+        video_frame: dai.ImgFrame = self.output_queues[
+            PipelineQueueType.VIDEO
+        ].getAll()[-1]
 
         self.__extract_img_properties(video_frame)
 
-        if frame_type == dai.RawImgFrame.Type.NV12:
-            return av.VideoFrame.from_ndarray(video_frame.getFrame(), "nv12").to_rgb()
-        elif frame_type == dai.RawImgFrame.Type.BGR888i:
-            return av.VideoFrame.from_ndarray(video_frame.getFrame()[..., ::-1], "rbg")
-        elif frame_type == dai.RawImgFrame.Type.RAW8:
-            return av.VideoFrame.from_ndarray(video_frame.getFrame(), "gray")
-        elif frame_type == dai.RawImgFrame.Type.YUV420p:
-            return av.VideoFrame.from_ndarray(
-                video_frame.getFrame(), "yuv420p"
-            ).to_rgb()
+        return img_frame_to_video_frame(video_frame).to_rgb()
 
     def get_nn_frame(self):
         try:
