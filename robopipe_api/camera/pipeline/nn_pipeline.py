@@ -39,6 +39,11 @@ class NNPipeline(DepthPipeline):
                 except:
                     continue
 
+    def get_video_queue(self, sensor_name: str):
+        return self.outputs[
+            self.output_queues[sensor_name].get(PipelineQueueType.VIDEO)
+        ]
+
     def __setup_mono_camera(
         self,
         camera: dai.node.MonoCamera,
@@ -47,8 +52,11 @@ class NNPipeline(DepthPipeline):
     ):
         sensor_name = camera.getBoardSocket().name
         script = self.scripts[sensor_name]
+        video_queue = self.get_video_queue(sensor_name)
 
         script.outputs["preview"].link(nn_node.input)
+        script.outputs["video"].unlink(video_queue.input)
+        nn_node.passthrough.link(video_queue.input)
 
     def __setup_camera(
         self,
@@ -59,12 +67,20 @@ class NNPipeline(DepthPipeline):
         camera.setPreviewSize(nn.input_shape[:2])
         camera.setInterleaved(False)
 
+        video_queue = self.get_video_queue(nn.sensor_name)
+
         camera.preview.link(nn_node.input)
+        camera.video.unlink(video_queue.input)
+        nn_node.passthrough.link(video_queue.input)
 
     def __setup_stereo_camera(
         self, nn: CameraNNConfig, nn_node: dai.node.NeuralNetwork
     ):
+        video_queue = self.get_video_queue(nn.sensor_name)
+
         self.scripts[nn.sensor_name].outputs["preview"].link(nn_node.input)
+        self.scripts[nn.sensor_name].outputs["video"].unlink(video_queue.input)
+        nn_node.passthrough.link(video_queue.input)
 
     def add_nn(self, nn: CameraNNConfig):
         sensor_name = nn.sensor_name
@@ -143,6 +159,18 @@ class NNPipeline(DepthPipeline):
             return
 
         nn_node = self.neural_networks[sensor_name]
+        video_queue = self.get_video_queue(sensor_name)
+
+        if sensor_name.startswith("DEPTH"):
+            script = self.scripts[self.get_depth_name()]
+            script.outputs["video"].link(video_queue.input)
+        else:
+            cam = self.cameras[sensor_name]
+
+            if isinstance(cam, dai.node.MonoCamera):
+                self.scripts[sensor_name].outputs["video"].link(video_queue.input)
+            else:
+                cam.video.link(video_queue.input)
 
         self.pipeline.remove(nn_node)
         del self.neural_networks[sensor_name]
