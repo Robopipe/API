@@ -8,6 +8,7 @@ from io import BytesIO
 from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
 from ..models.sensor_control import SensorControlUpdate
+from ..models.stream_info import StreamInfo
 from ..utils.detections_parser import parse_detections
 from ..utils.ws_adapter import WsAdapter
 from .common import (
@@ -27,11 +28,13 @@ router = APIRouter(
 
 
 @router.get("/")
-def list_all_streams(camera: CameraDep):
-    return {
-        sensor: {"active": sensor in camera.sensors}
-        for sensor in camera.all_sensors.keys()
-    }
+def list_all_streams(camera: CameraDep) -> list[StreamInfo]:
+    get_sensor_info = lambda sensor: StreamInfo(
+        name=sensor, active=(sensor in camera.sensors)
+    )
+    sensors = list(map(get_sensor_info, camera.all_sensors.keys()))
+
+    return sensors
 
 
 stream_router = APIRouter(
