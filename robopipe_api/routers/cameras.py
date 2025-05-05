@@ -13,6 +13,18 @@ def list_cameras(camera_manager: CameraManagerDep) -> list[DeviceInfo]:
     return list(map(lambda x: x.info, camera_manager.cameras.values()))
 
 
+@router.post("/refresh")
+def refresh_cameras(
+    camera_manager: CameraManagerDep, boot: bool = False
+) -> list[DeviceInfo]:
+    camera_manager.reload_cameras()
+
+    if boot:
+        camera_manager.boot_cameras()
+
+    return list(map(lambda x: x.info, camera_manager.cameras.values()))
+
+
 camera_router = APIRouter(
     prefix="/{mxid}",
     tags=["cameras"],
@@ -26,17 +38,21 @@ def get_camera(camera: CameraDep) -> DeviceInfo:
 
 
 @camera_router.post("/")
-def create_camera(camera_manager: CameraManagerDep, mxid: Mxid) -> DeviceInfo:
+def create_camera(
+    camera_manager: CameraManagerDep, mxid: Mxid, camera: CameraDep
+) -> DeviceInfo:
     camera_manager.boot_camera(mxid)
 
-    return {"status": "ok"}
+    return camera.info
 
 
 @camera_router.delete("/")
-def delete_camera(camera_manager: CameraManagerDep, mxid: Mxid) -> DeviceInfo:
+def delete_camera(
+    camera_manager: CameraManagerDep, mxid: Mxid, camera: CameraDep
+) -> DeviceInfo:
     camera_manager.shutdown_camera(mxid)
 
-    return {"status": "ok"}
+    return camera.info
 
 
 @camera_router.get("/stats")
