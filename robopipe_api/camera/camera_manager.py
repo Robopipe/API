@@ -4,8 +4,8 @@ from functools import lru_cache
 
 from ..error import CameraNotFoundException
 from .camera import Camera
+from .device_info import DeviceState
 from .pipeline.depth_pipeline import DepthPipeline
-from .pipeline.streaming_pipeline import StreamingPipeline
 
 
 class CameraManager:
@@ -39,11 +39,16 @@ class CameraManager:
                 del self.cameras[mxid]
 
     def boot_cameras(self):
+        print("Booting cameras...")
         for mxid in self.cameras.keys():
             self.boot_camera(mxid)
 
     def boot_camera(self, mxid: str):
         camera = self.cameras[mxid]
+
+        if camera.info.state != DeviceState.X_LINK_UNBOOTED:
+            return
+
         camera.open(
             DepthPipeline(None, [sensor for sensor in camera.all_sensors.values()])
         )
