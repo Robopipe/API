@@ -4,6 +4,7 @@ import time
 
 from ..error import CameraShutDownException, CameraException
 from ..log import logger
+from ..models.nn_config import NNConfig, NNType
 from .camera_stats import CameraStats
 from .device_info import DeviceInfo
 from .ir import IRConfig
@@ -11,7 +12,7 @@ from .pipeline.depth_pipeline import DepthPipeline
 from .pipeline.pipeline import Pipeline, PipelineQueueType
 from .pipeline.streaming_pipeline import StreamingPipeline
 from .pipeline.nn_pipeline import NNPipeline
-from .nn import CameraNNConfig
+from .nn import CameraNNConfig, CameraNNMobileNetConfig, CameraNNYoloConfig
 from .sensor.depth_sensor import DepthSensor
 from .sensor.sensor_base import SensorBase
 from .sensor.sensor import Sensor
@@ -19,13 +20,18 @@ from .sensor.sensor import Sensor
 
 class Camera:
     DEFAULT_POE_IP = "169.254.1.222"
+    NN_CONFIG_MAP: dict[NNType, type[CameraNNConfig]] = {
+        NNType.Generic: CameraNNConfig,
+        NNType.YOLO: CameraNNYoloConfig,
+        NNType.MobileNet: CameraNNMobileNetConfig,
+    }
 
     def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
         self.mxid = mxid
         self.boot_name = name if name == Camera.DEFAULT_POE_IP else mxid
-
         self.camera_handle = dai.Device(self.boot_name)
         self.camera_name = self.camera_handle.getDeviceName()
+        self.sensors: dict[str, SensorBase] = {}
         self.all_sensors = {
             sensor.socket.name: sensor
             for sensor in self.camera_handle.getConnectedCameraFeatures()
@@ -91,22 +97,26 @@ class Camera:
         }
 
     def reload_sensors(self):
-        self.sensors: dict[str, SensorBase] = {}
-
-        if self.camera_handle is None:
-            return
-
+        existing_sensors = self.sensors
+        self.sensors = {}
         restart_pipeline = lambda: self.open(self.pipeline)
 
         for [sensor_name, sensor_features] in self.all_sensors.items():
             if sensor_name in self.pipeline.cameras:
-                self.sensors[sensor_name] = Sensor(
+                sensor = Sensor(
                     sensor_features,
                     self.pipeline.cameras[sensor_name],
                     self.__get_sensor_queues(sensor_name, True),
                     self.__get_sensor_queues(sensor_name, False),
                     restart_pipeline,
                 )
+
+                self.sensors[sensor_name] = sensor
+
+                if sensor_name in existing_sensors:
+                    existing_sensor = existing_sensors[sensor_name]
+                    sensor.control = existing_sensor.control
+                    sensor.nn_config = existing_sensor.nn_config
 
         if (
             not any(map(lambda x: x.startswith("DEPTH"), self.all_sensors.keys()))
@@ -169,13 +179,28 @@ class Camera:
         self.pipeline.remove_sensor(sensor_name)
         self.open(self.pipeline)
 
-    def deploy_nn(self, nn: CameraNNConfig):
+    def deploy_nn(self, sensor_name: str, blob: dai.OpenVINO.Blob, config: NNConfig):
+        nn_config_cls = Camera.NN_CONFIG_MAP.get(config.type)
+
+        if nn_config_cls is None:
+            raise ValueError(f"Invalid NNConfig type: {config.type}")
+
+        nn = nn_config_cls(
+            sensor_name,
+            self.all_sensors[sensor_name],
+            blob,
+            config.num_inference_threads,
+            **(config.nn_config.model_dump() if config.nn_config is not None else {}),
+        )
+
+        self.sensors[sensor_name].nn_config = config
         self.pipeline = NNPipeline([nn], self.pipeline.pipeline)
 
         self.open(self.pipeline)
 
     def delete_nn(self, sensor_name: str):
         if isinstance(self.pipeline, NNPipeline):
+            self.sensors[sensor_name].nn_config = None
             self.pipeline.remove_nn(sensor_name)
             self.open(self.pipeline)
 

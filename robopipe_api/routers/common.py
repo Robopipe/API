@@ -68,30 +68,32 @@ def get_device(devices: DevicesDep, circuit: str, request: Request):
 DeviceDep = Annotated[Device, Depends(get_device)]
 
 
-def nn_config_checker(nn_config: Annotated[str, Form()]):
+def nn_config_checker(config: Annotated[str, Form()]):
+    NN_CONFIG_MAP = {
+        NNType.Generic: type(None),
+        NNType.YOLO: NNYoloConfig,
+        NNType.MobileNet: NNMobileNetConfig,
+    }
+
     try:
-        model = NNConfig.model_validate_json(nn_config)
+        config_model = NNConfig.model_validate_json(config)
+        nn_config_cls = NN_CONFIG_MAP.get(config_model.type)
 
-        if model.type == NNType.Generic and model.nn_config is not None:
-            raise ValueError("nn_config must be null when NNType is Generic")
-        elif model.type == NNType.YOLO and not isinstance(
-            model.nn_config, NNYoloConfig
-        ):
+        if nn_config_cls is None:
+            raise ValueError(f"Invalid NNType: {config_model.type}")
+
+        if not isinstance(config_model.nn_config, nn_config_cls):
             raise ValueError(
-                "nn_config must be of type NNYoloConfig or null when NNType is YOLO"
-            )
-        elif model.type == NNType.MobileNet and not isinstance(
-            model.nn_config, NNMobileNetConfig
-        ):
-            raise ValueError(
-                "nn_config must be of type NNMobileNetConfig or null when NNType is MobileNet"
+                f"Invalid NNType: {config_model.type} and NNConfig: {config_model.nn_config}. Expected: {nn_config_cls}"
             )
 
-        return model
+        return config_model
     except ValidationError as e:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, jsonable_encoder(e.errors())
-        )
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
 
 NNConfigDep = Annotated[NNConfig, Depends(nn_config_checker)]
