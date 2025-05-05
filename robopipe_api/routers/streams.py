@@ -5,10 +5,8 @@ from fastapi.responses import Response
 
 from io import BytesIO
 
-from ..camera.nn import CameraNNConfig, CameraNNYoloConfig, CameraNNMobileNetConfig
 from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
-from ..models.nn_config import NNType
 from ..models.sensor_control import SensorControlUpdate
 from ..utils.detections_parser import parse_detections
 from ..utils.ws_adapter import WsAdapter
@@ -97,36 +95,19 @@ def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Respo
     return Response(img_buffer.getvalue(), media_type=f"image/{format}")
 
 
+@stream_router.get("/nn", tags=["nn"])
+def get_neural_network(sensor: SensorDep):
+    return sensor.nn_config
+
+
 @stream_router.post("/nn", status_code=status.HTTP_201_CREATED, tags=["nn"])
 async def deploy_neural_network(
     camera: CameraDep, stream_name: StreamName, model: UploadFile, config: NNConfigDep
 ):
-    sensor = camera.all_sensors[stream_name]
     model_bytes = await model.read()
     blob = dai.OpenVINO.Blob(list(model_bytes))
 
-    if config.type == NNType.Generic:
-        nn_config = CameraNNConfig(
-            stream_name, sensor, blob, config.num_inference_threads
-        )
-    elif config.type == NNType.YOLO:
-        nn_config = CameraNNYoloConfig(
-            stream_name,
-            sensor,
-            blob,
-            config.num_inference_threads,
-            **config.nn_config.model_dump(),
-        )
-    elif config.type == NNType.MobileNet:
-        nn_config = CameraNNMobileNetConfig(
-            stream_name,
-            sensor,
-            blob,
-            config.num_inference_threads,
-            **config.nn_config.model_dump(),
-        )
-
-    camera.deploy_nn(nn_config)
+    camera.deploy_nn(stream_name, blob, config)
 
 
 @stream_router.delete("/nn", status_code=status.HTTP_202_ACCEPTED, tags=["nn"])

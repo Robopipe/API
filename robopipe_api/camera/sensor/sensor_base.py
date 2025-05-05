@@ -5,6 +5,7 @@ from PIL import Image
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from ...models.nn_config import NNConfig
 from ...utils.image import img_frame_to_pil_image, img_frame_to_video_frame
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from .sensor_config import SensorConfigProperties
@@ -21,6 +22,7 @@ class SensorBase(ABC):
         self.input_queues = input_queues
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
+        self._nn_config = None
 
     @property
     @abstractmethod
@@ -37,6 +39,15 @@ class SensorBase(ABC):
     @control.setter
     @abstractmethod
     def control(self, value: SensorControl) -> SensorControl: ...
+
+    @property
+    def nn_config(self) -> NNConfig | None:
+        return self._nn_config
+
+    @nn_config.setter
+    def nn_config(self, value: NNConfig | None) -> NNConfig | None:
+        self._nn_config = value
+        return self._nn_config
 
     def __extract_img_properties(self, img: dai.ImgFrame):
         pass
