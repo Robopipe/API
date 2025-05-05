@@ -9,7 +9,7 @@ from .camera_stats import CameraStats
 from .device_info import DeviceInfo
 from .ir import IRConfig
 from .pipeline.depth_pipeline import DepthPipeline
-from .pipeline.pipeline import Pipeline, PipelineQueueType
+from .pipeline.pipeline import EmptyPipeline, Pipeline, PipelineQueueType
 from .pipeline.streaming_pipeline import StreamingPipeline
 from .pipeline.nn_pipeline import NNPipeline
 from .nn import CameraNNConfig, CameraNNMobileNetConfig, CameraNNYoloConfig
@@ -29,7 +29,8 @@ class Camera:
     def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
         self.mxid = mxid
         self.boot_name = name if name == Camera.DEFAULT_POE_IP else mxid
-        self.camera_handle = dai.Device(self.boot_name)
+        self.pipeline = pipeline or EmptyPipeline()
+        self.__boot_camera()
         self.camera_name = self.camera_handle.getDeviceName()
         self.sensors: dict[str, SensorBase] = {}
         self.all_sensors = {
