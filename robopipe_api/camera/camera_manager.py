@@ -39,7 +39,6 @@ class CameraManager:
                 del self.cameras[mxid]
 
     def boot_cameras(self):
-        print("Booting cameras...")
         for mxid in self.cameras.keys():
             self.boot_camera(mxid)
 
