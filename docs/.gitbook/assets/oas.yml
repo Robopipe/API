@@ -1,0 +1,2400 @@
+openapi: 3.1.0
+info:
+  title: Robopipe API
+  description: API for the Robopipe application
+  version: 0.0.0.dev0
+servers:
+- url: https://robopipe-{controllerId}.local
+  description: Robopipe controller running on local network
+  variables:
+    controllerId:
+      default: '1'
+      description: Robopipe controller ID
+- url: http://localhost:8080
+  description: Locally running server
+paths:
+  /cameras/:
+    get:
+      tags:
+      - cameras
+      summary: List Cameras
+      operationId: list_cameras_cameras__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DeviceInfo'
+                type: array
+                title: Response List Cameras Cameras  Get
+  /cameras/{mxid}/:
+    get:
+      tags:
+      - cameras
+      - cameras
+      summary: Get Camera
+      operationId: get_camera_cameras__mxid___get
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceInfo'
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - cameras
+      - cameras
+      summary: Create Camera
+      operationId: create_camera_cameras__mxid___post
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceInfo'
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - cameras
+      - cameras
+      summary: Delete Camera
+      operationId: delete_camera_cameras__mxid___delete
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceInfo'
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/stats:
+    get:
+      tags:
+      - cameras
+      - cameras
+      summary: Get Camera Stats
+      operationId: get_camera_stats_cameras__mxid__stats_get
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraStats'
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/ir:
+    get:
+      tags:
+      - cameras
+      - cameras
+      summary: Get Infrared Config
+      operationId: get_infrared_config_cameras__mxid__ir_get
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/IRConfig'
+                - type: 'null'
+                title: Response Get Infrared Config Cameras  Mxid  Ir Get
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - cameras
+      - cameras
+      summary: Set Infrared Config
+      operationId: set_infrared_config_cameras__mxid__ir_post
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IRConfig'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/IRConfig'
+                - type: 'null'
+                title: Response Set Infrared Config Cameras  Mxid  Ir Post
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/streams/:
+    get:
+      tags:
+      - streams
+      summary: List All Streams
+      operationId: list_all_streams_cameras__mxid__streams__get
+      parameters:
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/streams/{stream_name}/:
+    post:
+      tags:
+      - streams
+      - streams
+      summary: Activate Stream
+      operationId: activate_stream_cameras__mxid__streams__stream_name___post
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - streams
+      - streams
+      summary: Deactivate Stream
+      operationId: deactivate_stream_cameras__mxid__streams__stream_name___delete
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/streams/{stream_name}/config:
+    get:
+      tags:
+      - streams
+      - streams
+      summary: Get Stream Config
+      operationId: get_stream_config_cameras__mxid__streams__stream_name__config_get
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/CameraConfigProperties'
+                - $ref: '#/components/schemas/ColorCameraConfigProperties'
+                - $ref: '#/components/schemas/MonoCameraConfigProperties'
+                title: Response Get Stream Config Cameras  Mxid  Streams  Stream Name  Config
+                  Get
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - streams
+      - streams
+      summary: Update Stream Config
+      operationId: update_stream_config_cameras__mxid__streams__stream_name__config_post
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/CameraConfigProperties'
+              - $ref: '#/components/schemas/ColorCameraConfigProperties'
+              - $ref: '#/components/schemas/MonoCameraConfigProperties'
+              title: Config
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/CameraConfigProperties'
+                - $ref: '#/components/schemas/ColorCameraConfigProperties'
+                - $ref: '#/components/schemas/MonoCameraConfigProperties'
+                title: Response Update Stream Config Cameras  Mxid  Streams  Stream
+                  Name  Config Post
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/streams/{stream_name}/control:
+    get:
+      tags:
+      - streams
+      - streams
+      summary: Get Stream Control
+      operationId: get_stream_control_cameras__mxid__streams__stream_name__control_get
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorControl'
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - streams
+      - streams
+      summary: Update Stream Control
+      operationId: update_stream_control_cameras__mxid__streams__stream_name__control_post
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorControlUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorControl'
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/streams/{stream_name}/still:
+    get:
+      tags:
+      - streams
+      - streams
+      summary: Capture Still Image
+      operationId: capture_still_image_cameras__mxid__streams__stream_name__still_get
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      - name: format
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: jpeg
+          title: Format
+      responses:
+        '200':
+          description: Image bytes in the selected format
+          content:
+            image/*:
+              schema:
+                type: string
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /cameras/{mxid}/streams/{stream_name}/nn:
+    post:
+      tags:
+      - streams
+      - streams
+      - nn
+      summary: Deploy Neural Network
+      operationId: deploy_neural_network_cameras__mxid__streams__stream_name__nn_post
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_deploy_neural_network_cameras__mxid__streams__stream_name__nn_post'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - streams
+      - streams
+      - nn
+      summary: Delete Neural Network
+      operationId: delete_neural_network_cameras__mxid__streams__stream_name__nn_delete
+      parameters:
+      - name: stream_name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: CAM_[A-H]|DEPTH_[A-H]_[A-H]
+          title: Stream Name
+      - name: mxid
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '[A-Z0-9]+'
+          title: Mxid
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Camera or stream not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/:
+    get:
+      tags:
+      - controller
+      summary: List All Circuits
+      operationId: list_all_circuits_controller__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /controller/{device_type}:
+    get:
+      tags:
+      - controller
+      summary: List All Circuits Of Device Type
+      operationId: list_all_circuits_of_device_type_controller__device_type__get
+      parameters:
+      - name: device_type
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: di|ro|do|ai|ao|sensor|led|watchdog|modbus_slave|owpower|register|data_point|owbus|device_info
+          title: Device Type
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ai:
+    get:
+      tags:
+      - controller
+      summary: List All Analog Inputs
+      operationId: List_all_analog_inputs_controller_ai_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogInput'
+                type: array
+                title: Response List All Analog Inputs Controller Ai Get
+    post:
+      tags:
+      - controller
+      summary: Set All Analog Inputs
+      operationId: Set_all_analog_inputs_controller_ai_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogInputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogInput'
+                type: array
+                title: Response Set All Analog Inputs Controller Ai Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ai/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get Analog Input
+      operationId: Get_analog_input_controller_ai__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set Analog Input
+      operationId: Set_analog_input_controller_ai__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogInputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ao:
+    get:
+      tags:
+      - controller
+      summary: List All Analog Outputs
+      operationId: List_all_analog_outputs_controller_ao_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogOutput'
+                type: array
+                title: Response List All Analog Outputs Controller Ao Get
+    post:
+      tags:
+      - controller
+      summary: Set All Analog Outputs
+      operationId: Set_all_analog_outputs_controller_ao_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogOutputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AnalogOutput'
+                type: array
+                title: Response Set All Analog Outputs Controller Ao Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/ao/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get Analog Output
+      operationId: Get_analog_output_controller_ao__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set Analog Output
+      operationId: Set_analog_output_controller_ao__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalogOutputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalogOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/di:
+    get:
+      tags:
+      - controller
+      summary: List All Digital Inputs
+      operationId: List_all_digital_inputs_controller_di_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalInput'
+                type: array
+                title: Response List All Digital Inputs Controller Di Get
+    post:
+      tags:
+      - controller
+      summary: Set All Digital Inputs
+      operationId: Set_all_digital_inputs_controller_di_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalInputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalInput'
+                type: array
+                title: Response Set All Digital Inputs Controller Di Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/di/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get Digital Input
+      operationId: Get_digital_input_controller_di__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set Digital Input
+      operationId: Set_digital_input_controller_di__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalInputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalInput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/do:
+    get:
+      tags:
+      - controller
+      summary: List All Digital Outputs
+      operationId: List_all_digital_outputs_controller_do_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalOutput'
+                type: array
+                title: Response List All Digital Outputs Controller Do Get
+    post:
+      tags:
+      - controller
+      summary: Set All Digital Outputs
+      operationId: Set_all_digital_outputs_controller_do_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalOutputUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DigitalOutput'
+                type: array
+                title: Response Set All Digital Outputs Controller Do Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/do/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get Digital Output
+      operationId: Get_digital_output_controller_do__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set Digital Output
+      operationId: Set_digital_output_controller_do__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalOutputUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/led:
+    get:
+      tags:
+      - controller
+      summary: List All Leds
+      operationId: List_all_leds_controller_led_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Led'
+                type: array
+                title: Response List All Leds Controller Led Get
+    post:
+      tags:
+      - controller
+      summary: Set All Leds
+      operationId: Set_all_leds_controller_led_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Led'
+                type: array
+                title: Response Set All Leds Controller Led Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/led/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get Led
+      operationId: Get_led_controller_led__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Led'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set Led
+      operationId: Set_led_controller_led__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Led'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owpower:
+    get:
+      tags:
+      - controller
+      summary: List All One-Wire Power Supplies
+      operationId: List_all_one_wire_power_supplies_controller_owpower_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWPower'
+                type: array
+                title: Response List All One Wire Power Supplies Controller Owpower
+                  Get
+    post:
+      tags:
+      - controller
+      summary: Set All One-Wire Power Supplies
+      operationId: Set_all_one_wire_power_supplies_controller_owpower_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWPowerUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWPower'
+                type: array
+                title: Response Set All One Wire Power Supplies Controller Owpower
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owpower/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get One-Wire Power Supply
+      operationId: Get_one_wire_power_supply_controller_owpower__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWPower'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set One-Wire Power Supply
+      operationId: Set_one_wire_power_supply_controller_owpower__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWPowerUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWPower'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owbus:
+    get:
+      tags:
+      - controller
+      summary: List All One-Wire Buses
+      operationId: List_all_one_wire_buses_controller_owbus_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWBus'
+                type: array
+                title: Response List All One Wire Buses Controller Owbus Get
+    post:
+      tags:
+      - controller
+      summary: Set All One-Wire Buses
+      operationId: Set_all_one_wire_buses_controller_owbus_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWBusUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/OWBus'
+                type: array
+                title: Response Set All One Wire Buses Controller Owbus Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/owbus/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get One-Wire Bus
+      operationId: Get_one_wire_bus_controller_owbus__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWBus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set One-Wire Bus
+      operationId: Set_one_wire_bus_controller_owbus__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OWBusUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OWBus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/register:
+    get:
+      tags:
+      - controller
+      summary: List All Modbus Registers
+      operationId: List_all_modbus_registers_controller_register_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Modbus'
+                type: array
+                title: Response List All Modbus Registers Controller Register Get
+    post:
+      tags:
+      - controller
+      summary: Set All Modbus Registers
+      operationId: Set_all_modbus_registers_controller_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModbusUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Modbus'
+                type: array
+                title: Response Set All Modbus Registers Controller Register Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /controller/register/{circuit}:
+    get:
+      tags:
+      - controller
+      summary: Get Modbus Register
+      operationId: Get_modbus_register_controller_register__circuit__get
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Modbus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - controller
+      summary: Set Modbus Register
+      operationId: Set_modbus_register_controller_register__circuit__post
+      parameters:
+      - name: circuit
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Circuit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModbusUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Modbus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AnalogInput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        modes:
+          additionalProperties:
+            $ref: '#/components/schemas/AnalogInputMode'
+          propertyNames:
+            $ref: '#/components/schemas/AnalogInputModeType'
+          type: object
+          title: Modes
+        mode:
+          $ref: '#/components/schemas/AnalogInputModeType'
+          default: Voltage
+      type: object
+      required:
+      - dev
+      - circuit
+      - modes
+      title: AnalogInput
+    AnalogInputMode:
+      properties:
+        value:
+          type: integer
+          title: Value
+        unit:
+          type: string
+          title: Unit
+        range:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Range
+      type: object
+      required:
+      - value
+      - unit
+      - range
+      title: AnalogInputMode
+    AnalogInputModeType:
+      type: string
+      enum:
+      - Disabled
+      - Voltage
+      - Voltage2V5
+      - Current
+      - Resistance3W
+      - Resistance2W
+      title: AnalogInputModeType
+    AnalogInputUpdate:
+      properties:
+        mode:
+          $ref: '#/components/schemas/AnalogInputModeType'
+          default: Voltage
+      type: object
+      title: AnalogInputUpdate
+    AnalogOutput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        modes:
+          additionalProperties:
+            $ref: '#/components/schemas/AnalogOutputMode'
+          propertyNames:
+            $ref: '#/components/schemas/AnalogOutputModeType'
+          type: object
+          title: Modes
+        value:
+          type: number
+          title: Value
+        mode:
+          $ref: '#/components/schemas/AnalogOutputModeType'
+          default: Voltage
+      type: object
+      required:
+      - dev
+      - circuit
+      - modes
+      - value
+      title: AnalogOutput
+    AnalogOutputMode:
+      properties:
+        value:
+          type: integer
+          title: Value
+        unit:
+          type: string
+          title: Unit
+        range:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Range
+      type: object
+      required:
+      - value
+      - unit
+      - range
+      title: AnalogOutputMode
+    AnalogOutputModeType:
+      type: string
+      enum:
+      - Voltage
+      - Current
+      - Resistance
+      title: AnalogOutputModeType
+    AnalogOutputUpdate:
+      properties:
+        value:
+          type: number
+          title: Value
+        mode:
+          $ref: '#/components/schemas/AnalogOutputModeType'
+          default: Voltage
+      type: object
+      required:
+      - value
+      title: AnalogOutputUpdate
+    AutoFocusMode:
+      type: string
+      enum:
+      - 'OFF'
+      - AUTO
+      - MACRO
+      - CONTINUOUS_VIDEO
+      - CONTINUOUS_PICTURE
+      - EDOF
+      title: AutoFocusMode
+    AutoWhiteBalanceMode:
+      type: string
+      enum:
+      - AUTO
+      - CLOUDY_DAYLIGHT
+      - DAYLIGHT
+      - FLUORESCENT
+      - INCANDESCENT
+      - 'OFF'
+      - SHADE
+      - TWILIGHT
+      - WARM_FLUORESCENT
+      title: AutoWhiteBalanceMode
+    Body_deploy_neural_network_cameras__mxid__streams__stream_name__nn_post:
+      properties:
+        model:
+          type: string
+          format: binary
+          title: Model
+        nn_config:
+          type: string
+          title: Nn Config
+      type: object
+      required:
+      - model
+      - nn_config
+      title: Body_deploy_neural_network_cameras__mxid__streams__stream_name__nn_post
+    CameraConfigProperties:
+      properties:
+        resolution:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Resolution
+        still_size:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Still Size
+        preview_size:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Preview Size
+        video_size:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Video Size
+        fps:
+          type: number
+          title: Fps
+      type: object
+      required:
+      - resolution
+      - still_size
+      - preview_size
+      - video_size
+      - fps
+      title: CameraConfigProperties
+    CameraStats:
+      properties:
+        chip_temperature:
+          $ref: '#/components/schemas/ChipTemperature'
+        cmx_memory_usage:
+          $ref: '#/components/schemas/MemoryInfo'
+        ddr_memory_usage:
+          $ref: '#/components/schemas/MemoryInfo'
+      type: object
+      required:
+      - chip_temperature
+      - cmx_memory_usage
+      - ddr_memory_usage
+      title: CameraStats
+    ChipTemperature:
+      properties:
+        average:
+          type: number
+          title: Average
+        css:
+          type: number
+          title: Css
+        dss:
+          type: number
+          title: Dss
+        mss:
+          type: number
+          title: Mss
+        upa:
+          type: number
+          title: Upa
+      type: object
+      required:
+      - average
+      - css
+      - dss
+      - mss
+      - upa
+      title: ChipTemperature
+    ColorCameraConfigProperties:
+      properties:
+        resolution:
+          $ref: '#/components/schemas/ColorCameraResolution'
+        still_size:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Still Size
+        preview_size:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Preview Size
+        video_size:
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Video Size
+        sensor_crop:
+          prefixItems:
+          - type: number
+          - type: number
+          type: array
+          maxItems: 2
+          minItems: 2
+          title: Sensor Crop
+        fps:
+          type: number
+          title: Fps
+      type: object
+      required:
+      - resolution
+      - still_size
+      - preview_size
+      - video_size
+      - sensor_crop
+      - fps
+      title: ColorCameraConfigProperties
+    ColorCameraResolution:
+      type: string
+      enum:
+      - THE_1080_P
+      - THE_1200_P
+      - THE_12_MP
+      - THE_1352X1012
+      - THE_13_MP
+      - THE_1440X1080
+      - THE_2024X1520
+      - THE_4000X3000
+      - THE_48_MP
+      - THE_4_K
+      - THE_5312X6000
+      - THE_5_MP
+      - THE_720_P
+      - THE_800_P
+      title: ColorCameraResolution
+    DeviceInfo:
+      properties:
+        mxid:
+          type: string
+          title: Mxid
+        name:
+          type: string
+          title: Name
+        camera_name:
+          type: string
+          title: Camera Name
+        platform:
+          $ref: '#/components/schemas/DevicePlatform'
+        protocol:
+          $ref: '#/components/schemas/DeviceProtocol'
+        state:
+          $ref: '#/components/schemas/DeviceState'
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - mxid
+      - name
+      - camera_name
+      - platform
+      - protocol
+      - state
+      - status
+      title: DeviceInfo
+    DevicePlatform:
+      type: string
+      enum:
+      - X_LINK_ANY_PLATFORM
+      - X_LINK_MYRIAD_X
+      - X_LINK_MYRIAD_2
+      title: DevicePlatform
+    DeviceProtocol:
+      type: string
+      enum:
+      - X_LINK_ANY_PROTOCOL
+      - X_LINK_IPC
+      - X_LINK_PCIE
+      - X_LINK_TCP_IP
+      - X_LINK_USB_CDC
+      - X_LINK_USB_VSC
+      title: DeviceProtocol
+    DeviceState:
+      type: string
+      enum:
+      - X_LINK_ANY_STATE
+      - X_LINK_BOOTED
+      - X_LINK_BOOTLOADER
+      - X_LINK_FLASH_BOOTED
+      - X_LINK_UNBOOTED
+      title: DeviceState
+    DigitalInput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        counter_modes:
+          items:
+            $ref: '#/components/schemas/DigitalInputCounterMode'
+          type: array
+          title: Counter Modes
+        modes:
+          items:
+            $ref: '#/components/schemas/DigitalInputMode'
+          type: array
+          title: Modes
+        value:
+          type: integer
+          enum:
+          - 0
+          - 1
+          title: Value
+        counter:
+          type: integer
+          title: Counter
+        counter_mode:
+          $ref: '#/components/schemas/DigitalInputCounterMode'
+        mode:
+          $ref: '#/components/schemas/DigitalInputMode'
+        debounce:
+          type: integer
+          title: Debounce
+          default: 50
+      type: object
+      required:
+      - dev
+      - circuit
+      - counter_modes
+      - modes
+      - value
+      - counter
+      - counter_mode
+      - mode
+      title: DigitalInput
+    DigitalInputCounterMode:
+      type: string
+      enum:
+      - Enabled
+      - Disabled
+      title: DigitalInputCounterMode
+    DigitalInputMode:
+      type: string
+      enum:
+      - Simple
+      - DirectSwitch
+      title: DigitalInputMode
+    DigitalInputUpdate:
+      properties:
+        counter:
+          type: integer
+          title: Counter
+        counter_mode:
+          $ref: '#/components/schemas/DigitalInputCounterMode'
+          default: Enabled
+        mode:
+          $ref: '#/components/schemas/DigitalInputMode'
+          default: Simple
+        debounce:
+          type: integer
+          title: Debounce
+          default: 50
+      type: object
+      required:
+      - counter
+      title: DigitalInputUpdate
+    DigitalOutput:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        modes:
+          items:
+            $ref: '#/components/schemas/DigitalOutputMode'
+          type: array
+          title: Modes
+        pwm_freq:
+          type: number
+          title: Pwm Freq
+        pwm_duty:
+          type: integer
+          maximum: 100.0
+          minimum: 0.0
+          title: Pwm Duty
+          description: Mutually exclusive with value. Value must be between 0 and
+            100
+        value:
+          type: integer
+          title: Value
+        mode:
+          $ref: '#/components/schemas/DigitalOutputMode'
+      type: object
+      required:
+      - dev
+      - circuit
+      - modes
+      - pwm_freq
+      - pwm_duty
+      - value
+      - mode
+      title: DigitalOutput
+    DigitalOutputMode:
+      type: string
+      enum:
+      - Simple
+      - PWM
+      title: DigitalOutputMode
+    DigitalOutputUpdate:
+      properties:
+        pwm_freq:
+          type: number
+          title: Pwm Freq
+        pwm_duty:
+          type: integer
+          maximum: 100.0
+          minimum: 0.0
+          title: Pwm Duty
+          description: Mutually exclusive with value. Value must be between 0 and
+            100
+        value:
+          type: integer
+          title: Value
+      type: object
+      required:
+      - pwm_freq
+      - pwm_duty
+      - value
+      title: DigitalOutputUpdate
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    IRConfig:
+      properties:
+        flood_light:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Flood Light
+          description: IR LED intensity. Value must be between 0.0 and 1.0
+          default: 0.0
+        dot_projector:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Dot Projector
+          description: Dot projector intensity. Value must be between 0.0 and 1.0
+          default: 0.0
+      type: object
+      title: IRConfig
+    Led:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        value:
+          type: integer
+          maximum: 1.0
+          minimum: 0.0
+          title: Value
+          description: Value must be between 0 and 1
+      type: object
+      required:
+      - dev
+      - circuit
+      - value
+      title: Led
+    LedUpdate:
+      properties:
+        value:
+          type: integer
+          maximum: 1.0
+          minimum: 0.0
+          title: Value
+          description: Value must be between 0 and 1
+      type: object
+      required:
+      - value
+      title: LedUpdate
+    MemoryInfo:
+      properties:
+        total:
+          type: integer
+          title: Total
+        used:
+          type: integer
+          title: Used
+        remaining:
+          type: integer
+          title: Remaining
+      type: object
+      required:
+      - total
+      - used
+      - remaining
+      title: MemoryInfo
+    Modbus:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        value:
+          type: integer
+          maximum: 65535.0
+          minimum: 0.0
+          title: Value
+          description: Value must be between 0 and 65535
+        save:
+          type: boolean
+          title: Save
+          default: true
+      type: object
+      required:
+      - dev
+      - circuit
+      - value
+      title: Modbus
+    ModbusUpdate:
+      properties:
+        value:
+          type: number
+          title: Value
+      type: object
+      required:
+      - value
+      title: ModbusUpdate
+    MonoCameraConfigProperties:
+      properties:
+        resolution:
+          $ref: '#/components/schemas/MonoCameraResolution'
+        fps:
+          type: number
+          title: Fps
+      type: object
+      required:
+      - resolution
+      - fps
+      title: MonoCameraConfigProperties
+    MonoCameraResolution:
+      type: string
+      enum:
+      - THE_1200_P
+      - THE_400_P
+      - THE_480_P
+      - THE_720_P
+      - THE_800_P
+      title: MonoCameraResolution
+    OWBus:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        bus:
+          type: string
+          title: Bus
+        interval:
+          type: integer
+          title: Interval
+          default: 10
+        do_scan:
+          type: boolean
+          title: Do Scan
+        do_reset:
+          type: boolean
+          title: Do Reset
+        scan_interval:
+          type: integer
+          title: Scan Interval
+          default: 60
+      type: object
+      required:
+      - dev
+      - circuit
+      - bus
+      - do_scan
+      - do_reset
+      title: OWBus
+    OWBusUpdate:
+      properties:
+        interval:
+          type: integer
+          title: Interval
+          default: 10
+        do_scan:
+          type: boolean
+          title: Do Scan
+          default: false
+        do_reset:
+          type: boolean
+          title: Do Reset
+          default: false
+        scan_interval:
+          type: integer
+          title: Scan Interval
+          default: 60
+      type: object
+      title: OWBusUpdate
+    OWPower:
+      properties:
+        dev:
+          type: string
+          title: Dev
+        circuit:
+          type: string
+          title: Circuit
+        value:
+          type: integer
+          enum:
+          - 0
+          - 1
+          title: Value
+      type: object
+      required:
+      - dev
+      - circuit
+      - value
+      title: OWPower
+    OWPowerUpdate:
+      properties:
+        value:
+          type: integer
+          enum:
+          - 0
+          - 1
+          title: Value
+      type: object
+      required:
+      - value
+      title: OWPowerUpdate
+    SensorControl:
+      properties:
+        exposure_time:
+          type: integer
+          maximum: 33000.0
+          minimum: 1.0
+          title: Exposure Time
+          description: Exposure time in microseconds. Ignored if auto_exposure_enable
+            is set to true. Value must be between 1 and 33000
+        sensitivity_iso:
+          type: integer
+          maximum: 5000.0
+          minimum: 100.0
+          title: Sensitivity Iso
+          description: Value must be between 100 and 5000
+        auto_exposure_enable:
+          type: boolean
+          title: Auto Exposure Enable
+        auto_exposure_compensation:
+          type: integer
+          maximum: 9.0
+          minimum: -9.0
+          title: Auto Exposure Compensation
+          description: Value must be between -9 and 9
+        auto_exposure_limit:
+          type: integer
+          title: Auto Exposure Limit
+          description: Maximum exposure time limit for auto-exposure in microseconds
+        auto_exposure_lock:
+          type: boolean
+          title: Auto Exposure Lock
+        contrast:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Contrast
+          description: Value must be between -10 and 10
+        brightness:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Brightness
+          description: Value must be between -10 and 10
+        saturation:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Saturation
+          description: Value must be between -10 and 10
+        chroma_denoise:
+          type: integer
+          maximum: 4.0
+          minimum: 0.0
+          title: Chroma Denoise
+          description: Value must be between 0 and 4
+        luma_denoise:
+          type: integer
+          maximum: 4.0
+          minimum: 0.0
+          title: Luma Denoise
+          description: Value must be between 0 and 4
+        auto_whitebalance_lock:
+          type: boolean
+          title: Auto Whitebalance Lock
+        auto_whitebalance_mode:
+          $ref: '#/components/schemas/AutoWhiteBalanceMode'
+          default: AUTO
+        manual_whitebalance:
+          type: integer
+          maximum: 12000.0
+          minimum: 1000.0
+          title: Manual Whitebalance
+          description: Value must be between 1000 and 12000
+        focus:
+          anyOf:
+          - $ref: '#/components/schemas/SensorFocus'
+          - type: 'null'
+      type: object
+      required:
+      - exposure_time
+      - sensitivity_iso
+      - auto_exposure_enable
+      - auto_exposure_compensation
+      - auto_exposure_limit
+      - auto_exposure_lock
+      - contrast
+      - brightness
+      - saturation
+      - chroma_denoise
+      - luma_denoise
+      - auto_whitebalance_lock
+      - manual_whitebalance
+      title: SensorControl
+    SensorControlUpdate:
+      properties:
+        exposure_time:
+          type: integer
+          maximum: 33000.0
+          minimum: 1.0
+          title: Exposure Time
+          description: Exposure time in microseconds. Ignored if auto_exposure_enable
+            is set to true. Value must be between 1 and 33000
+        sensitivity_iso:
+          type: integer
+          maximum: 5000.0
+          minimum: 100.0
+          title: Sensitivity Iso
+          description: Value must be between 100 and 5000
+        auto_exposure_enable:
+          type: boolean
+          title: Auto Exposure Enable
+        auto_exposure_compensation:
+          type: integer
+          maximum: 9.0
+          minimum: -9.0
+          title: Auto Exposure Compensation
+          description: Value must be between -9 and 9
+        auto_exposure_limit:
+          type: integer
+          title: Auto Exposure Limit
+          description: Maximum exposure time limit for auto-exposure in microseconds
+        auto_exposure_lock:
+          type: boolean
+          title: Auto Exposure Lock
+        contrast:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Contrast
+          description: Value must be between -10 and 10
+        brightness:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Brightness
+          description: Value must be between -10 and 10
+        saturation:
+          type: integer
+          maximum: 10.0
+          minimum: -10.0
+          title: Saturation
+          description: Value must be between -10 and 10
+        chroma_denoise:
+          type: integer
+          maximum: 4.0
+          minimum: 0.0
+          title: Chroma Denoise
+          description: Value must be between 0 and 4
+        luma_denoise:
+          type: integer
+          maximum: 4.0
+          minimum: 0.0
+          title: Luma Denoise
+          description: Value must be between 0 and 4
+        auto_whitebalance_lock:
+          type: boolean
+          title: Auto Whitebalance Lock
+        auto_whitebalance_mode:
+          $ref: '#/components/schemas/AutoWhiteBalanceMode'
+        manual_whitebalance:
+          type: integer
+          maximum: 12000.0
+          minimum: 1000.0
+          title: Manual Whitebalance
+          description: Value must be between 1000 and 12000
+        focus:
+          anyOf:
+          - $ref: '#/components/schemas/SensorFocus'
+          - type: 'null'
+      type: object
+      title: SensorControlUpdate
+    SensorFocus:
+      properties:
+        auto_focus_mode:
+          $ref: '#/components/schemas/AutoFocusMode'
+          default: CONTINUOUS_VIDEO
+        auto_focus_trigger:
+          type: boolean
+          title: Auto Focus Trigger
+          default: false
+        lens_position:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Lens Position
+          description: Value must be between 0.0 and 1.0
+          default: 0.0
+      type: object
+      title: SensorFocus
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
