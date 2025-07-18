@@ -2,18 +2,18 @@
 
 ## API Reference
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/led" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/led" method="get" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/led/{circuit}" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/led/{circuit}" method="get" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/led/{circuit}" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/led/{circuit}" method="post" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/led" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/led" method="post" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}

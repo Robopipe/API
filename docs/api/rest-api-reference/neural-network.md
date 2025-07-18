@@ -8,9 +8,9 @@ Deploying an AI model on the camera takes some time (usually \~20s, but may take
 
 ## API Reference
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/streams/{stream_name}/nn" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/nn" method="post" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
 ### NNConfig Description
 
@@ -40,6 +40,6 @@ The deploy neural network endpoint accepts form-data body. This body shall conta
 | --------------------------------------------- | ----------- |
 | <kbd>confidence\_threshold</kbd> (_optional_) |             |
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/cameras/{mxid}/streams/{stream_name}/nn" method="delete" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/nn" method="delete" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
