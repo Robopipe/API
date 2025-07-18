@@ -12,37 +12,37 @@ Depth stream and the respective sensors it uses cannot be both active at the sam
 
 ## API Reference
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/" method="get" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/" method="get" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/" method="post" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/{stream_name}/" method="post" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/" method="delete" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/{stream_name}/" method="delete" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/config" method="get" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/{stream_name}/config" method="get" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/config" method="post" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/{stream_name}/config" method="post" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/control" method="get" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/{stream_name}/control" method="get" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/control" method="post" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/{stream_name}/control" method="post" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
-{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/cameras/{mxid}/streams/{stream_name}/still" method="get" %}
-[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
-{% endopenapi %}
+{% openapi-operation spec="robopipe-api" path="/cameras/{mxid}/streams/{stream_name}/still" method="get" %}
+[OpenAPI robopipe-api](https://gitbook-x-prod-openapi.4401d86825a13bf607936cc3a9f3897a.r2.cloudflarestorage.com/raw/61c09c137433794c1f1727040fd632d7a56c4ad805d94fa4404486ea4c326b25.yaml?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=dce48141f43c0191a2ad043a6888781c%2F20250718%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20250718T112051Z&X-Amz-Expires=172800&X-Amz-Signature=4d21029758779c17d573643c236e9f9069a5ee15193b1272c66a3df1100916b6&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject)
+{% endopenapi-operation %}
 
 [^1]: This means that there are up to **8**
 
