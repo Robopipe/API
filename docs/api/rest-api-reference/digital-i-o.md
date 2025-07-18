@@ -4,34 +4,34 @@
 
 ## API Reference
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/di" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/di" method="get" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/di/{circuit}" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/di/{circuit}" method="get" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/di/{circuit}" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/di/{circuit}" method="post" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/di" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/di" method="post" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/do" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/do" method="get" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/do/{circuit}" method="get" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/do/{circuit}" method="get" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/do/{circuit}" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/do/{circuit}" method="post" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
 
-{% swagger src="../../.gitbook/assets/oas.yml" path="/controller/do" method="post" %}
-[oas.yml](../../.gitbook/assets/oas.yml)
-{% endswagger %}
+{% openapi src="../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml" path="/controller/do" method="post" %}
+[spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml](../../.gitbook/assets/spaces_TuTP9kHNw4UoUZQjsC6o_uploads_git-blob-9d61ed7a38f530cfdaca89fd71d55514141079c4_oas.yml)
+{% endopenapi %}
