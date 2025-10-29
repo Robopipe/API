@@ -213,13 +213,14 @@ class Camera:
             )
 
         devices = dai.Device.getAllConnectedDevices()
+        device_info = None
 
         for dev in devices:
             if dev.getMxId() == self.mxid:
                 device_info = dev
                 break
 
-        if device_info:
+        if device_info is not None:
             return DeviceInfo.from_device_info(device_info, self.camera_name)
 
     @property
