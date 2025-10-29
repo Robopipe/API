@@ -45,7 +45,7 @@ class CameraManager:
     def boot_camera(self, mxid: str):
         camera = self.cameras[mxid]
 
-        if camera.info.state != DeviceState.X_LINK_UNBOOTED:
+        if camera.info.state == DeviceState.X_LINK_BOOTED:
             return
 
         camera.open(
