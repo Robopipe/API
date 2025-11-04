@@ -3,7 +3,7 @@
     <h1 align="center">Robopipe API</h1>
 </p>
 
-Integrate Luxonis cameras with programmable logic controllers (PLCs) using simple REST and websocket APIs. It brings AI-powered analysis directly into manufacturing environment and enables you to use any language you are comfortable with. Robopipe API can be run on any unix based computer or PLC.
+Integrate Luxonis cameras with programmable logic controllers (PLCs) using simple REST and websocket APIs. It brings AI-powered analysis directly into manufacturing environment and enables you to use any language you are comfortable with. Robopipe API can be run on any unix based computer or PLC (you can buy Robopipe PLC (unix) at [shop.robopipe.io](https://shop.robopipe.io/))
 
 ## Documentation (Installation and Run)
 
