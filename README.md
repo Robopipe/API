@@ -3,9 +3,9 @@
     <h1 align="center">Robopipe API</h1>
 </p>
 
-Robopipe API is an open-source software, which enables a wide range of operations with Robopipe controllers and cameras. This respository contains sources for Robopipe API. You can learn more about Robopipe [here](https://robopipe.io).
+Integrate Luxonis cameras with programmable logic controllers (PLCs) using simple REST and websocket APIs. It brings AI-powered analysis directly into manufacturing environment and enables you to use any language you are comfortable with. Robopipe API can be run on any unix based computer or PLC.
 
-## Documentation
+## Documentation (Installation and Run)
 
 To learn more about how to use this API, please refer to the [Robopipe Documentation](https://robopipe.gitbook.io/robopipe).
 
