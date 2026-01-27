@@ -15,8 +15,8 @@ from .sensor_control import SensorControl
 class SensorBase(ABC):
     def __init__(
         self,
-        input_queues: dict[PipelineQueueType, dai.DataInputQueue],
-        output_queues: dict[PipelineQueueType, dai.DataOutputQueue],
+        input_queues: dict[PipelineQueueType, dai.InputQueue],
+        output_queues: dict[PipelineQueueType, dai.MessageQueue],
         restart_pipeline: Callable[[], None],
     ):
         self.input_queues = input_queues
@@ -54,27 +54,32 @@ class SensorBase(ABC):
 
     def capture_still(self):
         try:
-            control_queue = self.input_queues[PipelineQueueType.CONTROL]
-            ctrl = dai.CameraControl()
-            ctrl.setCaptureStill(True)
-            control_queue.send(ctrl)
+            # control_queue = self.input_queues[PipelineQueueType.CONTROL]
+            # ctrl = dai.CameraControl()
+            # ctrl.setCaptureStill(True)
+            # control_queue.send(ctrl)
+            still_queue = self.output_queues[PipelineQueueType.STILL]
+            img_frame = still_queue.getAll()[-1]
+            print(img_frame)
+            # img_frame: dai.ImgFrame = self.output_queues[
+            #     PipelineQueueType.STILL
+            # ].getAll()[-1]
 
-            img_frame: dai.ImgFrame = self.output_queues[
-                PipelineQueueType.STILL
-            ].getAll()[-1]
-
-            self.__extract_img_properties(img_frame)
-        except:
+            # self.__extract_img_properties(img_frame)
+        except Exception as e:
+            print(f"Error capturing still image: {e}")
             return
 
         return img_frame_to_pil_image(img_frame)
 
     def get_video_frame(self):
-        video_frame: dai.ImgFrame = self.output_queues[
-            PipelineQueueType.VIDEO
-        ].getAll()[-1]
+        video_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.VIDEO].get()
 
-        self.__extract_img_properties(video_frame)
+        # while video_frame is None:
+        #     print("Waiting for video frame...")
+        #     video_frame = self.output_queues[PipelineQueueType.VIDEO].front()
+
+        # self.__extract_img_properties(video_frame)
 
         return img_frame_to_video_frame(video_frame).to_rgb()
 

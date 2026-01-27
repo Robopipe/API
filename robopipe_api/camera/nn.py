@@ -71,7 +71,7 @@ class CameraNNYoloConfig(CameraNNConfig):
 
         return self.configure_node(node)
 
-    def configure_node(self, node: dai.node.YoloDetectionNetwork):
+    def configure_node(self, node):
         if self.anchor_masks is not None:
             node.setAnchorMasks(self.anchor_masks)
         if self.anchors is not None:
@@ -109,7 +109,7 @@ class CameraNNMobileNetConfig(CameraNNConfig):
 
         return self.configure_node(node)
 
-    def configure_node(self, node: dai.node.MobileNetDetectionNetwork):
+    def configure_node(self, node):
         if self.confidence_threshold is not None:
             node.setConfidenceThreshold(self.confidence_threshold)
 

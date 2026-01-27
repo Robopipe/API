@@ -12,13 +12,14 @@ class DepthPipeline(StreamingPipeline):
         stereo_pair: tuple[str, str] | None,
         sensors: list[dai.CameraFeatures],
         pipeline: dai.Pipeline | None = None,
+        device: dai.Device | None = None,
     ):
         self.stereo_pair = stereo_pair
         self.stereo_node = None
         self.cam_left_node = None
         self.cam_right_node = None
 
-        super().__init__(sensors, pipeline)
+        super().__init__(sensors, pipeline, device)
 
         if stereo_pair is not None:
             self.add_stereo_pair(*stereo_pair)
