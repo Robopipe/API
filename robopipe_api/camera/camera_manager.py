@@ -26,30 +26,44 @@ class CameraManager:
         return self.cameras.get(key)
 
     def reload_cameras(self):
-        mxids = list(map(lambda x: x.getMxId(), dai.Device.getAllConnectedDevices()))
-        devices = dai.Device.getAllConnectedDevices()
+        mxids = list(map(lambda x: x.deviceId, dai.DeviceBase.getAllConnectedDevices()))
+        devices = dai.DeviceBase.getAllConnectedDevices()
 
         for dev in devices:
-            mxid = dev.getMxId()
+            mxid = dev.deviceId
             if mxid not in self.cameras:
-                self.cameras[dev.mxid] = Camera(mxid, dev.name)
+                self.cameras[dev.deviceId] = Camera(mxid, dev.name)
 
         for mxid in self.cameras.keys():
             if mxid not in mxids:
                 del self.cameras[mxid]
 
     def boot_cameras(self):
+        print("Booting all connected cameras...", self.cameras)
         for mxid in self.cameras.keys():
             self.boot_camera(mxid)
 
     def boot_camera(self, mxid: str):
         camera = self.cameras[mxid]
-
-        if camera.info.state == DeviceState.X_LINK_BOOTED:
-            return
-
+        print(camera.info)
+        # if camera.info.state == DeviceState.X_LINK_BOOTED:
+        #     return
+        print(f"Booting camera {mxid}...")
+        print(camera.camera_handle)
+        # camera.load_camera()
         camera.open(
-            DepthPipeline(None, [sensor for sensor in camera.all_sensors.values()])
+            # DepthPipeline(
+            #     None,
+            #     [sensor for sensor in camera.all_sensors.values()],
+            #     device=camera.camera_handle,
+            # )
+        )
+        camera.run_pipeline(
+            DepthPipeline(
+                None,
+                [sensor for sensor in camera.all_sensors.values()],
+                device=camera.camera_handle,
+            )
         )
 
     def shutdown_camera(self, mxid: str):

@@ -29,17 +29,16 @@ class Camera:
     def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
         self.mxid = mxid
         self.boot_name = name if name == Camera.DEFAULT_POE_IP else mxid
-        self.pipeline = pipeline or EmptyPipeline()
+        self.camera_handle = dai.Device(self.boot_name)
+        self.pipeline = pipeline or EmptyPipeline(None, self.camera_handle)
         self.__boot_camera()
-        self.camera_name = self.camera_handle.getDeviceName()
+        self.camera_name: str = self.camera_handle.getDeviceName()
         self.sensors: dict[str, SensorBase] = {}
         self.all_sensors = {
             sensor.socket.name: sensor
             for sensor in self.camera_handle.getConnectedCameraFeatures()
         }
-        self._ir_config = (
-            IRConfig() if len(self.camera_handle.getIrDrivers()) >= 1 else None
-        )
+        self._ir_config = IRConfig() if self.camera_name.endswith("PRO") else None
 
         for stereo_pair in self.camera_handle.getAvailableStereoPairs():
             format_stereo_name = (
@@ -63,11 +62,11 @@ class Camera:
 
         for _ in range(retries):
             try:
-                self.camera_handle = dai.Device(
-                    self.pipeline.pipeline, dai.DeviceInfo(self.boot_name)
-                )
+                self.pipeline.pipeline.start()
                 return
             except Exception as e:
+                print(f"Error starting pipeline: {e}")
+                # self.pipeline.pipeline.stop()
                 last_exception = e
                 time.sleep(timeout)
                 timeout *= 2
@@ -75,18 +74,30 @@ class Camera:
         raise CameraException(last_exception)
 
     def __get_sensor_queues(self, sensor_name: str, q_type_input: bool):
-        def get_queue(q_type: PipelineQueueType, q_name: str):
-            if q_type_input:
-                return self.camera_handle.getInputQueue(q_name)
-            elif q_type == PipelineQueueType.STILL:
-                return self.camera_handle.getOutputQueue(
-                    q_name, blocking=False, maxSize=1
-                )
-            else:
-                return self.camera_handle.getOutputQueue(q_name)
+        # def get_queue(q_type: PipelineQueueType, q_name: str):
+        #     if q_type_input:
+        #         return self.camera_handle.getInputQueue(q_name)
+        #     elif q_type == PipelineQueueType.STILL:
+        #         return self.camera_handle.getOutputQueue(
+        #             q_name, blocking=False, maxSize=1
+        #         )
+        #     else:
+        #         return self.camera_handle.getOutputQueue(q_name)
+
+        # return {
+        #     k: get_queue(k, v)
+        #     for k, v in (
+        #         (
+        #             self.pipeline.input_queues.get(sensor_name)
+        #             if q_type_input
+        #             else self.pipeline.output_queues.get(sensor_name)
+        #         )
+        #         or {}
+        #     ).items()
+        # }
 
         return {
-            k: get_queue(k, v)
+            k: self.pipeline.inputs[v] if q_type_input else self.pipeline.outputs[v]
             for k, v in (
                 (
                     self.pipeline.input_queues.get(sensor_name)
@@ -101,7 +112,7 @@ class Camera:
         existing_sensors = self.sensors
         self.sensors = {}
         restart_pipeline = lambda: self.open(self.pipeline)
-
+        print(self.all_sensors, self.__get_sensor_queues("CAM_A", False))
         for [sensor_name, sensor_features] in self.all_sensors.items():
             if sensor_name in self.pipeline.cameras:
                 sensor = Sensor(
@@ -136,19 +147,26 @@ class Camera:
 
     def close(self):
         if self.camera_handle is not None:
+            self.pipeline.pipeline.stop()
+            self.pipeline = None
             self.camera_handle.close()
             self.camera_handle = None
-            self.pipeline = None
             logger.debug(f"Closed camera {self.mxid}")
 
-    def open(self, pipeline: Pipeline):
+    def open(self):
         self.close()
-        self.pipeline = pipeline
-        self.__boot_camera()
-        self.reload_sensors()
+        self.camera_handle = dai.Device(self.boot_name)
         logger.debug(f"Opened camera {self.mxid}")
 
         return self
+
+    def run_pipeline(self, pipeline: Pipeline):
+        if self.camera_handle is None:
+            raise CameraShutDownException()
+
+        self.pipeline = pipeline
+        self.__boot_camera()
+        self.reload_sensors()
 
     def activate_sensor(self, sensor_name: str):
         if self.camera_handle is None:
@@ -216,7 +234,7 @@ class Camera:
         device_info = None
 
         for dev in devices:
-            if dev.getMxId() == self.mxid:
+            if dev.deviceId == self.mxid:
                 device_info = dev
                 break
 

@@ -24,3 +24,7 @@ class DeviceNotFound(Exception):
 
 class CameraException(Exception):
     pass
+
+
+class PipelineException(Exception):
+    pass

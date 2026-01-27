@@ -10,9 +10,9 @@ from .sensor_config import SensorConfig, SensorConfigProperties
 class DepthSensor(Sensor):
     def __init__(
         self,
-        sensor_nodes: tuple[dai.node.MonoCamera, dai.node.MonoCamera],
-        input_queues: dict[PipelineQueueType, dai.DataInputQueue],
-        output_queues: dict[PipelineQueueType, dai.DataOutputQueue],
+        sensor_nodes: tuple[dai.node.Camera, dai.node.Camera],
+        input_queues: dict[PipelineQueueType, dai.InputQueue],
+        output_queues: dict[PipelineQueueType, dai.MessageQueue],
         restart_pipeline: Callable[[], None],
     ):
         super().__init__(

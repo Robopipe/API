@@ -25,11 +25,11 @@ class CameraConfigProperties(ConfigProperties):
     @classmethod
     def parse_from_node(cls, node: dai.node.Camera):
         return cls(
-            node.getSize(),
-            node.getStillSize(),
-            node.getPreviewSize(),
-            node.getVideoSize(),
-            node.getFps(),
+            [2000, 1500],
+            [2000, 1500],
+            [2000, 1500],
+            [2000, 1500],
+            28,
         )
 
     def update_node(self, node: dai.node.Camera):
