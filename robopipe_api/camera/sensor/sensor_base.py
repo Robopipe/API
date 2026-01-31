@@ -4,6 +4,7 @@ from PIL import Image
 
 from abc import ABC, abstractmethod
 from typing import Callable
+import av
 
 from ...models.nn_config import NNConfig
 from ...utils.image import img_frame_to_pil_image, img_frame_to_video_frame
@@ -23,6 +24,7 @@ class SensorBase(ABC):
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
         self._nn_config = None
+        self.last_frame = None
 
     @property
     @abstractmethod
@@ -73,15 +75,23 @@ class SensorBase(ABC):
         return img_frame_to_pil_image(img_frame)
 
     def get_video_frame(self):
-        video_frame: dai.ImgFrame = self.output_queues[PipelineQueueType.VIDEO].get()
-
+        # video_frame: dai.ImgFrame = self.output_queues[
+        #     PipelineQueueType.VIDEO
+        # ].getAll()[-1]
+        video_frame = (
+            self.output_queues[PipelineQueueType.VIDEO].tryGet()
+            or self.last_frame
+            or self.output_queues[PipelineQueueType.VIDEO].get()
+        )
+        self.last_frame = video_frame
+        # print("got video frame")
         # while video_frame is None:
         #     print("Waiting for video frame...")
         #     video_frame = self.output_queues[PipelineQueueType.VIDEO].front()
 
         # self.__extract_img_properties(video_frame)
 
-        return img_frame_to_video_frame(video_frame).to_rgb()
+        return img_frame_to_video_frame(video_frame)
 
     def get_nn_frame(self):
         try:

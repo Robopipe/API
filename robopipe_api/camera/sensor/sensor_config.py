@@ -25,10 +25,10 @@ class CameraConfigProperties(ConfigProperties):
     @classmethod
     def parse_from_node(cls, node: dai.node.Camera):
         return cls(
-            [2000, 1500],
-            [2000, 1500],
-            [2000, 1500],
-            [2000, 1500],
+            [1280, 720],
+            [1280, 720],
+            [1280, 720],
+            [1280, 720],
             28,
         )
 

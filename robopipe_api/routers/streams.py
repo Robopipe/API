@@ -1,7 +1,23 @@
+import av
 import depthai as dai
-from fastapi import APIRouter, WebSocket, UploadFile, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    UploadFile,
+    WebSocketDisconnect,
+    status,
+    Request,
+)
 import anyio
+import numpy as np
 from fastapi.responses import Response
+from aiortc import (
+    RTCSessionDescription,
+    RTCPeerConnection,
+    VideoStreamTrack,
+    RTCRtpCodecCapability,
+    RTCConfiguration,
+)
 
 from io import BytesIO
 
@@ -83,6 +99,193 @@ def update_stream_control(
     sensor.control = SensorControl.model_validate(updated_control)
 
     return sensor.control
+
+
+pcs = set()
+
+from aiortc.codecs import get_encoder
+from aiortc.codecs.h264 import H264Encoder
+
+# Monkey-patch the H264 encoder to use low-latency settings
+_original_init = H264Encoder.__init__
+
+
+def hw_accelerated_init(self, *args, **kwargs):
+    _original_init(self, *args, **kwargs)
+
+    # Try to use hardware encoder
+    if hasattr(self, "codec") and self.codec:
+        # Try different hardware encoders in order of preference
+        hw_encoders = ["h264_nvenc", "h264_qsv", "h264_videotoolbox", "h264_vaapi"]
+
+        for hw_codec in hw_encoders:
+            try:
+                # Check if hardware encoder is available
+                test_codec = av.codec.Codec(hw_codec, "w")
+
+                # Replace software encoder with hardware
+                old_codec = self.codec
+                self.codec = av.CodecContext.create(hw_codec, "w")
+                self.codec.width = old_codec.width
+                self.codec.height = old_codec.height
+                self.codec.pix_fmt = "yuv420p"
+                self.codec.time_base = old_codec.time_base
+                self.codec.framerate = old_codec.framerate
+                self.codec.bit_rate = old_codec.bit_rate
+
+                # Hardware-specific low-latency options
+                if "nvenc" in hw_codec:
+                    self.codec.options = {
+                        "preset": "llhp",  # Low-latency high performance
+                        "tune": "ull",  # Ultra low latency
+                        "zerolatency": "1",
+                        "delay": "0",
+                        "rc": "cbr",
+                        "bf": "0",
+                    }
+                elif "qsv" in hw_codec:
+                    self.codec.options = {
+                        "preset": "veryfast",
+                        "async_depth": "1",
+                        "low_power": "1",
+                    }
+                elif "videotoolbox" in hw_codec:
+                    self.codec.options = {
+                        "realtime": "1",
+                    }
+                else:
+                    self.codec.options = {
+                        "preset": "ultrafast",
+                        "tune": "zerolatency",
+                        "bf": "0",
+                    }
+
+                print(f"Using hardware encoder: {hw_codec}")
+                break
+
+            except:
+                continue
+        else:
+            # Fallback to software with aggressive settings
+            self.codec.options = {
+                "preset": "ultrafast",
+                "tune": "zerolatency",
+                "bf": "0",
+                "refs": "1",
+                "sc_threshold": "0",
+                "rc-lookahead": "0",
+            }
+            print("Using software encoder (h264)")
+
+
+H264Encoder.__init__ = hw_accelerated_init
+
+
+@stream_router.post("/video-rtc")
+async def negotiate_stream_offer(request: Request, sensor: SensorDep):
+    import fractions
+
+    class VideoTrack(VideoStreamTrack):
+        def __init__(self, sensor: SensorDep):
+            super().__init__()
+            self.sensor = sensor
+            self.counter = 0
+
+        async def recv(self):
+            pts, time_base = await self.next_timestamp()
+            self.counter += 1
+
+            video_frame = self.sensor.get_video_frame()
+            video_frame.pts = pts  # CHANGED: Use actual PTS from next_timestamp()
+            video_frame.time_base = time_base  # CHANGED: Use actual time_base
+
+            return video_frame
+
+    params = await request.json()
+    pc = RTCPeerConnection()
+    pcs.add(pc)
+
+    offer = RTCSessionDescription(
+        sdp=params["sdp"],
+        type=params["type"],
+    )
+
+    await pc.setRemoteDescription(offer)
+
+    video_transceiver = None
+    for t in pc.getTransceivers():
+        if t.kind == "video":
+            video_transceiver = t
+            break
+
+    if video_transceiver is None:
+        raise RuntimeError("Offer does not contain a video m-line")
+
+    video_transceiver.direction = "sendonly"
+
+    # OPTIMIZED CODEC SETTINGS FOR MINIMUM LATENCY
+    video_transceiver.setCodecPreferences(
+        [
+            RTCRtpCodecCapability(
+                mimeType="video/H264",
+                clockRate=90000,
+                channels=None,
+                parameters={
+                    "profile-level-id": "42e01f",  # Baseline profile (good)
+                    "packetization-mode": "1",
+                    "level-asymmetry-allowed": "1",
+                },
+            )
+        ]
+    )
+
+    # CRITICAL: Configure sender parameters for low latency
+    video_transceiver.sender.replaceTrack(VideoTrack(sensor))
+
+    # Modify SDP for ultra-low latency before creating answer
+    answer = await pc.createAnswer()
+
+    # OPTIMIZATION: Inject low-latency parameters into SDP
+    modified_sdp = modify_sdp_for_low_latency(answer.sdp)
+    answer = RTCSessionDescription(sdp=modified_sdp, type=answer.type)
+
+    await pc.setLocalDescription(answer)
+
+    return {
+        "sdp": pc.localDescription.sdp,
+        "type": pc.localDescription.type,
+    }
+
+
+def modify_sdp_for_low_latency(sdp: str) -> str:
+    """Inject ultra-low latency parameters into SDP"""
+    lines = sdp.split("\r\n")
+    new_lines = []
+
+    for line in lines:
+        new_lines.append(line)
+
+        # Add low-latency H.264 encoding parameters
+        if line.startswith("a=fmtp:") and "H264" in line:
+            # Extract the payload type
+            parts = line.split(" ", 1)
+            if len(parts) == 2:
+                payload_type = parts[0].split(":")[1]
+                params = parts[1]
+
+                # Add critical low-latency parameters
+                low_latency_params = [
+                    "x-google-start-bitrate=2000",  # Start at reasonable bitrate
+                    "x-google-min-bitrate=500",
+                    "x-google-max-bitrate=4000",
+                ]
+
+                # Combine existing and new parameters
+                new_lines[-1] = (
+                    f"a=fmtp:{payload_type} {params};{';'.join(low_latency_params)}"
+                )
+
+    return "\r\n".join(new_lines)
 
 
 @stream_router.get(

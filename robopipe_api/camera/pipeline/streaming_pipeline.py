@@ -54,11 +54,11 @@ class StreamingPipeline(Pipeline):
         cam.build(sensor.socket, sensorFps=28)
         self.cameras[sensor_name] = cam
         video_out = cam.requestOutput(
-            size=(2000, 1500),
+            size=(1920, 1080),
             type=dai.ImgFrame.Type.NV12,
             resizeMode=dai.ImgResizeMode.STRETCH,
             fps=28,
-        ).createOutputQueue()
+        ).createOutputQueue(maxSize=1, blocking=False)
         still_out = cam.requestOutput(
             size=(2000, 1500), type=dai.ImgFrame.Type.NV12, fps=28
         ).createOutputQueue()
