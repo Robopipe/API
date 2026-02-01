@@ -18,7 +18,7 @@ class CameraConfigProperties(ConfigProperties):
     Note: In depthai v3, camera sizes are configured via requestOutput()
     rather than directly on the node. These properties are for reference.
     """
-    fps: floatr
+    fps: float
 
     @classmethod
     def parse_from_node(cls, node: dai.node.Camera):
