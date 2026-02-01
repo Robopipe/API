@@ -7,9 +7,10 @@ from fastapi import (
     status,
 )
 import anyio
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 from io import BytesIO
+from typing import AsyncGenerator
 
 from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
@@ -95,13 +96,55 @@ def update_stream_control(
     "/still",
     response_description="Image bytes in the selected format",
     response_model=bytes,
-    response_class=Response(media_type="image/*"),
+    response_class=type[Response(media_type="image/*")],
 )
 def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Response:
     img_buffer = BytesIO()
     sensor.capture_still().save(img_buffer, format)
 
     return Response(img_buffer.getvalue(), media_type=f"image/{format}")
+
+
+async def generate_mjpeg_frames(sensor, fps: int = 15) -> AsyncGenerator[bytes, None]:
+    """Generate MJPEG frames as multipart content."""
+    frame_interval = 1.0 / fps
+    boundary = b"--frame\r\n"
+
+    while True:
+        try:
+            # Get video frame and convert to JPEG
+            video_frame = await anyio.to_thread.run_sync(sensor.get_video_frame)
+            pil_image = video_frame.to_image()
+
+            img_buffer = BytesIO()
+            pil_image.save(img_buffer, "JPEG", quality=80)
+            frame_data = img_buffer.getvalue()
+
+            yield (
+                boundary +
+                b"Content-Type: image/jpeg\r\n" +
+                f"Content-Length: {len(frame_data)}\r\n\r\n".encode() +
+                frame_data +
+                b"\r\n"
+            )
+
+            await anyio.sleep(frame_interval)
+        except Exception as e:
+            print(f"MJPEG stream error: {e}")
+            break
+
+
+@stream_router.get(
+    "/mjpeg",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"multipart/x-mixed-replace": {}}}},
+)
+async def stream_mjpeg(sensor: SensorDep, fps: int = 15):
+    """Stream video as MJPEG. Works in any browser via img tag."""
+    return StreamingResponse(
+        generate_mjpeg_frames(sensor, fps),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )
 
 
 @stream_router.get("/nn", tags=["nn"])

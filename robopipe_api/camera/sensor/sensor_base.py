@@ -75,23 +75,15 @@ class SensorBase(ABC):
         return img_frame_to_pil_image(img_frame)
 
     def get_video_frame(self):
-        # video_frame: dai.ImgFrame = self.output_queues[
-        #     PipelineQueueType.VIDEO
-        # ].getAll()[-1]
-        video_frame = (
-            self.output_queues[PipelineQueueType.VIDEO].tryGet()
-            or self.last_frame
-            or self.output_queues[PipelineQueueType.VIDEO].get()
-        )
-        self.last_frame = video_frame
-        # print("got video frame")
-        # while video_frame is None:
-        #     print("Waiting for video frame...")
-        #     video_frame = self.output_queues[PipelineQueueType.VIDEO].front()
+        dai_frame = self.output_queues[PipelineQueueType.VIDEO].tryGet()
 
-        # self.__extract_img_properties(video_frame)
+        if dai_frame is not None:
+            self.last_frame = img_frame_to_video_frame(dai_frame)
+        elif self.last_frame is None:
+            dai_frame = self.output_queues[PipelineQueueType.VIDEO].get()
+            self.last_frame = img_frame_to_video_frame(dai_frame)
 
-        return img_frame_to_video_frame(video_frame)
+        return self.last_frame
 
     def get_nn_frame(self):
         try:
