@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Stream - Robopipe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=Space+Mono&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Barlow', sans-serif;
+            background: #ffffff;
+            color: #1a1a1a;
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            padding: 20px 40px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .logo {
+            height: 32px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 32px;
+        }
+
+        .controls {
+            background: #f8f8f8;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input, select {
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+            padding: 12px 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+            color: #1a1a1a;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 36px;
+        }
+
+        select:disabled {
+            background-color: #f0f0f0;
+            cursor: not-allowed;
+            color: #999;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #2ECC71;
+            box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15);
+        }
+
+        input::placeholder {
+            color: #aaa;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            font-family: 'Barlow', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #2ECC71;
+            color: #fff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #27ae60;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+        }
+
+        .btn-secondary {
+            background: #fff;
+            color: #1a1a1a;
+            border: 1px solid #ddd;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #f5f5f5;
+            border-color: #ccc;
+        }
+
+        .btn-icon {
+            padding: 12px;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+
+        .btn-icon:hover:not(:disabled) {
+            background: #f5f5f5;
+            border-color: #ccc;
+        }
+
+        .btn-icon svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+        }
+
+        #status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 24px;
+        }
+
+        #status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .connected {
+            background: rgba(46, 204, 113, 0.1);
+            color: #27ae60;
+        }
+
+        .connected::before {
+            background: #2ECC71;
+        }
+
+        .disconnected {
+            background: rgba(231, 76, 60, 0.1);
+            color: #c0392b;
+        }
+
+        .disconnected::before {
+            background: #e74c3c;
+        }
+
+        .connecting {
+            background: rgba(241, 196, 15, 0.1);
+            color: #d68910;
+        }
+
+        .connecting::before {
+            background: #f1c40f;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .video-container {
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-size: 13px;
+        }
+
+        .footer a {
+            color: #2ECC71;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .input-with-button {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-with-button select {
+            flex: 1;
+        }
+
+        .error-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #c0392b;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .error-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <img src="https://cdn.prod.website-files.com/676e983aac02b65480d76ae2/67714b8570bb4454233a986d_Logo.svg" alt="Robopipe" class="logo">
+    </header>
+
+    <div class="container">
+        <h1>Camera Stream</h1>
+        <p class="subtitle">View live camera feed from DepthAI cameras</p>
+
+        <div class="controls">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="apiUrl">API URL</label>
+                    <input type="text" id="apiUrl" placeholder="http://localhost:8080">
+                </div>
+                <div class="form-group">
+                    <label for="mxid">Camera</label>
+                    <div class="input-with-button">
+                        <select id="mxid" disabled>
+                            <option value="">Loading cameras...</option>
+                        </select>
+                        <button class="btn-icon" onclick="loadCameras()" title="Refresh cameras">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 2v6h-6"></path>
+                                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                                <path d="M3 22v-6h6"></path>
+                                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="streamName">Stream</label>
+                    <select id="streamName" disabled>
+                        <option value="">Select a camera first</option>
+                    </select>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" id="connectBtn" onclick="connect()" disabled>Start Stream</button>
+                <button class="btn-secondary" id="disconnectBtn" onclick="disconnect()" disabled>Stop</button>
+            </div>
+        </div>
+
+        <div id="status" class="disconnected">Disconnected</div>
+
+        <div class="video-container">
+            <video id="video" autoplay playsinline muted></video>
+        </div>
+    </div>
+
+    <footer class="footer">
+        Powered by <a href="https://robopipe.io" target="_blank">Robopipe</a>
+    </footer>
+
+    <div id="errorToast" class="error-toast"></div>
+
+    <script>
+        let ws = null;
+        let mediaSource = null;
+        let sourceBuffer = null;
+        let bufferQueue = [];
+
+        // Initialize API URL from browser location
+        document.getElementById('apiUrl').value = window.location.origin;
+
+        function setStatus(text, state) {
+            const el = document.getElementById('status');
+            el.textContent = text;
+            el.className = state;
+        }
+
+        function showError(message) {
+            const toast = document.getElementById('errorToast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+
+        function getApiUrl() {
+            return document.getElementById('apiUrl').value.replace(/\/$/, '');
+        }
+
+        async function loadCameras() {
+            const mxidSelect = document.getElementById('mxid');
+            const streamSelect = document.getElementById('streamName');
+
+            mxidSelect.disabled = true;
+            mxidSelect.innerHTML = '<option value="">Loading cameras...</option>';
+            streamSelect.disabled = true;
+            streamSelect.innerHTML = '<option value="">Select a camera first</option>';
+            document.getElementById('connectBtn').disabled = true;
+
+            try {
+                const response = await fetch(`${getApiUrl()}/cameras/`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const cameras = await response.json();
+
+                if (cameras.length === 0) {
+                    mxidSelect.innerHTML = '<option value="">No cameras found</option>';
+                    return;
+                }
+
+                mxidSelect.innerHTML = cameras.map(cam =>
+                    `<option value="${cam.mxid}">${cam.name || cam.mxid}</option>`
+                ).join('');
+                mxidSelect.disabled = false;
+
+                // Load streams for first camera
+                await loadStreams();
+            } catch (error) {
+                console.error('Failed to load cameras:', error);
+                mxidSelect.innerHTML = '<option value="">Failed to load cameras</option>';
+                showError(`Failed to load cameras: ${error.message}`);
+            }
+        }
+
+        async function loadStreams() {
+            const mxid = document.getElementById('mxid').value;
+            const streamSelect = document.getElementById('streamName');
+
+            if (!mxid) {
+                streamSelect.disabled = true;
+                streamSelect.innerHTML = '<option value="">Select a camera first</option>';
+                document.getElementById('connectBtn').disabled = true;
+                return;
+            }
+
+            streamSelect.disabled = true;
+            streamSelect.innerHTML = '<option value="">Loading streams...</option>';
+
+            try {
+                const response = await fetch(`${getApiUrl()}/cameras/${mxid}/streams/`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const streams = await response.json();
+
+                if (streams.length === 0) {
+                    streamSelect.innerHTML = '<option value="">No streams available</option>';
+                    return;
+                }
+
+                streamSelect.innerHTML = streams.map(stream => {
+                    const status = stream.active ? ' (active)' : '';
+                    return `<option value="${stream.name}">${stream.name}${status}</option>`;
+                }).join('');
+                streamSelect.disabled = false;
+                document.getElementById('connectBtn').disabled = false;
+            } catch (error) {
+                console.error('Failed to load streams:', error);
+                streamSelect.innerHTML = '<option value="">Failed to load streams</option>';
+                showError(`Failed to load streams: ${error.message}`);
+            }
+        }
+
+        // Load streams when camera selection changes
+        document.getElementById('mxid').addEventListener('change', loadStreams);
+
+        // Reload cameras when API URL changes
+        document.getElementById('apiUrl').addEventListener('change', loadCameras);
+
+        async function connect() {
+            const mxid = document.getElementById('mxid').value;
+            const streamName = document.getElementById('streamName').value;
+
+            if (!mxid || !streamName) {
+                showError('Please select a camera and stream');
+                return;
+            }
+
+            // First activate the stream
+            setStatus('Activating stream...', 'connecting');
+            try {
+                await fetch(`${getApiUrl()}/cameras/${mxid}/streams/${streamName}/`, {
+                    method: 'POST'
+                });
+            } catch (e) {
+                // Stream might already be active, continue anyway
+            }
+
+            setStatus('Connecting...', 'connecting');
+            document.getElementById('connectBtn').disabled = true;
+            document.getElementById('disconnectBtn').disabled = false;
+
+            const video = document.getElementById('video');
+
+            // Setup MediaSource for fMP4
+            mediaSource = new MediaSource();
+            video.src = URL.createObjectURL(mediaSource);
+
+            mediaSource.addEventListener('sourceopen', () => {
+                try {
+                    sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+                    sourceBuffer.mode = 'sequence';
+
+                    sourceBuffer.addEventListener('updateend', () => {
+                        if (bufferQueue.length > 0 && !sourceBuffer.updating) {
+                            sourceBuffer.appendBuffer(bufferQueue.shift());
+                        }
+                    });
+
+                    // Connect WebSocket
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const apiHost = new URL(getApiUrl()).host;
+                    const wsUrl = `${wsProtocol}//${apiHost}/cameras/${mxid}/streams/${streamName}/video`;
+
+                    ws = new WebSocket(wsUrl);
+                    ws.binaryType = 'arraybuffer';
+
+                    ws.onopen = () => {
+                        setStatus('Connected', 'connected');
+                    };
+
+                    ws.onmessage = (event) => {
+                        const data = new Uint8Array(event.data);
+                        if (sourceBuffer && !sourceBuffer.updating) {
+                            try {
+                                sourceBuffer.appendBuffer(data);
+                            } catch (e) {
+                                bufferQueue.push(data);
+                            }
+                        } else {
+                            bufferQueue.push(data);
+                        }
+                    };
+
+                    ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        setStatus('Connection error', 'disconnected');
+                        showError('WebSocket connection error');
+                    };
+
+                    ws.onclose = () => {
+                        setStatus('Disconnected', 'disconnected');
+                        document.getElementById('connectBtn').disabled = false;
+                        document.getElementById('disconnectBtn').disabled = true;
+                    };
+                } catch (e) {
+                    console.error('MediaSource error:', e);
+                    showError(`MediaSource error: ${e.message}`);
+                }
+            });
+        }
+
+        function disconnect() {
+            const video = document.getElementById('video');
+
+            // Stop WebSocket
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+
+            if (mediaSource && mediaSource.readyState === 'open') {
+                try {
+                    mediaSource.endOfStream();
+                } catch (e) {}
+            }
+            mediaSource = null;
+            sourceBuffer = null;
+            bufferQueue = [];
+
+            video.src = '';
+
+            setStatus('Disconnected', 'disconnected');
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+        }
+
+        // Load cameras on page load
+        loadCameras();
+    </script>
+</body>
+</html>
