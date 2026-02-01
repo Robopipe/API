@@ -1,4 +1,5 @@
 import depthai as dai
+from typing import Any
 
 from ...error import PipelineException
 from .pipeline_queue_type import PipelineQueueType
@@ -16,18 +17,23 @@ class Pipeline:
         self.pipeline = pipeline or dai.Pipeline(device)
         self.input_queues: dict[str, dict[PipelineQueueType, str]] = {}
         self.output_queues: dict[str, dict[PipelineQueueType, str]] = {}
-        self.cameras: dict[
-            str, dai.node.ColorCamera | dai.node.MonoCamera | dai.node.Camera
-        ] = {}
-        self.inputs: dict[str, dai.node.InputQueue] = {}
-        self.outputs: dict[str, dai.node.MessageQueue] = {}
+        self.cameras: dict[str, dai.node.Camera] = {}
+        # In v3, queues are objects returned by createInputQueue/createOutputQueue
+        # not node types, so we use Any for the type hint
+        self.inputs: dict[str, Any] = {}
+        self.outputs: dict[str, Any] = {}
 
-        self.pipeline.setXLinkChunkSize(0)
+        # Note: setXLinkChunkSize may not be needed in v3 (XLink is automatic)
+        # Keeping for compatibility, can be removed if it causes issues
+        try:
+            self.pipeline.setXLinkChunkSize(0)
+        except AttributeError:
+            pass  # Method doesn't exist in v3
         self.extract_properties()
 
     def add_queue(
         self,
-        queue: dai.InputQueue | dai.MessageQueue,
+        queue,
         queue_type: PipelineQueueType,
         sensor_name: str,
         input: bool,
@@ -47,26 +53,20 @@ class Pipeline:
     def __add_queue_from_name(self, queue_name: str, input: bool):
         self.__add_queue(*PipelineQueueType.parse_queue_name(queue_name), input)
 
-    def get_input_queue(self, queue_name: str) -> dai.InputQueue:
+    def get_input_queue(self, queue_name: str):
         return self.inputs[queue_name]
 
-    def get_output_queue(self, queue_name: str) -> dai.MessageQueue:
+    def get_output_queue(self, queue_name: str):
         return self.outputs[queue_name]
 
     def extract_properties(self):
         nodes = self.pipeline.getAllNodes()
 
         for node in nodes:
-            if isinstance(
-                node, (dai.node.ColorCamera, dai.node.MonoCamera, dai.node.Camera)
-            ):
+            if isinstance(node, dai.node.Camera):
                 self.cameras[node.getBoardSocket().name] = node
-            elif isinstance(node, dai.node.InputQueue):
-                self.__add_queue_from_name(node.getStreamName(), True)
-                self.inputs[node.getStreamName()] = node
-            elif isinstance(node, dai.node.MessageQueue):
-                self.__add_queue_from_name(node.getStreamName(), False)
-                self.outputs[node.getStreamName()] = node
+            # In v3, queues are not nodes - they're created via createOutputQueue()
+            # and stored directly in self.inputs/self.outputs when add_queue is called
 
     def del_queue(self, sensor_name: str, queue_type: PipelineQueueType):
         queue_name = queue_type.get_queue_name(sensor_name)
@@ -91,8 +91,10 @@ class Pipeline:
             except:
                 pass
 
-        del self.input_queues[sensor_name]
-        del self.output_queues[sensor_name]
+        if sensor_name in self.input_queues:
+            del self.input_queues[sensor_name]
+        if sensor_name in self.output_queues:
+            del self.output_queues[sensor_name]
 
 
 class EmptyPipeline(Pipeline):

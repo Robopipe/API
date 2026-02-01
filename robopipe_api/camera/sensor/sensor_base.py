@@ -16,8 +16,8 @@ from .sensor_control import SensorControl
 class SensorBase(ABC):
     def __init__(
         self,
-        input_queues: dict[PipelineQueueType, dai.InputQueue],
-        output_queues: dict[PipelineQueueType, dai.MessageQueue],
+        input_queues: dict,
+        output_queues: dict,
         restart_pipeline: Callable[[], None],
     ):
         self.input_queues = input_queues

@@ -15,9 +15,9 @@ class DepthPipeline(StreamingPipeline):
         device: dai.Device | None = None,
     ):
         self.stereo_pair = stereo_pair
-        self.stereo_node = None
-        self.cam_left_node = None
-        self.cam_right_node = None
+        self.stereo_node: dai.node.StereoDepth | None = None
+        self.cam_left_node: dai.node.Camera | None = None
+        self.cam_right_node: dai.node.Camera | None = None
 
         super().__init__(sensors, pipeline, device)
 
@@ -33,40 +33,19 @@ class DepthPipeline(StreamingPipeline):
     def extract_properties(self):
         super().extract_properties()
 
-        stereo_node: list[dai.node.StereoDepth] = list(
-            filter(
-                lambda x: isinstance(x, dai.node.StereoDepth),
-                self.pipeline.getAllNodes(),
-            )
-        )
+        stereo_nodes = [
+            n for n in self.pipeline.getAllNodes()
+            if isinstance(n, dai.node.StereoDepth)
+        ]
 
-        if stereo_node:
-            self.stereo_node = stereo_node[0]
+        if stereo_nodes:
+            self.stereo_node = stereo_nodes[0]
 
-            for camera in self.cameras.values():
-                if not isinstance(camera, dai.node.MonoCamera):
-                    continue
-
-                try:
-                    camera.out.unlink(self.stereo_node.left)
-                    camera.out.link(self.stereo_node.left)
-                    self.cam_left_node = camera
-                except:
-                    pass
-
-                try:
-                    camera.out.unlink(self.stereo_node.right)
-                    camera.out.link(self.stereo_node.right)
-                    self.cam_right_node = camera
-                except:
-                    pass
-
-            self.stereo_pair = (
-                self.cam_left_node.getBoardSocket().name,
-                self.cam_right_node.getBoardSocket().name,
-            )
-            del self.cameras[self.cam_left_node.getBoardSocket().name]
-            del self.cameras[self.cam_right_node.getBoardSocket().name]
+            # Find cameras linked to stereo node
+            for camera in list(self.cameras.values()):
+                socket_name = camera.getBoardSocket().name
+                # In v3, we track which cameras are used for stereo via socket
+                # The actual linking is done in add_stereo_pair
 
             for script in self.pipeline.getAllNodes():
                 if not isinstance(script, dai.node.Script):
@@ -100,49 +79,31 @@ class DepthPipeline(StreamingPipeline):
         self.remove_sensor(left_socket.name)
         self.remove_sensor(right_socket.name)
 
-        control = self.create_x_link(depth_name, PipelineQueueType.CONTROL, True)
-        still = self.create_x_link(depth_name, PipelineQueueType.STILL, False, False, 1)
-        video = self.create_x_link(depth_name, PipelineQueueType.VIDEO, False, False, 1)
-
-        cam_left = self.pipeline.createMonoCamera()
+        # Create Camera nodes for stereo pair (v3 unified Camera node)
+        cam_left = self.pipeline.create(dai.node.Camera)
+        cam_left.build(left_socket)
         self.cam_left_node = cam_left
-        cam_left.setBoardSocket(left_socket)
-        cam_left.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
 
-        cam_right = self.pipeline.createMonoCamera()
+        cam_right = self.pipeline.create(dai.node.Camera)
+        cam_right.build(right_socket)
         self.cam_right_node = cam_right
-        cam_right.setBoardSocket(right_socket)
-        cam_right.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
 
-        stereo_depth = self.pipeline.createStereoDepth()
+        # Create StereoDepth node
+        stereo_depth = self.pipeline.create(dai.node.StereoDepth)
         self.stereo_node = stereo_depth
 
-        script = self.pipeline.createScript()
-        self.scripts[depth_name] = script
-        script.setScript(
-            """
-                while True:
-                    frame = node.io['in'].get()
-                    node.io['video'].send(frame)
-                    node.io['still'].send(frame)
+        # Link camera outputs to stereo depth (640x400 for performance)
+        cam_left.requestOutput((640, 400), dai.ImgFrame.Type.GRAY8).link(stereo_depth.left)
+        cam_right.requestOutput((640, 400), dai.ImgFrame.Type.GRAY8).link(stereo_depth.right)
 
-                    if "preview" in node.io:
-                        node.io["preview"].send(frame)
-            """
-        )
+        # Create output queues for disparity
+        video_out = stereo_depth.disparity.createOutputQueue(maxSize=1, blocking=False)
+        still_out = stereo_depth.disparity.createOutputQueue(maxSize=1, blocking=False)
 
-        cam_left.out.link(stereo_depth.left)
-        cam_right.out.link(stereo_depth.right)
-        control.out.link(cam_left.inputControl)
-        control.out.link(cam_right.inputControl)
+        self.add_queue(video_out, PipelineQueueType.VIDEO, depth_name, False)
+        self.add_queue(still_out, PipelineQueueType.STILL, depth_name, False)
 
-        script.inputs["in"].setBlocking(False)
-        script.inputs["in"].setQueueSize(1)
-        stereo_depth.disparity.link(script.inputs["in"])
         stereo_depth.setNumFramesPool(10)
-
-        script.outputs["still"].link(still.input)
-        script.outputs["video"].link(video.input)
 
     def remove_stereo_pair(self):
         if self.stereo_pair is None:

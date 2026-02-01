@@ -13,9 +13,9 @@ class Sensor(SensorBase):
     def __init__(
         self,
         sensor_features: dai.CameraFeatures,
-        sensor_node: dai.node.Camera | dai.node.ColorCamera | dai.node.MonoCamera,
-        input_queues: dict[PipelineQueueType, dai.InputQueue],
-        output_queues: dict[PipelineQueueType, dai.MessageQueue],
+        sensor_node: dai.node.Camera,
+        input_queues: dict,
+        output_queues: dict,
         restart_pipeline: Callable[[], None],
     ):
         super().__init__(input_queues, output_queues, restart_pipeline)
