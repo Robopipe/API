@@ -79,7 +79,7 @@ class StreamingPipeline(Pipeline):
         ).createOutputQueue(maxSize=1, blocking=False)
         still_out = cam.requestOutput(
             size=still_size, type=frame_type, fps=target_fps
-        ).createOutputQueue()
+        ).createOutputQueue(maxSize=1, blocking=False)
         self.add_queue(video_out, PipelineQueueType.VIDEO, sensor_name, False)
         self.add_queue(still_out, PipelineQueueType.STILL, sensor_name, False)
         # cam_control = cam.inputControl.createInputQueue()
