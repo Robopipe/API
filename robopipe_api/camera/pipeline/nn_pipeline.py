@@ -11,6 +11,8 @@ class NNPipeline(DepthPipeline):
     ):
         self.neural_networks: dict[str, dai.node.NeuralNetwork] = {}
         self.nn_configs: dict[str, CameraNNConfig] = {}
+        # Store NN input outputs for cleanup
+        self.nn_outputs: dict = {}
         super().__init__(None, [], pipeline)
 
         for nn in networks:
@@ -24,16 +26,9 @@ class NNPipeline(DepthPipeline):
                 continue
 
             for camera in self.cameras.values():
-                is_mono = isinstance(camera, dai.node.MonoCamera)
-
+                # In v3, all cameras are dai.node.Camera
+                # Try to find which camera is linked to this NN
                 try:
-                    if is_mono:
-                        camera.out.unlink(neural_network.input)
-                        camera.out.link(neural_network.input)
-                    else:
-                        camera.preview.unlink(neural_network.input)
-                        camera.preview.link(neural_network.input)
-
                     self.neural_networks[camera.getBoardSocket().name] = neural_network
                     break
                 except:
@@ -44,43 +39,30 @@ class NNPipeline(DepthPipeline):
             self.output_queues[sensor_name].get(PipelineQueueType.VIDEO)
         ]
 
-    def __setup_mono_camera(
+    def __setup_camera(
         self,
-        camera: dai.node.MonoCamera,
+        camera: dai.node.Camera,
         nn: CameraNNConfig,
         nn_node: dai.node.NeuralNetwork,
     ):
         sensor_name = camera.getBoardSocket().name
-        script = self.scripts[sensor_name]
-        video_queue = self.get_video_queue(sensor_name)
 
-        script.outputs["preview"].link(nn_node.input)
-        script.outputs["video"].unlink(video_queue.input)
-        nn_node.passthrough.link(video_queue.input)
-
-    def __setup_camera(
-        self,
-        camera: dai.node.ColorCamera | dai.node.Camera,
-        nn: CameraNNConfig,
-        nn_node: dai.node.NeuralNetwork,
-    ):
-        camera.setPreviewSize(nn.input_shape[:2])
-        camera.setInterleaved(False)
-
-        video_queue = self.get_video_queue(nn.sensor_name)
-
-        camera.preview.link(nn_node.input)
-        camera.video.unlink(video_queue.input)
-        nn_node.passthrough.link(video_queue.input)
+        # Create an output sized for the NN input
+        nn_input_size = nn.input_shape[:2]
+        nn_output = camera.requestOutput(
+            size=nn_input_size,
+            type=dai.ImgFrame.Type.BGR888p,
+        )
+        nn_output.link(nn_node.input)
+        self.nn_outputs[sensor_name] = nn_output
 
     def __setup_stereo_camera(
         self, nn: CameraNNConfig, nn_node: dai.node.NeuralNetwork
     ):
-        video_queue = self.get_video_queue(nn.sensor_name)
-
-        self.scripts[nn.sensor_name].outputs["preview"].link(nn_node.input)
-        self.scripts[nn.sensor_name].outputs["video"].unlink(video_queue.input)
-        nn_node.passthrough.link(video_queue.input)
+        # For depth-based NN, link disparity to NN
+        # This requires the disparity to be converted to appropriate format
+        if self.stereo_node is not None:
+            self.stereo_node.disparity.link(nn_node.input)
 
     def add_nn(self, nn: CameraNNConfig):
         sensor_name = nn.sensor_name
@@ -96,10 +78,10 @@ class NNPipeline(DepthPipeline):
             self.stereo_node.depth.link(nn_node.inputDepth)
 
         self.neural_networks[sensor_name] = nn_node
-        cam_nn_out = self.create_x_link(
-            sensor_name, PipelineQueueType.NN, False, False, 1
-        )
-        nn_node.out.link(cam_nn_out.input)
+
+        # Create output queue for NN results
+        nn_out = nn_node.out.createOutputQueue(maxSize=1, blocking=False)
+        self.add_queue(nn_out, PipelineQueueType.NN, sensor_name, False)
 
         if sensor_name.startswith("DEPTH"):
             left, right = sensor_name.split("_")[1:]
@@ -111,11 +93,7 @@ class NNPipeline(DepthPipeline):
             self.add_sensor(nn.sensor)
 
         cam = self.cameras[sensor_name]
-
-        if isinstance(cam, dai.node.MonoCamera):
-            self.__setup_mono_camera(cam, nn, nn_node)
-        else:
-            self.__setup_camera(cam, nn, nn_node)
+        self.__setup_camera(cam, nn, nn_node)
 
     def add_stereo_pair(self, left, right):
         nn_to_remove: list[CameraNNConfig] = []
@@ -159,18 +137,10 @@ class NNPipeline(DepthPipeline):
             return
 
         nn_node = self.neural_networks[sensor_name]
-        video_queue = self.get_video_queue(sensor_name)
 
-        if sensor_name.startswith("DEPTH"):
-            script = self.scripts[self.get_depth_name()]
-            script.outputs["video"].link(video_queue.input)
-        else:
-            cam = self.cameras[sensor_name]
-
-            if isinstance(cam, dai.node.MonoCamera):
-                self.scripts[sensor_name].outputs["video"].link(video_queue.input)
-            else:
-                cam.video.link(video_queue.input)
+        # Clean up NN output reference
+        if sensor_name in self.nn_outputs:
+            del self.nn_outputs[sensor_name]
 
         self.pipeline.remove(nn_node)
         del self.neural_networks[sensor_name]

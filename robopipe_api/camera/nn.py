@@ -2,33 +2,67 @@ import depthai as dai
 
 import pathlib
 
+# Type alias for supported model formats
+ModelType = dai.OpenVINO.Blob | dai.NNArchive | pathlib.Path
+
 
 class CameraNNConfig:
     def __init__(
         self,
         sensor_name: str,
         sensor: dai.CameraFeatures,
-        blob: dai.OpenVINO.Blob | pathlib.Path,
+        blob: ModelType,
         num_inference_threads: int = 2,
     ):
         self.sensor_name = sensor_name
         self.sensor = sensor
-        self.blob = (
-            blob if isinstance(blob, dai.OpenVINO.Blob) else dai.OpenVINO.Blob(blob)
-        )
-        self.input_shape = list(self.blob.networkInputs.values())[0].dims
-        self.output_shape = list(self.blob.networkOutputs.values())[0].dims
         self.num_inference_threads = num_inference_threads
+
+        # Handle different model formats
+        if isinstance(blob, dai.NNArchive):
+            self.nn_archive = blob
+            self.blob = None
+            # Get input/output shapes from archive
+            try:
+                config = blob.getConfig()
+                # inputs/outputs can be list or dict depending on version
+                inputs = config.model.inputs
+                outputs = config.model.outputs
+                if isinstance(inputs, dict):
+                    self.input_shape = list(inputs.values())[0].dims
+                elif isinstance(inputs, list) and len(inputs) > 0:
+                    self.input_shape = inputs[0].dims
+                else:
+                    self.input_shape = [1, 3, 300, 300]
+                if isinstance(outputs, dict):
+                    self.output_shape = list(outputs.values())[0].dims
+                elif isinstance(outputs, list) and len(outputs) > 0:
+                    self.output_shape = outputs[0].dims
+                else:
+                    self.output_shape = [1, 1, 100, 7]
+            except Exception:
+                # Fallback to defaults if config parsing fails
+                self.input_shape = [1, 3, 300, 300]
+                self.output_shape = [1, 1, 100, 7]
+        else:
+            self.nn_archive = None
+            self.blob = (
+                blob if isinstance(blob, dai.OpenVINO.Blob) else dai.OpenVINO.Blob(blob)
+            )
+            self.input_shape = list(self.blob.networkInputs.values())[0].dims
+            self.output_shape = list(self.blob.networkOutputs.values())[0].dims
 
     def create_node(
         self, pipeline: dai.Pipeline, with_depth: bool = False
     ) -> dai.node.NeuralNetwork:
-        node = pipeline.createNeuralNetwork()
+        node = pipeline.create(dai.node.NeuralNetwork)
 
         return self.configure_node(node)
 
     def configure_node(self, node: dai.node.NeuralNetwork):
-        if isinstance(self.blob, dai.OpenVINO.Blob):
+        if self.nn_archive is not None:
+            node.setNNArchive(self.nn_archive)
+        elif isinstance(self.blob, dai.OpenVINO.Blob):
             node.setBlob(self.blob)
         else:
             node.setBlobPath(self.blob)
@@ -45,7 +79,7 @@ class CameraNNYoloConfig(CameraNNConfig):
         self,
         sensor_name: str,
         sensor: dai.CameraFeatures,
-        blob: dai.OpenVINO.Blob | pathlib.Path,
+        blob: ModelType,
         num_inference_threads: int = 2,
         anchor_masks: dict[str, list[int]] | None = None,
         anchors: list[float] | None = None,
@@ -65,9 +99,9 @@ class CameraNNYoloConfig(CameraNNConfig):
 
     def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
         if with_depth:
-            node = pipeline.createYoloSpatialDetectionNetwork()
+            node = pipeline.create(dai.node.YoloSpatialDetectionNetwork)
         else:
-            node = pipeline.createYoloDetectionNetwork()
+            node = pipeline.create(dai.node.YoloDetectionNetwork)
 
         return self.configure_node(node)
 
@@ -93,7 +127,7 @@ class CameraNNMobileNetConfig(CameraNNConfig):
         self,
         sensor_name: str,
         sensor: dai.CameraFeatures,
-        blob: dai.OpenVINO.Blob | pathlib.Path,
+        blob: ModelType,
         num_inference_threads: int = 2,
         confidence_threshold: float | None = None,
     ):
@@ -103,9 +137,9 @@ class CameraNNMobileNetConfig(CameraNNConfig):
 
     def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
         if with_depth:
-            node = pipeline.createMobileNetSpatialDetectionNetwork()
+            node = pipeline.create(dai.node.MobileNetSpatialDetectionNetwork)
         else:
-            node = pipeline.createMobileNetDetectionNetwork()
+            node = pipeline.create(dai.node.MobileNetDetectionNetwork)
 
         return self.configure_node(node)
 

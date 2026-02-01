@@ -11,8 +11,8 @@ class DepthSensor(Sensor):
     def __init__(
         self,
         sensor_nodes: tuple[dai.node.Camera, dai.node.Camera],
-        input_queues: dict[PipelineQueueType, dai.InputQueue],
-        output_queues: dict[PipelineQueueType, dai.MessageQueue],
+        input_queues: dict,
+        output_queues: dict,
         restart_pipeline: Callable[[], None],
     ):
         super().__init__(

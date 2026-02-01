@@ -153,10 +153,13 @@ class Camera:
             self.camera_handle = None
             logger.debug(f"Closed camera {self.mxid}")
 
-    def open(self):
+    def open(self, pipeline: Pipeline | None = None):
         self.close()
         self.camera_handle = dai.Device(self.boot_name)
         logger.debug(f"Opened camera {self.mxid}")
+
+        if pipeline is not None:
+            self.run_pipeline(pipeline)
 
         return self
 
@@ -198,7 +201,7 @@ class Camera:
         self.pipeline.remove_sensor(sensor_name)
         self.open(self.pipeline)
 
-    def deploy_nn(self, sensor_name: str, blob: dai.OpenVINO.Blob, config: NNConfig):
+    def deploy_nn(self, sensor_name: str, blob: dai.OpenVINO.Blob | dai.NNArchive, config: NNConfig):
         nn_config_cls = Camera.NN_CONFIG_MAP.get(config.type)
 
         if nn_config_cls is None:
