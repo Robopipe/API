@@ -1,5 +1,6 @@
 import depthai as dai
 
+from ...log import logger
 from .pipeline import Pipeline
 from .pipeline_queue_type import PipelineQueueType
 
@@ -29,18 +30,27 @@ class StreamingPipeline(Pipeline):
 
     def add_sensor(self, sensor: dai.CameraFeatures):
         sensor_name = sensor.socket.name
+        logger.debug(f"[StreamingPipeline.add_sensor] Adding sensor: {sensor_name}")
 
         if sensor_name in self.cameras:
+            logger.debug(f"[StreamingPipeline.add_sensor] Sensor {sensor_name} already exists, skipping")
             return
 
         if not (
             dai.CameraSensorType.COLOR in sensor.supportedTypes
             or dai.CameraSensorType.MONO in sensor.supportedTypes
         ):
+            logger.debug(f"[StreamingPipeline.add_sensor] Sensor {sensor_name} is not COLOR or MONO, skipping")
             return
 
+        self._check_device(f"before creating Camera node for {sensor_name}")
+        logger.debug(f"[StreamingPipeline.add_sensor] Creating Camera node for {sensor_name}")
         cam = self.pipeline.create(dai.node.Camera)
+        self._check_device(f"after creating Camera node for {sensor_name}")
+        logger.debug(f"[StreamingPipeline.add_sensor] Building Camera node with socket={sensor.socket}")
         cam.build(sensor.socket, sensorFps=28)
+        self._check_device(f"after building Camera node for {sensor_name}")
+        logger.debug(f"[StreamingPipeline.add_sensor] Camera node built for {sensor_name}")
         self.cameras[sensor_name] = cam
 
         # Determine frame type based on sensor type
@@ -76,10 +86,10 @@ class StreamingPipeline(Pipeline):
             type=frame_type,
             resizeMode=dai.ImgResizeMode.STRETCH,
             fps=target_fps,
-        ).createOutputQueue(maxSize=1, blocking=False)
+        ).createOutputQueue(maxSize=4, blocking=False)
         still_out = cam.requestOutput(
             size=still_size, type=frame_type, fps=target_fps
-        ).createOutputQueue(maxSize=1, blocking=False)
+        ).createOutputQueue(maxSize=2, blocking=False)
         self.add_queue(video_out, PipelineQueueType.VIDEO, sensor_name, False)
         self.add_queue(still_out, PipelineQueueType.STILL, sensor_name, False)
         # cam_control = cam.inputControl.createInputQueue()

@@ -42,8 +42,9 @@ class Sensor(SensorBase):
     @control.setter
     def control(self, value: SensorControl):
         self._control = value
-        control_queue = self.input_queues[PipelineQueueType.CONTROL]
-        control_queue.send(self._control.to_camera_control())
+        control_queue = self.input_queues.get(PipelineQueueType.CONTROL)
+        if control_queue is not None:
+            control_queue.send(self._control.to_camera_control())
 
     def __extract_img_properties(self, img: dai.ImgFrame):
         self._control.sensitivity_iso = img.getSensitivity()

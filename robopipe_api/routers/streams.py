@@ -105,33 +105,63 @@ def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Respo
     return Response(img_buffer.getvalue(), media_type=f"image/{format}")
 
 
-async def generate_mjpeg_frames(sensor, fps: int = 15) -> AsyncGenerator[bytes, None]:
-    """Generate MJPEG frames as multipart content."""
+async def generate_mjpeg_frames(
+    sensor,
+    fps: int = 15,
+    quality: int = 50,
+    scale: float = 0.8,
+) -> AsyncGenerator[bytes, None]:
+    """Generate MJPEG frames as multipart content.
+
+    Args:
+        sensor: The camera sensor
+        fps: Target frames per second
+        quality: JPEG quality 1-100 (lower = faster, smaller)
+        scale: Resolution scale 0.1-1.0 (lower = faster, smaller)
+    """
     frame_interval = 1.0 / fps
     boundary = b"--frame\r\n"
 
-    while True:
-        try:
-            # Get video frame and convert to JPEG
-            video_frame = await anyio.to_thread.run_sync(sensor.get_video_frame)
-            pil_image = video_frame.to_image()
+    try:
+        while True:
+            img_buffer = None
+            try:
+                # Get video frame and convert to JPEG
+                video_frame = await anyio.to_thread.run_sync(sensor.get_video_frame)
+                pil_image = video_frame.to_image()
 
-            img_buffer = BytesIO()
-            pil_image.save(img_buffer, "JPEG", quality=80)
-            frame_data = img_buffer.getvalue()
+                # Downscale if requested (significant latency reduction)
+                if scale < 1.0:
+                    new_size = (int(pil_image.width * scale), int(pil_image.height * scale))
+                    pil_image = pil_image.resize(new_size, resample=0)  # 0 = NEAREST (fastest)
 
-            yield (
-                boundary +
-                b"Content-Type: image/jpeg\r\n" +
-                f"Content-Length: {len(frame_data)}\r\n\r\n".encode() +
-                frame_data +
-                b"\r\n"
-            )
+                img_buffer = BytesIO()
+                # Lower quality = faster encoding + smaller payload
+                pil_image.save(img_buffer, "JPEG", quality=quality, optimize=False)
+                frame_data = img_buffer.getvalue()
 
-            await anyio.sleep(frame_interval)
-        except Exception as e:
-            print(f"MJPEG stream error: {e}")
-            break
+                yield (
+                    boundary +
+                    b"Content-Type: image/jpeg\r\n" +
+                    f"Content-Length: {len(frame_data)}\r\n\r\n".encode() +
+                    frame_data +
+                    b"\r\n"
+                )
+
+                await anyio.sleep(frame_interval)
+            except GeneratorExit:
+                break
+            except Exception as e:
+                print(f"MJPEG stream error: {e}")
+                break
+            finally:
+                # Clean up BytesIO buffer
+                if img_buffer is not None:
+                    img_buffer.close()
+                    del img_buffer
+    finally:
+        # Generator cleanup
+        pass
 
 
 @stream_router.get(
@@ -139,10 +169,27 @@ async def generate_mjpeg_frames(sensor, fps: int = 15) -> AsyncGenerator[bytes, 
     response_class=StreamingResponse,
     responses={200: {"content": {"multipart/x-mixed-replace": {}}}},
 )
-async def stream_mjpeg(sensor: SensorDep, fps: int = 15):
-    """Stream video as MJPEG. Works in any browser via img tag."""
+async def stream_mjpeg(
+    sensor: SensorDep,
+    fps: int = 15,
+    quality: int = 50,
+    scale: float = 0.8,
+):
+    """Stream video as MJPEG. Works in any browser via img tag.
+
+    Query params:
+        fps: Target frame rate (default 15)
+        quality: JPEG quality 1-100 (default 50, lower = faster/smaller)
+        scale: Resolution scale 0.1-1.0 (default 1.0, lower = faster/smaller)
+
+    Example for low latency: /mjpeg?fps=30&quality=30&scale=0.5
+    """
+    # Clamp values to valid ranges
+    quality = max(1, min(100, quality))
+    scale = max(0.1, min(1.0, scale))
+
     return StreamingResponse(
-        generate_mjpeg_frames(sensor, fps),
+        generate_mjpeg_frames(sensor, fps, quality, scale),
         media_type="multipart/x-mixed-replace; boundary=frame",
     )
 
@@ -191,15 +238,71 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
         while True:
             detections = sensor.get_nn_detections()
 
+            if detections is None:
+                await ws.send_json({"error": "NN queue not available"})
+                await anyio.sleep(1)
+                continue
+
             if isinstance(detections, dai.NNData):
-                parsed_detections = detections.getFirstLayerFp16()
+                # v3 API: use getTensor or getFirstTensor
+                try:
+                    if hasattr(detections, 'getFirstTensor'):
+                        tensor = detections.getFirstTensor()
+                    elif hasattr(detections, 'getTensor'):
+                        layer_names = detections.getAllLayerNames()
+                        if layer_names:
+                            tensor = detections.getTensor(layer_names[0])
+                        else:
+                            tensor = None
+                    else:
+                        tensor = None
+
+                    if tensor is not None:
+                        # Check if this is a segmentation mask (2D output)
+                        import cv2
+                        import numpy as np
+
+                        # Reshape to 2D if needed (assumes square output like 256x256)
+                        flat = tensor.flatten()
+                        size = int(np.sqrt(len(flat)))
+                        if size * size == len(flat):
+                            # It's a segmentation mask
+                            mask = flat.reshape((size, size))
+                            # Convert to uint8 binary mask
+                            mask_uint8 = (mask > 0.5).astype(np.uint8) * 255
+
+                            # Find contours
+                            contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                            # Extract contour points (simplify to reduce data)
+                            parsed_detections = []
+                            for contour in contours:
+                                # Approximate contour to reduce points
+                                epsilon = 0.01 * cv2.arcLength(contour, True)
+                                approx = cv2.approxPolyDP(contour, epsilon, True)
+                                points = approx.reshape(-1, 2).tolist()
+                                if len(points) >= 3:  # Valid polygon
+                                    parsed_detections.append(points)
+                        else:
+                            # Not a square mask, return raw
+                            parsed_detections = flat.tolist()
+                    else:
+                        parsed_detections = []
+                except Exception as e:
+                    print(f"[NN] Error processing: {e}")
+                    parsed_detections = []
             else:
                 parsed_detections = parse_detections(detections)
 
             await ws.send_json({"detections": parsed_detections})
-            await anyio.sleep(0.001)
+            await anyio.sleep(0.05)  # 50ms = ~20fps max
     except WebSocketDisconnect:
-        return
+        pass
+    finally:
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 @stream_router.websocket("/video")
