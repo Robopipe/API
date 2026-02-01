@@ -84,7 +84,6 @@ class StreamingPipeline(Pipeline):
         #     )
         # cam_config = self.pipeline.create(dai.ImageManipConfig)
         # cam_config = self.create_x_link(sensor_name, PipelineQueueType.CONFIG, True)
-        # print("kokotinq")
         # cam = self.pipeline.create(dai.node.Camera)
         # print("aaaaa")
         # cam.build(sensor.socket)
