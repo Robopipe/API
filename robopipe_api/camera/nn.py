@@ -2,6 +2,8 @@ import depthai as dai
 
 import pathlib
 
+from ..log import logger
+
 # Type alias for supported model formats
 ModelType = dai.OpenVINO.Blob | dai.NNArchive | pathlib.Path
 
@@ -19,29 +21,50 @@ class CameraNNConfig:
         self.num_inference_threads = num_inference_threads
 
         # Handle different model formats
+        logger.info(f"[CameraNNConfig] blob type: {type(blob)}")
         if isinstance(blob, dai.NNArchive):
             self.nn_archive = blob
             self.blob = None
             # Get input/output shapes from archive
             try:
                 config = blob.getConfig()
+                logger.info(f"[CameraNNConfig] NNArchive config.model: {config.model}")
                 # inputs/outputs can be list or dict depending on version
                 inputs = config.model.inputs
                 outputs = config.model.outputs
+                logger.info(f"[CameraNNConfig] inputs: {inputs}, outputs: {outputs}")
                 if isinstance(inputs, dict):
-                    self.input_shape = list(inputs.values())[0].dims
+                    first_input = list(inputs.values())[0]
+                    logger.info(f"[CameraNNConfig] first_input: {first_input}, attrs: {dir(first_input)}")
+                    self.input_shape = list(first_input.dims) if hasattr(first_input, 'dims') else [1, 3, 300, 300]
                 elif isinstance(inputs, list) and len(inputs) > 0:
-                    self.input_shape = inputs[0].dims
+                    first_input = inputs[0]
+                    logger.info(f"[CameraNNConfig] first_input (list): {first_input}, attrs: {dir(first_input)}")
+                    # Try different attribute names for shape/dims
+                    if hasattr(first_input, 'dims'):
+                        self.input_shape = list(first_input.dims)
+                    elif hasattr(first_input, 'shape'):
+                        self.input_shape = list(first_input.shape)
+                    elif hasattr(first_input, 'size'):
+                        self.input_shape = list(first_input.size)
+                    else:
+                        logger.warning(f"[CameraNNConfig] No dims/shape/size attr found")
+                        self.input_shape = [1, 3, 300, 300]
                 else:
+                    logger.warning(f"[CameraNNConfig] Could not extract input shape, using default")
                     self.input_shape = [1, 3, 300, 300]
                 if isinstance(outputs, dict):
-                    self.output_shape = list(outputs.values())[0].dims
+                    first_output = list(outputs.values())[0]
+                    self.output_shape = list(first_output.dims) if hasattr(first_output, 'dims') else [1, 1, 100, 7]
                 elif isinstance(outputs, list) and len(outputs) > 0:
-                    self.output_shape = outputs[0].dims
+                    self.output_shape = list(outputs[0].dims) if hasattr(outputs[0], 'dims') else [1, 1, 100, 7]
                 else:
                     self.output_shape = [1, 1, 100, 7]
-            except Exception:
+            except Exception as e:
                 # Fallback to defaults if config parsing fails
+                logger.error(f"[CameraNNConfig] Failed to parse NNArchive config: {e}")
+                import traceback
+                traceback.print_exc()
                 self.input_shape = [1, 3, 300, 300]
                 self.output_shape = [1, 1, 100, 7]
         else:
@@ -52,25 +75,46 @@ class CameraNNConfig:
             self.input_shape = list(self.blob.networkInputs.values())[0].dims
             self.output_shape = list(self.blob.networkOutputs.values())[0].dims
 
+        logger.info(f"[CameraNNConfig] Final shapes - input: {self.input_shape}, output: {self.output_shape}")
+
     def create_node(
-        self, pipeline: dai.Pipeline, with_depth: bool = False
+        self,
+        pipeline: dai.Pipeline,
+        camera_output,
+        with_depth: bool = False,
     ) -> dai.node.NeuralNetwork:
+        """Create and configure NN node with v3 API.
+
+        Args:
+            pipeline: The depthai pipeline
+            camera_output: The camera output to link to NN input (from requestOutput)
+            with_depth: Whether to use spatial detection (requires stereo depth)
+        """
+        logger.debug(f"[CameraNNConfig.create_node] Creating NeuralNetwork node")
         node = pipeline.create(dai.node.NeuralNetwork)
+        logger.debug(f"[CameraNNConfig.create_node] NeuralNetwork node created")
 
-        return self.configure_node(node)
-
-    def configure_node(self, node: dai.node.NeuralNetwork):
+        # V3 API: use build() with input and model for NNArchive
         if self.nn_archive is not None:
-            node.setNNArchive(self.nn_archive)
-        elif isinstance(self.blob, dai.OpenVINO.Blob):
-            node.setBlob(self.blob)
+            logger.debug(f"[CameraNNConfig.create_node] Building with NNArchive")
+            node.build(camera_output, self.nn_archive)
+            logger.debug(f"[CameraNNConfig.create_node] NNArchive build complete")
         else:
-            node.setBlobPath(self.blob)
+            # For Blob, link manually and set blob
+            logger.debug(f"[CameraNNConfig.create_node] Linking camera output to node input")
+            camera_output.link(node.input)
+            if isinstance(self.blob, dai.OpenVINO.Blob):
+                logger.debug(f"[CameraNNConfig.create_node] Setting blob")
+                node.setBlob(self.blob)
+            else:
+                logger.debug(f"[CameraNNConfig.create_node] Setting blob path")
+                node.setBlobPath(self.blob)
 
+        logger.debug(f"[CameraNNConfig.create_node] Configuring node (blocking=False, threads={self.num_inference_threads})")
         node.input.setBlocking(False)
-        node.input.setQueueSize(1)
         node.setNumInferenceThreads(self.num_inference_threads)
 
+        logger.debug(f"[CameraNNConfig.create_node] Node creation complete")
         return node
 
 
@@ -97,15 +141,36 @@ class CameraNNYoloConfig(CameraNNConfig):
         self.iou_threshold = iou_threshold
         self.num_classes = num_classes
 
-    def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
+    def create_node(
+        self,
+        pipeline: dai.Pipeline,
+        camera_output,
+        with_depth: bool = False,
+    ):
+        logger.debug(f"[CameraNNYoloConfig.create_node] Creating YOLO node (with_depth={with_depth})")
         if with_depth:
             node = pipeline.create(dai.node.YoloSpatialDetectionNetwork)
         else:
             node = pipeline.create(dai.node.YoloDetectionNetwork)
+        logger.debug(f"[CameraNNYoloConfig.create_node] Node created: {type(node).__name__}")
 
-        return self.configure_node(node)
+        return self.configure_node(node, camera_output)
 
-    def configure_node(self, node):
+    def configure_node(self, node, camera_output):
+        logger.debug(f"[CameraNNYoloConfig.configure_node] Configuring YOLO node")
+        # Link camera output to detection network input
+        if self.nn_archive is not None:
+            logger.debug(f"[CameraNNYoloConfig.configure_node] Building with NNArchive")
+            node.build(camera_output, self.nn_archive)
+        else:
+            logger.debug(f"[CameraNNYoloConfig.configure_node] Linking camera output and setting blob")
+            camera_output.link(node.input)
+            if isinstance(self.blob, dai.OpenVINO.Blob):
+                node.setBlob(self.blob)
+            else:
+                node.setBlobPath(self.blob)
+
+        logger.debug(f"[CameraNNYoloConfig.configure_node] Setting YOLO-specific parameters")
         if self.anchor_masks is not None:
             node.setAnchorMasks(self.anchor_masks)
         if self.anchors is not None:
@@ -119,7 +184,11 @@ class CameraNNYoloConfig(CameraNNConfig):
         if self.num_classes is not None:
             node.setNumClasses(self.num_classes)
 
-        return super().configure_node(node)
+        node.input.setBlocking(False)
+        node.setNumInferenceThreads(self.num_inference_threads)
+        logger.debug(f"[CameraNNYoloConfig.configure_node] YOLO node configuration complete")
+
+        return node
 
 
 class CameraNNMobileNetConfig(CameraNNConfig):
@@ -135,16 +204,41 @@ class CameraNNMobileNetConfig(CameraNNConfig):
 
         self.confidence_threshold = confidence_threshold
 
-    def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
+    def create_node(
+        self,
+        pipeline: dai.Pipeline,
+        camera_output,
+        with_depth: bool = False,
+    ):
+        logger.debug(f"[CameraNNMobileNetConfig.create_node] Creating MobileNet node (with_depth={with_depth})")
         if with_depth:
             node = pipeline.create(dai.node.MobileNetSpatialDetectionNetwork)
         else:
             node = pipeline.create(dai.node.MobileNetDetectionNetwork)
+        logger.debug(f"[CameraNNMobileNetConfig.create_node] Node created: {type(node).__name__}")
 
-        return self.configure_node(node)
+        return self.configure_node(node, camera_output)
 
-    def configure_node(self, node):
+    def configure_node(self, node, camera_output):
+        logger.debug(f"[CameraNNMobileNetConfig.configure_node] Configuring MobileNet node")
+        # Link camera output to detection network input
+        if self.nn_archive is not None:
+            logger.debug(f"[CameraNNMobileNetConfig.configure_node] Building with NNArchive")
+            node.build(camera_output, self.nn_archive)
+        else:
+            logger.debug(f"[CameraNNMobileNetConfig.configure_node] Linking camera output and setting blob")
+            camera_output.link(node.input)
+            if isinstance(self.blob, dai.OpenVINO.Blob):
+                node.setBlob(self.blob)
+            else:
+                node.setBlobPath(self.blob)
+
         if self.confidence_threshold is not None:
+            logger.debug(f"[CameraNNMobileNetConfig.configure_node] Setting confidence_threshold={self.confidence_threshold}")
             node.setConfidenceThreshold(self.confidence_threshold)
 
-        return super().configure_node(node)
+        node.input.setBlocking(False)
+        node.setNumInferenceThreads(self.num_inference_threads)
+        logger.debug(f"[CameraNNMobileNetConfig.configure_node] MobileNet node configuration complete")
+
+        return node

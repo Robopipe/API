@@ -1,5 +1,6 @@
 import depthai as dai
 
+from ...log import logger
 from .pipeline_queue_type import PipelineQueueType
 from .streaming_pipeline import StreamingPipeline
 
@@ -97,8 +98,8 @@ class DepthPipeline(StreamingPipeline):
         cam_right.requestOutput((640, 400), dai.ImgFrame.Type.GRAY8).link(stereo_depth.right)
 
         # Create output queues for disparity
-        video_out = stereo_depth.disparity.createOutputQueue(maxSize=1, blocking=False)
-        still_out = stereo_depth.disparity.createOutputQueue(maxSize=1, blocking=False)
+        video_out = stereo_depth.disparity.createOutputQueue(maxSize=4, blocking=False)
+        still_out = stereo_depth.disparity.createOutputQueue(maxSize=2, blocking=False)
 
         self.add_queue(video_out, PipelineQueueType.VIDEO, depth_name, False)
         self.add_queue(still_out, PipelineQueueType.STILL, depth_name, False)
