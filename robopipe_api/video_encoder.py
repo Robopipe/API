@@ -48,7 +48,20 @@ class VideoEncoder:
         self.initialization_fragment = self.next()
 
     def __del__(self):
-        self.container.close()
+        self.close()
+
+    def close(self):
+        """Explicitly close resources."""
+        try:
+            if hasattr(self, 'container') and self.container:
+                self.container.close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, 'buffer') and self.buffer:
+                self.buffer.close()
+        except Exception:
+            pass
 
     def __iter__(self):
         return self
@@ -59,17 +72,22 @@ class VideoEncoder:
     def next(self):
         try:
             frame = self.sensor.get_video_frame()
-        except:
+        except Exception:
+            self.close()
             raise StopIteration()
 
-        packets = self.video_stream.encode(frame)
-        self.container.mux(packets)
-        buffer = self.buffer.getvalue()
+        try:
+            packets = self.video_stream.encode(frame)
+            self.container.mux(packets)
+            buffer = self.buffer.getvalue()
 
-        self.buffer.seek(0)
-        self.buffer.truncate()
+            self.buffer.seek(0)
+            self.buffer.truncate()
 
-        return buffer
+            return buffer
+        except Exception:
+            self.close()
+            raise StopIteration()
 
     @property
     def init_fragment(self):

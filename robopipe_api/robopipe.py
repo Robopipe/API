@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from contextlib import asynccontextmanager
@@ -19,6 +20,7 @@ from .error import (
 from .routers import cameras, controller, streams
 from .stream import stream_service_factory
 from . import __version__
+from pathlib import Path
 
 
 def setup():
@@ -108,6 +110,11 @@ app.include_router(cameras.router)
 app.include_router(streams.router)
 controller.register_device_endpoints(controller.DEVICE_ENDPOINTS)
 app.include_router(controller.router)
+
+# Mount static files for stream viewer
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/", include_in_schema=False)

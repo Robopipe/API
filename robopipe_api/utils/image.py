@@ -11,7 +11,7 @@ class UnsupportedImageFormat(Exception):
 def img_frame_to_pil_image(img_frame: dai.ImgFrame) -> Image.Image:
     img_type = img_frame.getType()
 
-    if img_type == dai.ImgFrame.Type.RAW8:
+    if img_type in (dai.ImgFrame.Type.RAW8, dai.ImgFrame.Type.GRAY8):
         return Image.fromarray(img_frame.getFrame(), "L")
     elif img_type == dai.ImgFrame.Type.RAW16:
         return Image.fromarray((img_frame.getFrame() / 256).astype(np.uint8), "L")
@@ -28,6 +28,7 @@ def img_frame_to_pil_image(img_frame: dai.ImgFrame) -> Image.Image:
 def img_frame_to_video_frame(img_frame: dai.ImgFrame) -> av.VideoFrame:
     FORMAT_MAP = {
         dai.ImgFrame.Type.RAW8: "gray",
+        dai.ImgFrame.Type.GRAY8: "gray",
         dai.ImgFrame.Type.RAW16: "gray",
         dai.ImgFrame.Type.NV12: "nv12",
         dai.ImgFrame.Type.BGR888i: "bgr24",
