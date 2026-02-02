@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Stream - Robopipe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=Space+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Barlow', sans-serif; background: #ffffff; color: #1a1a1a; min-height: 100vh; }
+
+        /* Header */
+        .header { display: flex; align-items: center; padding: 20px 40px; border-bottom: 1px solid #e5e5e5; }
+        .logo { height: 32px; }
+
+        /* Layout */
+        .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
+        h1 { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 28px; margin-bottom: 8px; color: #1a1a1a; }
+        .subtitle { color: #666; font-size: 16px; margin-bottom: 32px; }
+        .footer { text-align: center; padding: 40px 20px; color: #999; font-size: 13px; }
+        .footer a { color: #2ECC71; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        /* Form Controls */
+        .controls { background: #f8f8f8; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        label { font-size: 13px; font-weight: 500; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+        input, select { font-family: 'Space Mono', monospace; font-size: 14px; padding: 12px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #1a1a1a; transition: border-color 0.2s, box-shadow 0.2s; }
+        select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+        select:disabled { background-color: #f0f0f0; cursor: not-allowed; color: #999; }
+        input:focus, select:focus { outline: none; border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15); }
+        input::placeholder { color: #aaa; }
+        .input-with-button { display: flex; gap: 8px; }
+        .input-with-button select { flex: 1; }
+        .method-info { font-size: 12px; color: #888; margin-top: 4px; }
+
+        /* Buttons */
+        .button-group { display: flex; gap: 12px; }
+        button { font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #2ECC71; color: #fff; }
+        .btn-primary:hover:not(:disabled) { background: #27ae60; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3); }
+        .btn-secondary { background: #fff; color: #1a1a1a; border: 1px solid #ddd; }
+        .btn-secondary:hover:not(:disabled) { background: #f5f5f5; border-color: #ccc; }
+        .btn-icon { padding: 12px; background: #fff; border: 1px solid #ddd; }
+        .btn-icon:hover:not(:disabled) { background: #f5f5f5; border-color: #ccc; }
+        .btn-icon svg { width: 16px; height: 16px; display: block; }
+
+        /* Status Indicators */
+        #status { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; margin-bottom: 24px; }
+        #status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; }
+        .connected { background: rgba(46, 204, 113, 0.1); color: #27ae60; }
+        .connected::before { background: #2ECC71; }
+        .disconnected { background: rgba(231, 76, 60, 0.1); color: #c0392b; }
+        .disconnected::before { background: #e74c3c; }
+        .connecting { background: rgba(241, 196, 15, 0.1); color: #d68910; }
+        .connecting::before { background: #f1c40f; animation: pulse 1s infinite; }
+        .recording-indicator { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(231, 76, 60, 0.1); color: #c0392b; border-radius: 6px; font-size: 13px; font-weight: 500; margin-left: 12px; }
+        .recording-indicator::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #e74c3c; animation: pulse 1s infinite; }
+        .recording-indicator.hidden { display: none; }
+
+        /* Video Container */
+        .video-container { background: #1a1a1a; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; }
+        .video-container video, .video-container img, .video-container canvas { width: 100%; height: 100%; object-fit: contain; background: #000; }
+        .hidden { display: none !important; }
+
+        /* Overlays */
+        .error-toast { position: fixed; bottom: 20px; right: 20px; background: #c0392b; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; opacity: 0; transform: translateY(10px); transition: all 0.3s; z-index: 1000; }
+        .error-toast.show { opacity: 1; transform: translateY(0); }
+        .converting-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; }
+        .converting-overlay.hidden { display: none; }
+        .converting-spinner { width: 48px; height: 48px; border: 4px solid #333; border-top-color: #2ECC71; border-radius: 50%; animation: spin 1s linear infinite; }
+        .converting-text { color: white; margin-top: 16px; font-size: 16px; font-weight: 500; }
+        .converting-progress { color: #aaa; margin-top: 8px; font-size: 14px; font-family: 'Space Mono', monospace; }
+
+        /* Animations */
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+         FFmpeg Module - Handles WebM to MP4 conversion using FFmpeg.wasm
+         ═══════════════════════════════════════════════════════════════════════════ -->
+    <script src="/static/ffmpeg/dist/umd/ffmpeg.js"></script>
+    <script>
+    (function() {
+        const { FFmpeg } = FFmpegWASM;
+        const ffmpeg = new FFmpeg();
+        let loaded = false;
+        let loading = false;
+
+        /**
+         * Converts a Blob to Uint8Array for FFmpeg input
+         */
+        async function blobToUint8Array(blob) {
+            return new Uint8Array(await blob.arrayBuffer());
+        }
+
+        /**
+         * Loads FFmpeg WASM module (lazy-loaded, cached)
+         * @returns {Promise<boolean>} True if loaded successfully
+         */
+        window.loadFFmpeg = async function() {
+            if (loaded) return true;
+            if (loading) {
+                while (loading) await new Promise(r => setTimeout(r, 100));
+                return loaded;
+            }
+
+            loading = true;
+            try {
+                console.log('Loading FFmpeg...');
+                await ffmpeg.load({
+                    coreURL: '/static/core/dist/umd/ffmpeg-core.js',
+                    wasmURL: '/static/core/dist/umd/ffmpeg-core.wasm',
+                });
+                loaded = true;
+                console.log('FFmpeg loaded successfully');
+                return true;
+            } catch (e) {
+                console.error('Failed to load FFmpeg:', e);
+                return false;
+            } finally {
+                loading = false;
+            }
+        };
+
+        /**
+         * Converts WebM video to MP4 using FFmpeg
+         * @param {Blob} webmBlob - Input WebM video blob
+         * @param {function} onProgress - Progress callback (negative = seconds processed, 100 = done)
+         * @returns {Promise<Blob>} Output MP4 blob
+         */
+        window.convertToMP4 = async function(webmBlob, onProgress) {
+            if (!loaded && !(await window.loadFFmpeg())) {
+                throw new Error('FFmpeg not available');
+            }
+
+            // Track conversion progress
+            ffmpeg.on('progress', (event) => {
+                if (event.progress === 1) {
+                    onProgress?.(100);
+                } else if (event.time > 0) {
+                    // Report time processed (negative value signals "time" not "percent")
+                    onProgress?.(-parseFloat((event.time / 1000000).toFixed(1)));
+                }
+            });
+
+            // Write input and convert
+            await ffmpeg.writeFile('input.webm', await blobToUint8Array(webmBlob));
+            await ffmpeg.exec([
+                '-i', 'input.webm',
+                '-c:v', 'libx264',
+                '-profile:v', 'baseline',
+                '-level', '3.0',
+                '-preset', 'ultrafast',
+                '-crf', '23',
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
+                '-r', '10',
+                'output.mp4'
+            ]);
+
+            // Read output and cleanup
+            const outputData = await ffmpeg.readFile('output.mp4');
+            await ffmpeg.deleteFile('input.webm');
+            await ffmpeg.deleteFile('output.mp4');
+
+            return new Blob([outputData], { type: 'video/mp4' });
+        };
+
+        // Preload FFmpeg in background after page loads
+        setTimeout(() => window.loadFFmpeg(), 2000);
+    })();
+    </script>
+</head>
+<body>
+    <header class="header">
+        <img src="https://cdn.prod.website-files.com/676e983aac02b65480d76ae2/67714b8570bb4454233a986d_Logo.svg" alt="Robopipe" class="logo">
+    </header>
+
+    <div class="container">
+        <h1>Camera Stream</h1>
+        <p class="subtitle">View live camera feed from DepthAI cameras</p>
+
+        <div class="controls">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="apiUrl">API URL</label>
+                    <input type="text" id="apiUrl" placeholder="http://localhost:8080">
+                </div>
+                <div class="form-group">
+                    <label for="mxid">Camera</label>
+                    <div class="input-with-button">
+                        <select id="mxid" disabled>
+                            <option value="">Loading cameras...</option>
+                        </select>
+                        <button class="btn-icon" onclick="CameraAPI.loadCameras()" title="Refresh cameras">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 2v6h-6"></path>
+                                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                                <path d="M3 22v-6h6"></path>
+                                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="streamName">Stream</label>
+                    <select id="streamName" disabled>
+                        <option value="">Select a camera first</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="streamMethod">Method</label>
+                    <select id="streamMethod">
+                        <option value="mjpeg">MJPEG</option>
+                        <option value="websocket">WebSocket (fMP4)</option>
+                    </select>
+                    <div class="method-info" id="methodInfo">Simple, works everywhere</div>
+                </div>
+                <div class="form-group">
+                    <label for="recordVideo">Record Video</label>
+                    <select id="recordVideo">
+                        <option value="no">No</option>
+                        <option value="mp4">Yes → MP4 (FFmpeg conversion)</option>
+                        <option value="webm">Yes → WebM (no conversion)</option>
+                    </select>
+                    <div class="method-info">MJPEG only</div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" id="connectBtn" onclick="StreamConnection.connect()" disabled>Start Stream</button>
+                <button class="btn-secondary" id="disconnectBtn" onclick="StreamConnection.disconnect()" disabled>Stop</button>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center;">
+            <div id="status" class="disconnected">Disconnected</div>
+            <div id="recordingIndicator" class="recording-indicator hidden">Recording</div>
+        </div>
+
+        <div class="video-container">
+            <img id="mjpegStream" class="hidden" alt="Camera stream">
+            <video id="wsStream" class="hidden" autoplay playsinline muted></video>
+            <canvas id="recordingCanvas" class="hidden"></canvas>
+        </div>
+    </div>
+
+    <footer class="footer">
+        Powered by <a href="https://robopipe.io" target="_blank">Robopipe</a>
+    </footer>
+
+    <div id="errorToast" class="error-toast"></div>
+
+    <div id="convertingOverlay" class="converting-overlay hidden">
+        <div class="converting-spinner"></div>
+        <div class="converting-text">Converting to MP4...</div>
+        <div class="converting-progress" id="convertingProgress">0%</div>
+    </div>
+
+    <script>
+    /* ═══════════════════════════════════════════════════════════════════════════════
+       UI UTILITIES
+       Helper functions for updating the user interface
+       ═══════════════════════════════════════════════════════════════════════════════ */
+    const UI = {
+        /**
+         * Updates the connection status indicator
+         * @param {string} text - Status text to display
+         * @param {'connected'|'disconnected'|'connecting'} state - Visual state
+         */
+        setStatus(text, state) {
+            const el = document.getElementById('status');
+            el.textContent = text;
+            el.className = state;
+        },
+
+        /**
+         * Shows a temporary error toast notification
+         * @param {string} message - Error message to display
+         */
+        showError(message) {
+            const toast = document.getElementById('errorToast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 4000);
+        },
+
+        /**
+         * Gets the API URL from the input field
+         * @returns {string} Base API URL without trailing slash
+         */
+        getApiUrl() {
+            return document.getElementById('apiUrl').value.replace(/\/$/, '');
+        },
+
+        /** Shows the recording indicator */
+        showRecording() {
+            document.getElementById('recordingIndicator').classList.remove('hidden');
+        },
+
+        /** Hides the recording indicator */
+        hideRecording() {
+            document.getElementById('recordingIndicator').classList.add('hidden');
+        },
+
+        /**
+         * Shows/hides the conversion overlay
+         * @param {boolean} show - Whether to show the overlay
+         * @param {string} [progress] - Progress text to display
+         */
+        setConvertingOverlay(show, progress) {
+            const overlay = document.getElementById('convertingOverlay');
+            const progressEl = document.getElementById('convertingProgress');
+            if (show) {
+                overlay.classList.remove('hidden');
+                if (progress) progressEl.textContent = progress;
+            } else {
+                overlay.classList.add('hidden');
+            }
+        }
+    };
+
+    /* ═══════════════════════════════════════════════════════════════════════════════
+       CAMERA API
+       Functions for fetching cameras and streams from the Robopipe API
+       ═══════════════════════════════════════════════════════════════════════════════ */
+    const CameraAPI = {
+        /**
+         * Fetches and populates the camera dropdown
+         * Called on page load and when refresh button is clicked
+         */
+        async loadCameras() {
+            const mxidSelect = document.getElementById('mxid');
+            const streamSelect = document.getElementById('streamName');
+
+            mxidSelect.disabled = true;
+            mxidSelect.innerHTML = '<option value="">Loading cameras...</option>';
+            streamSelect.disabled = true;
+            streamSelect.innerHTML = '<option value="">Select a camera first</option>';
+            document.getElementById('connectBtn').disabled = true;
+
+            try {
+                const response = await fetch(`${UI.getApiUrl()}/cameras/`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const cameras = await response.json();
+                if (cameras.length === 0) {
+                    mxidSelect.innerHTML = '<option value="">No cameras found</option>';
+                    return;
+                }
+
+                mxidSelect.innerHTML = cameras.map(cam =>
+                    `<option value="${cam.mxid}">${cam.name || cam.mxid}</option>`
+                ).join('');
+                mxidSelect.disabled = false;
+
+                await this.loadStreams();
+            } catch (error) {
+                console.error('Failed to load cameras:', error);
+                mxidSelect.innerHTML = '<option value="">Failed to load cameras</option>';
+                UI.showError(`Failed to load cameras: ${error.message}`);
+            }
+        },
+
+        /**
+         * Fetches and populates the stream dropdown for the selected camera
+         * Called when camera selection changes
+         */
+        async loadStreams() {
+            const mxid = document.getElementById('mxid').value;
+            const streamSelect = document.getElementById('streamName');
+
+            if (!mxid) {
+                streamSelect.disabled = true;
+                streamSelect.innerHTML = '<option value="">Select a camera first</option>';
+                document.getElementById('connectBtn').disabled = true;
+                return;
+            }
+
+            streamSelect.disabled = true;
+            streamSelect.innerHTML = '<option value="">Loading streams...</option>';
+
+            try {
+                const response = await fetch(`${UI.getApiUrl()}/cameras/${mxid}/streams/`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const streams = await response.json();
+                if (streams.length === 0) {
+                    streamSelect.innerHTML = '<option value="">No streams available</option>';
+                    return;
+                }
+
+                streamSelect.innerHTML = streams.map(stream => {
+                    const status = stream.active ? ' (active)' : '';
+                    return `<option value="${stream.name}">${stream.name}${status}</option>`;
+                }).join('');
+                streamSelect.disabled = false;
+                document.getElementById('connectBtn').disabled = false;
+            } catch (error) {
+                console.error('Failed to load streams:', error);
+                streamSelect.innerHTML = '<option value="">Failed to load streams</option>';
+                UI.showError(`Failed to load streams: ${error.message}`);
+            }
+        }
+    };
+
+    /* ═══════════════════════════════════════════════════════════════════════════════
+       MJPEG FRAME PARSER
+       Fetches MJPEG stream directly and extracts individual frames for recording.
+       This is necessary because the browser's <img> element caches frames internally,
+       making it impossible to record actual video from the visual updates.
+       ═══════════════════════════════════════════════════════════════════════════════ */
+    const MjpegParser = {
+        abortController: null,
+        frameImageBitmap: null,
+        _frameCount: 0,
+
+        /**
+         * Starts fetching and parsing the MJPEG stream
+         * Extracts individual JPEG frames and creates ImageBitmaps for drawing
+         * @param {string} url - MJPEG stream URL
+         */
+        async start(url) {
+            this.abortController = new AbortController();
+            this._frameCount = 0;
+            console.log('Starting MJPEG frame parser:', url);
+
+            try {
+                const response = await fetch(url, { signal: this.abortController.signal });
+                const reader = response.body.getReader();
+
+                let buffer = new Uint8Array(0);
+                const boundaryBytes = new TextEncoder().encode('--frame');
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    // Append new data to buffer
+                    const newBuffer = new Uint8Array(buffer.length + value.length);
+                    newBuffer.set(buffer);
+                    newBuffer.set(value, buffer.length);
+                    buffer = newBuffer;
+
+                    // Extract complete JPEG frames from buffer
+                    while (true) {
+                        const jpegStart = this._findJpegStart(buffer);
+                        if (jpegStart === -1) break;
+
+                        const nextBoundary = this._findBoundary(buffer, jpegStart, boundaryBytes);
+                        if (nextBoundary === -1) break;
+
+                        // Extract and process JPEG frame
+                        const jpegData = buffer.slice(jpegStart, nextBoundary);
+                        await this._processFrame(jpegData);
+
+                        buffer = buffer.slice(nextBoundary);
+                    }
+
+                    // Prevent memory issues with large buffers
+                    if (buffer.length > 1024 * 1024) {
+                        buffer = buffer.slice(-512 * 1024);
+                    }
+                }
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.error('MJPEG parser error:', e);
+                }
+            }
+        },
+
+        /**
+         * Processes a single JPEG frame
+         * @param {Uint8Array} jpegData - Raw JPEG bytes
+         */
+        async _processFrame(jpegData) {
+            try {
+                const blob = new Blob([jpegData], { type: 'image/jpeg' });
+                this.frameImageBitmap = await createImageBitmap(blob);
+                this._frameCount++;
+
+                if (this._frameCount === 1 || this._frameCount % 30 === 0) {
+                    console.log(`Frame parser: parsed ${this._frameCount} frames (${this.frameImageBitmap.width}x${this.frameImageBitmap.height})`);
+                }
+            } catch (e) {
+                console.warn('Invalid JPEG frame, skipping');
+            }
+        },
+
+        /** Finds JPEG magic bytes (0xFF 0xD8) in buffer */
+        _findJpegStart(buffer) {
+            for (let i = 0; i < buffer.length - 1; i++) {
+                if (buffer[i] === 0xFF && buffer[i + 1] === 0xD8) return i;
+            }
+            return -1;
+        },
+
+        /** Finds boundary marker in buffer after given position */
+        _findBoundary(buffer, startFrom, boundaryBytes) {
+            outer: for (let i = startFrom; i < buffer.length - boundaryBytes.length; i++) {
+                for (let j = 0; j < boundaryBytes.length; j++) {
+                    if (buffer[i + j] !== boundaryBytes[j]) continue outer;
+                }
+                return i;
+            }
+            return -1;
+        },
+
+        /** Stops the parser and cleans up resources */
+        stop() {
+            if (this.abortController) {
+                this.abortController.abort();
+                this.abortController = null;
+            }
+            this.frameImageBitmap = null;
+        }
+    };
+
+    /* ═══════════════════════════════════════════════════════════════════════════════
+       VIDEO RECORDER
+       Records video from canvas using MediaRecorder API.
+       Continuously draws frames from MjpegParser to canvas, which is then
+       captured by the browser at a fixed frame rate.
+       ═══════════════════════════════════════════════════════════════════════════════ */
+    const VideoRecorder = {
+        isRecording: false,
+        mediaRecorder: null,
+        canvasStream: null,
+        recordedChunks: [],
+        animationId: null,
+        mimeType: null,
+
+        /** Configuration */
+        CONFIG: {
+            MAX_WIDTH: 1280,        // Scale down videos wider than this
+            CAPTURE_FPS: 15,        // Canvas capture frame rate
+            BITRATE: 800000,        // 800 Kbps
+            CHUNK_INTERVAL: 1000    // Collect data every 1 second
+        },
+
+        /**
+         * Detects the best supported recording format
+         * @returns {string|null} MIME type or null if none supported
+         */
+        _getSupportedMimeType() {
+            const types = [
+                'video/webm;codecs=vp8',
+                'video/webm;codecs=vp9',
+                'video/webm',
+                'video/mp4;codecs=avc1.42E01E',
+                'video/mp4',
+            ];
+            for (const type of types) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    console.log('Using recording format:', type);
+                    return type;
+                }
+            }
+            return null;
+        },
+
+        /**
+         * Starts recording video from the MJPEG parser frames
+         * Sets up canvas, starts draw loop, then begins MediaRecorder capture
+         */
+        start() {
+            if (this.isRecording) return;
+
+            const canvas = document.getElementById('recordingCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Wait for first frame from parser
+            if (!MjpegParser.frameImageBitmap) {
+                console.log('Waiting for first frame from parser...');
+                setTimeout(() => this.start(), 100);
+                return;
+            }
+
+            // Configure canvas size (scale down if needed)
+            const frame = MjpegParser.frameImageBitmap;
+            const scale = frame.width > this.CONFIG.MAX_WIDTH
+                ? this.CONFIG.MAX_WIDTH / frame.width : 1;
+            canvas.width = Math.round(frame.width * scale);
+            canvas.height = Math.round(frame.height * scale);
+            console.log(`Recording at ${canvas.width}x${canvas.height} (scale: ${scale})`);
+
+            // Start draw loop BEFORE creating stream (ensures frames are being drawn)
+            let frameCount = 0;
+            this.isRecording = true;
+
+            const drawFrame = () => {
+                if (!this.isRecording) return;
+                if (MjpegParser.frameImageBitmap) {
+                    ctx.drawImage(MjpegParser.frameImageBitmap, 0, 0, canvas.width, canvas.height);
+                    if (++frameCount % 100 === 0) {
+                        console.log(`Drew ${frameCount} frames to canvas`);
+                    }
+                }
+                this.animationId = requestAnimationFrame(drawFrame);
+            };
+            drawFrame();
+
+            // Create capture stream (browser samples canvas at this FPS)
+            this.canvasStream = canvas.captureStream(this.CONFIG.CAPTURE_FPS);
+            if (this.canvasStream.getVideoTracks().length === 0) {
+                UI.showError('Failed to capture video from canvas');
+                this.isRecording = false;
+                return;
+            }
+
+            // Initialize MediaRecorder
+            this.mimeType = this._getSupportedMimeType();
+            if (!this.mimeType) {
+                UI.showError('No supported recording format found');
+                this.isRecording = false;
+                return;
+            }
+
+            try {
+                this.mediaRecorder = new MediaRecorder(this.canvasStream, {
+                    mimeType: this.mimeType,
+                    videoBitsPerSecond: this.CONFIG.BITRATE
+                });
+            } catch (e) {
+                console.error('MediaRecorder error:', e);
+                UI.showError('Recording not supported in this browser');
+                this.isRecording = false;
+                return;
+            }
+
+            this.recordedChunks = [];
+
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.recordedChunks.push(event.data);
+                    const totalMB = this.recordedChunks.reduce((sum, c) => sum + c.size, 0) / 1024 / 1024;
+                    console.log(`Recorded chunk: ${event.data.size} bytes (total: ${totalMB.toFixed(2)} MB)`);
+                }
+            };
+
+            this.mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event);
+                UI.showError('Recording error: ' + (event.error?.message || 'Unknown error'));
+            };
+
+            this.mediaRecorder.start(this.CONFIG.CHUNK_INTERVAL);
+            console.log('MediaRecorder started, state:', this.mediaRecorder.state);
+            UI.showRecording();
+        },
+
+        /**
+         * Stops recording and processes the video
+         * Waits for MediaRecorder to finish before cleaning up stream
+         */
+        async stop() {
+            if (!this.isRecording) return;
+            this.isRecording = false;
+            console.log('Stopping recording...');
+
+            // Stop draw loop
+            if (this.animationId) {
+                cancelAnimationFrame(this.animationId);
+                this.animationId = null;
+            }
+
+            UI.hideRecording();
+
+            // Wait for MediaRecorder to finish (stream must stay active!)
+            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                await new Promise(resolve => {
+                    this.mediaRecorder.onstop = resolve;
+                    this.mediaRecorder.stop();
+                });
+            }
+            this.mediaRecorder = null;
+
+            // Now safe to stop stream
+            if (this.canvasStream) {
+                this.canvasStream.getTracks().forEach(track => track.stop());
+                this.canvasStream = null;
+            }
+
+            console.log('Recording stopped, total chunks:', this.recordedChunks.length);
+
+            if (this.recordedChunks.length > 0) {
+                await this._processRecording();
+            }
+        },
+
+        /**
+         * Processes recorded chunks into final video file
+         * Either downloads as WebM or converts to MP4 based on user selection
+         */
+        async _processRecording() {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const streamName = document.getElementById('streamName').value || 'stream';
+            const format = document.getElementById('recordVideo').value;
+
+            // Create WebM blob
+            const webmBlob = new Blob(this.recordedChunks, { type: 'video/webm' });
+            console.log(`WebM blob size: ${(webmBlob.size / 1024 / 1024).toFixed(2)} MB`);
+            this.recordedChunks = [];
+
+            // Direct WebM download (no conversion)
+            if (format === 'webm') {
+                this._downloadBlob(webmBlob, `robopipe-${streamName}-${timestamp}.webm`);
+                console.log('Downloaded recording as WebM');
+                return;
+            }
+
+            // Convert to MP4
+            UI.setConvertingOverlay(true, 'Loading FFmpeg...');
+
+            try {
+                const mp4Blob = await window.convertToMP4(webmBlob, (progress) => {
+                    if (progress === 100) {
+                        UI.setConvertingOverlay(true, 'Finalizing...');
+                    } else if (progress < 0) {
+                        UI.setConvertingOverlay(true, `${-progress}s processed`);
+                    } else {
+                        UI.setConvertingOverlay(true, 'Converting...');
+                    }
+                });
+
+                console.log(`MP4 blob size: ${(mp4Blob.size / 1024 / 1024).toFixed(2)} MB`);
+                this._downloadBlob(mp4Blob, `robopipe-${streamName}-${timestamp}.mp4`);
+                console.log('Downloaded recording as MP4');
+            } catch (e) {
+                console.error('FFmpeg conversion failed:', e);
+                UI.showError('MP4 conversion failed, downloading WebM instead');
+                this._downloadBlob(webmBlob, `robopipe-${streamName}-${timestamp}.webm`);
+            } finally {
+                UI.setConvertingOverlay(false);
+            }
+        },
+
+        /** Helper to trigger blob download */
+        _downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    };
+
+    /* ═══════════════════════════════════════════════════════════════════════════════
+       STREAM CONNECTION
+       Manages connections to MJPEG and WebSocket video streams
+       ═══════════════════════════════════════════════════════════════════════════════ */
+    const StreamConnection = {
+        ws: null,
+        mediaSource: null,
+        sourceBuffer: null,
+        bufferQueue: [],
+
+        /**
+         * Connects to the selected stream using the chosen method
+         */
+        connect() {
+            const method = document.getElementById('streamMethod').value;
+            if (method === 'mjpeg') {
+                this._connectMjpeg();
+            } else {
+                this._connectWebSocket();
+            }
+        },
+
+        /**
+         * Connects to MJPEG stream
+         * If recording is enabled, uses frame parser + canvas display
+         * Otherwise, displays directly via <img> element
+         */
+        _connectMjpeg() {
+            const mxid = document.getElementById('mxid').value;
+            const streamName = document.getElementById('streamName').value;
+
+            if (!mxid || !streamName) {
+                UI.showError('Please select a camera and stream');
+                return;
+            }
+
+            UI.setStatus('Connecting...', 'connecting');
+            document.getElementById('connectBtn').disabled = true;
+            document.getElementById('disconnectBtn').disabled = false;
+
+            const mjpegImg = document.getElementById('mjpegStream');
+            const wsVideo = document.getElementById('wsStream');
+            const canvas = document.getElementById('recordingCanvas');
+            const streamUrl = `${UI.getApiUrl()}/cameras/${mxid}/streams/${streamName}/mjpeg`;
+            const recordOption = document.getElementById('recordVideo').value;
+
+            wsVideo.classList.add('hidden');
+
+            if (recordOption === 'mp4' || recordOption === 'webm') {
+                // Recording mode: parse frames and display on canvas
+                mjpegImg.classList.add('hidden');
+                canvas.classList.remove('hidden');
+
+                MjpegParser.start(streamUrl);
+
+                // Wait for first frame then start recording
+                let waitCount = 0;
+                const waitForFrame = () => {
+                    if (++waitCount > 100) {
+                        UI.showError('Timeout waiting for video frames');
+                        return;
+                    }
+                    if (MjpegParser.frameImageBitmap) {
+                        console.log(`First frame received after ${waitCount * 100}ms`);
+                        UI.setStatus('Connected', 'connected');
+                        VideoRecorder.start();
+                    } else {
+                        if (waitCount % 10 === 0) {
+                            console.log(`Waiting for first frame... (${waitCount * 100}ms)`);
+                        }
+                        setTimeout(waitForFrame, 100);
+                    }
+                };
+                setTimeout(waitForFrame, 100);
+            } else {
+                // View-only mode: display via <img> element
+                mjpegImg.classList.remove('hidden');
+                canvas.classList.add('hidden');
+                mjpegImg.src = streamUrl;
+
+                mjpegImg.onload = () => UI.setStatus('Connected', 'connected');
+                mjpegImg.onerror = () => {
+                    UI.setStatus('Error loading stream', 'disconnected');
+                    UI.showError('Failed to load MJPEG stream');
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                };
+            }
+        },
+
+        /**
+         * Connects to WebSocket stream with fMP4/MSE playback
+         * Uses MediaSource Extensions to play H.264 video
+         */
+        _connectWebSocket() {
+            const mxid = document.getElementById('mxid').value;
+            const streamName = document.getElementById('streamName').value;
+
+            if (!mxid || !streamName) {
+                UI.showError('Please select a camera and stream');
+                return;
+            }
+
+            UI.setStatus('Connecting...', 'connecting');
+            document.getElementById('connectBtn').disabled = true;
+            document.getElementById('disconnectBtn').disabled = false;
+
+            const mjpegImg = document.getElementById('mjpegStream');
+            const wsVideo = document.getElementById('wsStream');
+
+            mjpegImg.classList.add('hidden');
+            wsVideo.classList.remove('hidden');
+
+            // Setup MediaSource for fMP4 playback
+            this.mediaSource = new MediaSource();
+            wsVideo.src = URL.createObjectURL(this.mediaSource);
+
+            this.mediaSource.addEventListener('sourceopen', () => {
+                try {
+                    this.sourceBuffer = this.mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+                    this.sourceBuffer.mode = 'sequence';
+
+                    this.sourceBuffer.addEventListener('updateend', () => {
+                        if (this.bufferQueue.length > 0 && !this.sourceBuffer.updating) {
+                            this.sourceBuffer.appendBuffer(this.bufferQueue.shift());
+                        }
+                    });
+
+                    // Connect WebSocket
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const apiHost = new URL(UI.getApiUrl()).host;
+                    const wsUrl = `${wsProtocol}//${apiHost}/cameras/${mxid}/streams/${streamName}/video`;
+
+                    this.ws = new WebSocket(wsUrl);
+                    this.ws.binaryType = 'arraybuffer';
+
+                    this.ws.onopen = () => UI.setStatus('Connected', 'connected');
+
+                    this.ws.onmessage = (event) => {
+                        const data = new Uint8Array(event.data);
+                        if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                            try {
+                                this.sourceBuffer.appendBuffer(data);
+                            } catch (e) {
+                                this.bufferQueue.push(data);
+                            }
+                        } else {
+                            this.bufferQueue.push(data);
+                        }
+                    };
+
+                    this.ws.onerror = () => {
+                        UI.setStatus('Connection error', 'disconnected');
+                        UI.showError('WebSocket connection error');
+                    };
+
+                    this.ws.onclose = () => {
+                        UI.setStatus('Disconnected', 'disconnected');
+                        document.getElementById('connectBtn').disabled = false;
+                        document.getElementById('disconnectBtn').disabled = true;
+                    };
+                } catch (e) {
+                    console.error('MediaSource error:', e);
+                    UI.showError(`MediaSource error: ${e.message}`);
+                }
+            });
+        },
+
+        /**
+         * Disconnects from current stream and cleans up all resources
+         */
+        async disconnect() {
+            const mjpegImg = document.getElementById('mjpegStream');
+            const wsVideo = document.getElementById('wsStream');
+            const canvas = document.getElementById('recordingCanvas');
+
+            // Stop MJPEG
+            mjpegImg.src = '';
+            mjpegImg.classList.add('hidden');
+            canvas.classList.add('hidden');
+
+            MjpegParser.stop();
+            await VideoRecorder.stop();
+
+            // Stop WebSocket
+            if (this.ws) {
+                this.ws.close();
+                this.ws = null;
+            }
+
+            if (this.mediaSource && this.mediaSource.readyState === 'open') {
+                try { this.mediaSource.endOfStream(); } catch (e) {}
+            }
+            this.mediaSource = null;
+            this.sourceBuffer = null;
+            this.bufferQueue = [];
+
+            wsVideo.src = '';
+            wsVideo.classList.add('hidden');
+
+            UI.setStatus('Disconnected', 'disconnected');
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+        }
+    };
+
+    /* ═══════════════════════════════════════════════════════════════════════════════
+       INITIALIZATION
+       Set up event listeners and load initial data
+       ═══════════════════════════════════════════════════════════════════════════════ */
+    (function init() {
+        // Set API URL from current location
+        document.getElementById('apiUrl').value = window.location.origin;
+
+        // Update method info when stream method changes
+        document.getElementById('streamMethod').addEventListener('change', (e) => {
+            document.getElementById('methodInfo').textContent =
+                e.target.value === 'mjpeg' ? 'Simple, works everywhere' : 'Lower bandwidth, H.264 encoded';
+        });
+
+        // Reload streams when camera changes
+        document.getElementById('mxid').addEventListener('change', () => CameraAPI.loadStreams());
+
+        // Reload cameras when API URL changes
+        document.getElementById('apiUrl').addEventListener('change', () => CameraAPI.loadCameras());
+
+        // Load cameras on page load
+        CameraAPI.loadCameras();
+    })();
+    </script>
+</body>
+</html>

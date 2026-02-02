@@ -15,7 +15,7 @@ class DevicePlatform(Enum):
 class DeviceProtocol(Enum):
     X_LINK_ANY_PROTOCOL = dai.XLinkProtocol.X_LINK_ANY_PROTOCOL.name
     X_LINK_IPC = dai.XLinkProtocol.X_LINK_IPC.name
-    X_LINK_NMB_OF_PROTOCOLS = dai.XLinkProtocol.name
+    X_LINK_NMB_OF_PROTOCOLS = dai.XLinkProtocol.X_LINK_NMB_OF_PROTOCOLS.name
     X_LINK_PCIE = dai.XLinkProtocol.X_LINK_PCIE.name
     X_LINK_TCP_IP = dai.XLinkProtocol.X_LINK_TCP_IP.name
     X_LINK_USB_CDC = dai.XLinkProtocol.X_LINK_USB_CDC.name

@@ -29,8 +29,11 @@ class Camera:
     def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
         self.mxid = mxid
         self.boot_name = name if name == Camera.DEFAULT_POE_IP else mxid
+        logger.debug(f"[Camera.__init__] Creating device with boot_name={self.boot_name}")
         self.camera_handle = dai.Device(self.boot_name)
+        logger.debug(f"[Camera.__init__] Device created, creating pipeline")
         self.pipeline = pipeline or EmptyPipeline(None, self.camera_handle)
+        logger.debug(f"[Camera.__init__] Pipeline created: {type(self.pipeline).__name__}")
         self.__boot_camera()
         self.camera_name: str = self.camera_handle.getDeviceName()
         self.sensors: dict[str, SensorBase] = {}
@@ -59,18 +62,22 @@ class Camera:
     def __boot_camera(self, retries: int = 5, timeout_base: float = 1):
         timeout = timeout_base
         last_exception = None
+        logger.debug(f"[Camera.__boot_camera] Starting pipeline boot (retries={retries})")
 
-        for _ in range(retries):
+        for attempt in range(retries):
             try:
+                logger.debug(f"[Camera.__boot_camera] Attempt {attempt + 1}/{retries} - calling pipeline.start()")
                 self.pipeline.pipeline.start()
+                logger.debug(f"[Camera.__boot_camera] Pipeline started successfully")
                 return
             except Exception as e:
-                print(f"Error starting pipeline: {e}")
+                logger.error(f"[Camera.__boot_camera] Attempt {attempt + 1} failed: {e}")
                 # self.pipeline.pipeline.stop()
                 last_exception = e
                 time.sleep(timeout)
                 timeout *= 2
 
+        logger.error(f"[Camera.__boot_camera] All {retries} attempts failed")
         raise CameraException(last_exception)
 
     def __get_sensor_queues(self, sensor_name: str, q_type_input: bool):
@@ -112,14 +119,19 @@ class Camera:
         existing_sensors = self.sensors
         self.sensors = {}
         restart_pipeline = lambda: self.open(self.pipeline)
-        print(self.all_sensors, self.__get_sensor_queues("CAM_A", False))
+        print(f"[reload_sensors] all_sensors: {list(self.all_sensors.keys())}")
+        print(f"[reload_sensors] pipeline.cameras: {list(self.pipeline.cameras.keys())}")
+        print(f"[reload_sensors] pipeline.output_queues: {self.pipeline.output_queues}")
         for [sensor_name, sensor_features] in self.all_sensors.items():
             if sensor_name in self.pipeline.cameras:
+                input_queues = self.__get_sensor_queues(sensor_name, True)
+                output_queues = self.__get_sensor_queues(sensor_name, False)
+                print(f"[reload_sensors] Creating sensor {sensor_name} with output_queues: {list(output_queues.keys())}")
                 sensor = Sensor(
                     sensor_features,
                     self.pipeline.cameras[sensor_name],
-                    self.__get_sensor_queues(sensor_name, True),
-                    self.__get_sensor_queues(sensor_name, False),
+                    input_queues,
+                    output_queues,
                     restart_pipeline,
                 )
 
@@ -147,16 +159,26 @@ class Camera:
 
     def close(self):
         if self.camera_handle is not None:
-            self.pipeline.pipeline.stop()
-            self.pipeline = None
+            if self.pipeline is not None:
+                try:
+                    self.pipeline.pipeline.stop()
+                except Exception:
+                    pass  # Pipeline might already be stopped
+                self.pipeline = None
             self.camera_handle.close()
             self.camera_handle = None
             logger.debug(f"Closed camera {self.mxid}")
 
-    def open(self):
+    def open(self, pipeline: Pipeline | None = None):
+        logger.debug(f"[Camera.open] Closing existing connection")
         self.close()
+        logger.debug(f"[Camera.open] Creating new device with boot_name={self.boot_name}")
         self.camera_handle = dai.Device(self.boot_name)
-        logger.debug(f"Opened camera {self.mxid}")
+        logger.debug(f"[Camera.open] Device created successfully for {self.mxid}")
+
+        if pipeline is not None:
+            logger.debug(f"[Camera.open] Running pipeline: {type(pipeline).__name__}")
+            self.run_pipeline(pipeline)
 
         return self
 
@@ -175,18 +197,33 @@ class Camera:
         if not isinstance(self.pipeline, StreamingPipeline):
             raise RuntimeError("Serve is in invalid state")
 
+        # In v3, cannot modify built pipeline - must recreate with new sensor list
+        # Collect currently active sensors
+        active_sensors = [
+            self.all_sensors[name]
+            for name in self.pipeline.cameras.keys()
+            if name in self.all_sensors
+        ]
+
+        # Add the new sensor
+        if sensor_name in self.all_sensors:
+            new_sensor = self.all_sensors[sensor_name]
+            if new_sensor not in active_sensors:
+                active_sensors.append(new_sensor)
+
+        # Close and reopen with fresh pipeline
+        self.close()
+        self.camera_handle = dai.Device(self.boot_name)
+
         if sensor_name.startswith("DEPTH"):
             left, right = sensor_name.split("_")[1:]
             stereo_pair = (f"CAM_{left}", f"CAM_{right}")
-
-            if isinstance(self.pipeline, DepthPipeline):
-                self.pipeline.add_stereo_pair(*stereo_pair)
-            else:
-                self.pipeline = DepthPipeline(stereo_pair, [], self.pipeline.pipeline)
+            self.pipeline = DepthPipeline(stereo_pair, active_sensors, device=self.camera_handle)
         else:
-            self.pipeline.add_sensor(self.all_sensors[sensor_name])
+            self.pipeline = StreamingPipeline(active_sensors, device=self.camera_handle)
 
-        self.open(self.pipeline)
+        self.__boot_camera()
+        self.reload_sensors()
 
     def deactivate_sensor(self, sensor_name: str):
         if self.camera_handle is None:
@@ -195,15 +232,45 @@ class Camera:
         if not isinstance(self.pipeline, StreamingPipeline):
             raise RuntimeError("Server is in invalid state")
 
-        self.pipeline.remove_sensor(sensor_name)
-        self.open(self.pipeline)
+        # In v3, cannot modify built pipeline - must recreate without this sensor
+        # Collect currently active sensors, excluding the one to deactivate
+        active_sensors = [
+            self.all_sensors[name]
+            for name in self.pipeline.cameras.keys()
+            if name in self.all_sensors and name != sensor_name
+        ]
 
-    def deploy_nn(self, sensor_name: str, blob: dai.OpenVINO.Blob, config: NNConfig):
+        # Close and reopen with fresh pipeline
+        self.close()
+        self.camera_handle = dai.Device(self.boot_name)
+
+        self.pipeline = StreamingPipeline(active_sensors, device=self.camera_handle)
+
+        self.__boot_camera()
+        self.reload_sensors()
+
+    def _check_device_connected(self, context: str) -> bool:
+        """Check if device is still connected and log the status."""
+        try:
+            if self.camera_handle is None:
+                logger.warning(f"[Device Check - {context}] camera_handle is None")
+                return False
+            # Try to query something to see if device is alive
+            connected = not self.camera_handle.isClosed()
+            logger.debug(f"[Device Check - {context}] Device connected: {connected}")
+            return connected
+        except Exception as e:
+            logger.error(f"[Device Check - {context}] Error checking device: {e}")
+            return False
+
+    def deploy_nn(self, sensor_name: str, blob: dai.OpenVINO.Blob | dai.NNArchive, config: NNConfig):
+        logger.debug(f"[Camera.deploy_nn] Deploying NN to sensor={sensor_name}, type={config.type}")
         nn_config_cls = Camera.NN_CONFIG_MAP.get(config.type)
 
         if nn_config_cls is None:
             raise ValueError(f"Invalid NNConfig type: {config.type}")
 
+        logger.debug(f"[Camera.deploy_nn] Creating NN config: {nn_config_cls.__name__}")
         nn = nn_config_cls(
             sensor_name,
             self.all_sensors[sensor_name],
@@ -211,11 +278,29 @@ class Camera:
             config.num_inference_threads,
             **(config.nn_config.model_dump() if config.nn_config is not None else {}),
         )
+        logger.debug(f"[Camera.deploy_nn] NN config created, input_shape={nn.input_shape}")
 
         self.sensors[sensor_name].nn_config = config
-        self.pipeline = NNPipeline([nn], self.pipeline.pipeline)
 
-        self.open(self.pipeline)
+        # In v3, cannot add queues to a built pipeline - must create fresh one
+        logger.debug(f"[Camera.deploy_nn] Closing existing device connection")
+        self.close()
+        logger.debug(f"[Camera.deploy_nn] Creating new device with boot_name={self.boot_name}")
+        self.camera_handle = dai.Device(self.boot_name)
+        self._check_device_connected("after device creation")
+
+        logger.debug(f"[Camera.deploy_nn] Device created, now creating NNPipeline")
+
+        # Create fresh NNPipeline with device (not reusing old pipeline)
+        self.pipeline = NNPipeline([nn], device=self.camera_handle)
+        self._check_device_connected("after NNPipeline creation")
+
+        logger.debug(f"[Camera.deploy_nn] NNPipeline created, booting camera")
+
+        self.__boot_camera()
+        logger.debug(f"[Camera.deploy_nn] Camera booted, reloading sensors")
+        self.reload_sensors()
+        logger.debug(f"[Camera.deploy_nn] NN deployment complete")
 
     def delete_nn(self, sensor_name: str):
         if isinstance(self.pipeline, NNPipeline):
