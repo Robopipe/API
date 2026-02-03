@@ -48,7 +48,6 @@ class StreamingPipeline(Pipeline):
         cam = self.pipeline.create(dai.node.Camera)
         self._check_device(f"after creating Camera node for {sensor_name}")
         logger.debug(f"[StreamingPipeline.add_sensor] Building Camera node with socket={sensor.socket}")
-        cam.build(sensor.socket, sensorFps=28)
         self._check_device(f"after building Camera node for {sensor_name}")
         logger.debug(f"[StreamingPipeline.add_sensor] Camera node built for {sensor_name}")
         self.cameras[sensor_name] = cam
@@ -80,7 +79,8 @@ class StreamingPipeline(Pipeline):
         else:
             still_config = min(valid_configs, key=lambda c: c.width * c.height)
         still_size = (still_config.width, still_config.height)
-
+        cam.setMaxSizePools(1, 1, 1)  # 3 bytes per pixel, 4 frames buffer for video, 2 frames buffer for still
+        cam.build(sensor.socket, sensorFps=28, sensorResolution=still_size)
         video_out = cam.requestOutput(
             size=video_size,
             type=frame_type,
