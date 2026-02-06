@@ -30,6 +30,8 @@ class StreamingPipeline(Pipeline):
 
     def add_sensor(self, sensor: dai.CameraFeatures):
         sensor_name = sensor.socket.name
+        if sensor_name != 'CAM_A':
+            return
         logger.debug(f"[StreamingPipeline.add_sensor] Adding sensor: {sensor_name}")
 
         if sensor_name in self.cameras:
@@ -54,7 +56,7 @@ class StreamingPipeline(Pipeline):
 
         # Determine frame type based on sensor type
         is_mono = dai.CameraSensorType.MONO in sensor.supportedTypes
-        frame_type = dai.ImgFrame.Type.GRAY8 if is_mono else dai.ImgFrame.Type.NV12
+        frame_type = dai.ImgFrame.Type.YUV420p if is_mono else dai.ImgFrame.Type.NV12
 
         target_fps = 28
         max_video_pixels = 1920 * 1080
@@ -79,78 +81,30 @@ class StreamingPipeline(Pipeline):
         else:
             still_config = min(valid_configs, key=lambda c: c.width * c.height)
         still_size = (still_config.width, still_config.height)
-        cam.setMaxSizePools(1, 1, 1)  # 3 bytes per pixel, 4 frames buffer for video, 2 frames buffer for still
-        cam.build(sensor.socket, sensorFps=28, sensorResolution=still_size)
-        video_out = cam.requestOutput(
+        cam.setMaxSizePools(1, 1, 1)
+        cam.build(sensor.socket, sensorFps=28)
+        video_output = cam.requestOutput(
             size=video_size,
             type=frame_type,
             resizeMode=dai.ImgResizeMode.STRETCH,
             fps=target_fps,
-        ).createOutputQueue(maxSize=4, blocking=False)
-        still_out = cam.requestOutput(
-            size=still_size, type=frame_type, fps=target_fps
-        ).createOutputQueue(maxSize=2, blocking=False)
+        )
+        # still_out = cam.requestOutput(
+        #     size=still_size, type=frame_type, fps=target_fps
+        # ).createOutputQueue(maxSize=2, blocking=False)
+        video_enc = self.pipeline.create(dai.node.VideoEncoder)
+        video_enc.setDefaultProfilePreset(28, dai.VideoEncoderProperties.Profile.H264_MAIN)
+        # video_enc.setLossless(True)
+        # video_enc.setQuality(10)
+        video_enc.setNumFramesPool(10)
+        video_enc.setMaxOutputFrameSize(5 * 1024 * 1024)  # 2 MB
+        video_output.link(video_enc.input)
+        # video_out = video_enc.bitstream.createOutputQueue(
+        #     maxSize=1, blocking=False
+        # )
+        video_out = video_enc.out.createOutputQueue(maxSize=1, blocking=False)
         self.add_queue(video_out, PipelineQueueType.VIDEO, sensor_name, False)
-        self.add_queue(still_out, PipelineQueueType.STILL, sensor_name, False)
-        # cam_control = cam.inputControl.createInputQueue()
-        # self.add_queue(cam_control, PipelineQueueType.CONTROL, sensor_name, True)
-        # cam_control = self.create_x_link(sensor_name, PipelineQueueType.CONTROL, True)
-        # cam_still = self.create_x_link(
-        #     sensor_name, PipelineQueueType.STILL, False, False, 1
-        # )
-        # cam_video = self.create_x_link(
-        #     sensor_name, PipelineQueueType.VIDEO, False, False, 1
-        # )
-
-        # if not (
-        #     dai.CameraSensorType.COLOR in sensor.supportedTypes
-        #     or dai.CameraSensorType.MONO in sensor.supportedTypes
-        # ):
-        #     print(sensor.supportedTypes)
-        #     raise ValueError(
-        #         f"Sensor {sensor_name} does not support COLOR or MONO camera types."
-        #     )
-        # cam_config = self.pipeline.create(dai.ImageManipConfig)
-        # cam_config = self.create_x_link(sensor_name, PipelineQueueType.CONFIG, True)
-        # cam = self.pipeline.create(dai.node.Camera)
-        # print("aaaaa")
-        # cam.build(sensor.socket)
-        # print("bbbbb")
-        # cam.requestFullResolutionOutput().createOutputQueue()
-        # cam.inputControl.createInputQueue()
-        # cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
-        # cam_config.out.link(cam.inputConfig)
-        # cam.still.link(cam_still.input)
-        # cam.video.link(cam_video.input)
-        # elif dai.CameraSensorType.MONO in sensor.supportedTypes:
-        #     cam = self.pipeline.create(dai.node.Camera)
-        #     cam.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
-
-        #     script = self.pipeline.createScript()
-        #     script.setScript(
-        #         """
-        #             while True:
-        #                 frame = node.io['in'].get()
-        #                 node.io['video'].send(frame)
-        #                 node.io['still'].send(frame)
-
-        #                 if "preview" in node.io:
-        #                     node.io['preview'].send(frame)
-        #         """
-        #     )
-
-        #     script.inputs["in"].setBlocking(False)
-        #     script.inputs["in"].setQueueSize(1)
-        #     cam.out.link(script.inputs["in"])
-        #     script.outputs["still"].link(cam_still.input)
-        #     script.outputs["video"].link(cam_video.input)
-        #     self.scripts[sensor_name] = script
-        # else:
-        #     return
-
-        # self.cameras[sensor_name] = cam
-
-        # cam_control.out.link(cam.inputControl)
+        # self.add_queue(still_out, PipelineQueueType.STILL, sensor_name, False)
 
     def remove_sensor(self, sensor_name: str):
         if sensor_name not in self.cameras:

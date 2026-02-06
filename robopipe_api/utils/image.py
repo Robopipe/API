@@ -16,7 +16,9 @@ def img_frame_to_pil_image(img_frame: dai.ImgFrame) -> Image.Image:
     elif img_type == dai.ImgFrame.Type.RAW16:
         return Image.fromarray((img_frame.getFrame() / 256).astype(np.uint8), "L")
     elif img_type == dai.ImgFrame.Type.NV12:
-        return av.VideoFrame.from_ndarray(img_frame.getFrame(), "nv12").to_image()
+        img = av.VideoFrame.from_ndarray(img_frame.getFrame(), "nv12").to_image()
+        # remove last 4 bottom pixels which are padding in depthai NV12 frames
+        return img.crop((0, 0, img.width, img.height - 5))
     elif img_type == dai.ImgFrame.Type.BGR888i:
         return Image.fromarray(img_frame.getFrame()[..., ::-1])
     elif img_type == dai.ImgFrame.Type.BGR888p:
@@ -47,4 +49,8 @@ def img_frame_to_video_frame(img_frame: dai.ImgFrame) -> av.VideoFrame:
         img_frame = img_frame.getFrame().transpose((1, 2, 0))
         return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
 
-    return av.VideoFrame.from_ndarray(img_frame.getFrame(), FORMAT_MAP[img_type])
+    img_frame = av.VideoFrame.from_ndarray(img_frame.getFrame(), FORMAT_MAP[img_type])
+    # remove last 4 bottom pixels which are padding in depthai NV12 frames
+    # if img_type == dai.ImgFrame.Type.NV12:
+    #     img_frame = img_frame.crop(0, 0, img_frame.width, img_frame.height - 4)
+    return img_frame

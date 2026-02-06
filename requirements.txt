@@ -2,6 +2,7 @@ annotated-types==0.7.0
 anyio==4.6.2.post1
 asyncowfs @ git+https://github.com/UniPiTechnology/asyncowfs@2b524dc9afaa65fd2f3035c7304a87284678b1fc
 attrs==25.1.0
+aiortc==1.9.0
 av==13.1.0
 build==1.2.2.post1
 certifi==2025.4.26

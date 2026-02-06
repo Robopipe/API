@@ -72,26 +72,13 @@ class SensorBase(ABC):
 
     def get_video_frame(self):
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
-        dai_frame = video_queue.tryGet()
+        frame = video_queue.getAll()[-1]
+        # if frame is not None:
+        #     self.last_frame = frame
+        # elif self.last_frame is None:
+        #     self.last_frame = video_queue.get()
 
-        if dai_frame is not None:
-            # Drain any additional queued frames to get the latest and prevent buildup
-            while True:
-                next_frame = video_queue.tryGet()
-                if next_frame is None:
-                    break
-                dai_frame = next_frame
-
-            # Clean up old frame before replacing
-            if self.last_frame is not None:
-                del self.last_frame
-            self.last_frame = img_frame_to_video_frame(dai_frame)
-        elif self.last_frame is None:
-            # Blocking get only if we have no frame at all
-            dai_frame = video_queue.get()
-            self.last_frame = img_frame_to_video_frame(dai_frame)
-
-        return self.last_frame
+        return frame
 
     def get_nn_frame(self):
         try:
