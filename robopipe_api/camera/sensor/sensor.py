@@ -3,6 +3,7 @@ import depthai as dai
 import math
 from typing import Callable
 
+from ...log import logger
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from .sensor_config import SensorConfig, SensorConfigProperties
 from .sensor_control import SensorControl
