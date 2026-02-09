@@ -1,530 +1,862 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebRTC Stream - Robopipe</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=Space+Mono&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=Space+Mono&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Barlow', sans-serif; background: #ffffff; color: #1a1a1a; min-height: 100vh; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: "Barlow", sans-serif;
+        background: #ffffff;
+        color: #1a1a1a;
+        min-height: 100vh;
+      }
 
-        /* Header */
-        .header { display: flex; align-items: center; padding: 20px 40px; border-bottom: 1px solid #e5e5e5; }
-        .logo { height: 32px; }
+      /* Header */
+      .header {
+        display: flex;
+        align-items: center;
+        padding: 20px 40px;
+        border-bottom: 1px solid #e5e5e5;
+      }
+      .logo {
+        height: 32px;
+      }
 
-        /* Layout */
-        .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
-        h1 { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 28px; margin-bottom: 8px; color: #1a1a1a; }
-        .subtitle { color: #666; font-size: 16px; margin-bottom: 32px; }
-        .footer { text-align: center; padding: 40px 20px; color: #999; font-size: 13px; }
-        .footer a { color: #2ECC71; text-decoration: none; }
-        .footer a:hover { text-decoration: underline; }
+      /* Layout */
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 40px 20px;
+      }
+      h1 {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 600;
+        font-size: 28px;
+        margin-bottom: 8px;
+        color: #1a1a1a;
+      }
+      .subtitle {
+        color: #666;
+        font-size: 16px;
+        margin-bottom: 32px;
+      }
+      .footer {
+        text-align: center;
+        padding: 40px 20px;
+        color: #999;
+        font-size: 13px;
+      }
+      .footer a {
+        color: #2ecc71;
+        text-decoration: none;
+      }
+      .footer a:hover {
+        text-decoration: underline;
+      }
 
-        /* Form Controls */
-        .controls { background: #f8f8f8; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
-        .form-group { display: flex; flex-direction: column; gap: 6px; }
-        label { font-size: 13px; font-weight: 500; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
-        input, select { font-family: 'Space Mono', monospace; font-size: 14px; padding: 12px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #1a1a1a; transition: border-color 0.2s, box-shadow 0.2s; }
-        select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
-        select:disabled { background-color: #f0f0f0; cursor: not-allowed; color: #999; }
-        input:focus, select:focus { outline: none; border-color: #2ECC71; box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15); }
-        input::placeholder { color: #aaa; }
+      /* Form Controls */
+      .controls {
+        background: #f8f8f8;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 24px;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      input,
+      select {
+        font-family: "Space Mono", monospace;
+        font-size: 14px;
+        padding: 12px 14px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fff;
+        color: #1a1a1a;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+      select {
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        padding-right: 36px;
+      }
+      select:disabled {
+        background-color: #f0f0f0;
+        cursor: not-allowed;
+        color: #999;
+      }
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: #2ecc71;
+        box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.15);
+      }
+      input::placeholder {
+        color: #aaa;
+      }
 
-        /* Buttons */
-        .button-group { display: flex; gap: 12px; flex-wrap: wrap; }
-        button { font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-primary { background: #2ECC71; color: #fff; }
-        .btn-primary:hover:not(:disabled) { background: #27ae60; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3); }
-        .btn-danger { background: #e74c3c; color: #fff; }
-        .btn-danger:hover:not(:disabled) { background: #c0392b; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
-        .btn-secondary { background: #fff; color: #1a1a1a; border: 1px solid #ddd; }
-        .btn-secondary:hover:not(:disabled) { background: #f5f5f5; border-color: #ccc; }
+      /* Buttons */
+      .button-group {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      button {
+        font-family: "Barlow", sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-primary {
+        background: #2ecc71;
+        color: #fff;
+      }
+      .btn-primary:hover:not(:disabled) {
+        background: #27ae60;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+      }
+      .btn-danger {
+        background: #e74c3c;
+        color: #fff;
+      }
+      .btn-danger:hover:not(:disabled) {
+        background: #c0392b;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+      }
+      .btn-secondary {
+        background: #fff;
+        color: #1a1a1a;
+        border: 1px solid #ddd;
+      }
+      .btn-secondary:hover:not(:disabled) {
+        background: #f5f5f5;
+        border-color: #ccc;
+      }
 
-        /* Status Indicators */
-        #status { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; margin-bottom: 24px; }
-        #status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; }
-        .connected { background: rgba(46, 204, 113, 0.1); color: #27ae60; }
-        .connected::before { background: #2ECC71; }
-        .disconnected { background: rgba(231, 76, 60, 0.1); color: #c0392b; }
-        .disconnected::before { background: #e74c3c; }
-        .connecting { background: rgba(241, 196, 15, 0.1); color: #d68910; }
-        .connecting::before { background: #f1c40f; animation: pulse 1s infinite; }
+      /* Status Indicators */
+      #status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 24px;
+      }
+      #status::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .connected {
+        background: rgba(46, 204, 113, 0.1);
+        color: #27ae60;
+      }
+      .connected::before {
+        background: #2ecc71;
+      }
+      .disconnected {
+        background: rgba(231, 76, 60, 0.1);
+        color: #c0392b;
+      }
+      .disconnected::before {
+        background: #e74c3c;
+      }
+      .connecting {
+        background: rgba(241, 196, 15, 0.1);
+        color: #d68910;
+      }
+      .connecting::before {
+        background: #f1c40f;
+        animation: pulse 1s infinite;
+      }
 
-        /* Video Container */
-        .video-container { background: #1a1a1a; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; position: relative; }
-        .video-container video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .video-placeholder { color: #666; font-size: 16px; text-align: center; padding: 20px; }
-        .video-placeholder svg { display: block; margin: 0 auto 12px; opacity: 0.3; }
+      /* Video Container */
+      .video-container {
+        background: #1a1a1a;
+        border-radius: 12px;
+        overflow: hidden;
+        aspect-ratio: 16/9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+      .video-container video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+      }
+      .video-placeholder {
+        color: #666;
+        font-size: 16px;
+        text-align: center;
+        padding: 20px;
+      }
+      .video-placeholder svg {
+        display: block;
+        margin: 0 auto 12px;
+        opacity: 0.3;
+      }
 
-        /* Stats Panel */
-        .stats { background: #f8f8f8; border-radius: 12px; padding: 20px 24px; margin-top: 24px; }
-        .stats h3 { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-        .stat-item { display: flex; flex-direction: column; gap: 2px; }
-        .stat-label { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-        .stat-value { font-family: 'Space Mono', monospace; font-size: 14px; color: #1a1a1a; }
+      /* Stats Panel */
+      .stats {
+        background: #f8f8f8;
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-top: 24px;
+      }
+      .stats h3 {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #1a1a1a;
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+      }
+      .stat-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .stat-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .stat-value {
+        font-family: "Space Mono", monospace;
+        font-size: 14px;
+        color: #1a1a1a;
+      }
 
-        /* Log */
-        .log-container { background: #f8f8f8; border-radius: 12px; padding: 20px 24px; margin-top: 24px; }
-        .log-container h3 { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
-        .log { font-family: 'Space Mono', monospace; font-size: 12px; background: #1a1a1a; color: #aaa; border-radius: 8px; padding: 16px; max-height: 200px; overflow-y: auto; }
-        .log .info { color: #2ECC71; }
-        .log .warn { color: #f1c40f; }
-        .log .error { color: #e74c3c; }
-        .log div { padding: 2px 0; word-break: break-all; }
+      /* Log */
+      .log-container {
+        background: #f8f8f8;
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-top: 24px;
+      }
+      .log-container h3 {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #1a1a1a;
+      }
+      .log {
+        font-family: "Space Mono", monospace;
+        font-size: 12px;
+        background: #1a1a1a;
+        color: #aaa;
+        border-radius: 8px;
+        padding: 16px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .log .info {
+        color: #2ecc71;
+      }
+      .log .warn {
+        color: #f1c40f;
+      }
+      .log .error {
+        color: #e74c3c;
+      }
+      .log div {
+        padding: 2px 0;
+        word-break: break-all;
+      }
 
-        /* Error Toast */
-        .error-toast { position: fixed; bottom: 20px; right: 20px; background: #c0392b; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; opacity: 0; transform: translateY(10px); transition: all 0.3s; z-index: 1000; }
-        .error-toast.show { opacity: 1; transform: translateY(0); }
+      /* Error Toast */
+      .error-toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #c0392b;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: all 0.3s;
+        z-index: 1000;
+      }
+      .error-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
 
-        /* Animations */
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      /* Animations */
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
     </style>
-</head>
-<body>
-
+  </head>
+  <body>
     <!-- Header -->
     <div class="header">
-        <svg class="logo" viewBox="0 0 180 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <text x="0" y="24" font-family="Space Grotesk, sans-serif" font-size="24" font-weight="600" fill="#1a1a1a">Robopipe</text>
-            <text x="120" y="24" font-family="Space Mono, monospace" font-size="14" fill="#2ECC71">WebRTC</text>
-        </svg>
+      <svg
+        class="logo"
+        viewBox="0 0 180 32"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <text
+          x="0"
+          y="24"
+          font-family="Space Grotesk, sans-serif"
+          font-size="24"
+          font-weight="600"
+          fill="#1a1a1a"
+        >
+          Robopipe
+        </text>
+        <text
+          x="120"
+          y="24"
+          font-family="Space Mono, monospace"
+          font-size="14"
+          fill="#2ECC71"
+        >
+          WebRTC
+        </text>
+      </svg>
     </div>
 
     <div class="container">
-        <h1>WebRTC Video Stream</h1>
-        <p class="subtitle">Low-latency peer-to-peer video stream from camera sensors</p>
+      <h1>WebRTC Video Stream</h1>
+      <p class="subtitle">
+        Low-latency peer-to-peer video stream from camera sensors
+      </p>
 
-        <!-- Controls -->
-        <div class="controls">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label for="host">API Host</label>
-                    <input type="text" id="host" placeholder="e.g. 192.168.1.100:8000">
-                </div>
-                <div class="form-group">
-                    <label for="mxid">Camera MXID</label>
-                    <input type="text" id="mxid" placeholder="e.g. 18443010B1FA0E1300">
-                </div>
-                <div class="form-group">
-                    <label for="stream">Stream Name</label>
-                    <select id="stream">
-                        <option value="CAM_A">CAM_A</option>
-                        <option value="CAM_B">CAM_B</option>
-                        <option value="CAM_C">CAM_C</option>
-                        <option value="CAM_D">CAM_D</option>
-                    </select>
-                </div>
-            </div>
-            <div class="button-group">
-                <button id="btnConnect" class="btn-primary" onclick="connect()">Connect</button>
-                <button id="btnDisconnect" class="btn-danger" onclick="disconnect()" disabled>Disconnect</button>
-                <button id="btnLoadCameras" class="btn-secondary" onclick="loadCameras()">Load Cameras</button>
-            </div>
+      <!-- Controls -->
+      <div class="controls">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="host">API Host</label>
+            <input
+              type="text"
+              id="host"
+              placeholder="e.g. 192.168.1.100:8000"
+            />
+          </div>
+          <div class="form-group">
+            <label for="mxid">Camera MXID</label>
+            <input
+              type="text"
+              id="mxid"
+              placeholder="e.g. 18443010B1FA0E1300"
+            />
+          </div>
+          <div class="form-group">
+            <label for="stream">Stream Name</label>
+            <select id="stream">
+              <option value="CAM_A">CAM_A</option>
+              <option value="CAM_B">CAM_B</option>
+              <option value="CAM_C">CAM_C</option>
+              <option value="CAM_D">CAM_D</option>
+            </select>
+          </div>
         </div>
-
-        <!-- Status -->
-        <div id="status" class="disconnected">Disconnected</div>
-
-        <!-- Video -->
-        <div class="video-container">
-            <video id="video" autoplay muted playsinline></video>
-            <div id="placeholder" class="video-placeholder">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                </svg>
-                Configure host and camera, then click <strong>Connect</strong>
-            </div>
+        <div class="button-group">
+          <button id="btnConnect" class="btn-primary" onclick="connect()">
+            Connect
+          </button>
+          <button
+            id="btnDisconnect"
+            class="btn-danger"
+            onclick="disconnect()"
+            disabled
+          >
+            Disconnect
+          </button>
+          <button
+            id="btnLoadCameras"
+            class="btn-secondary"
+            onclick="loadCameras()"
+          >
+            Load Cameras
+          </button>
         </div>
+      </div>
 
-        <!-- Connection Stats -->
-        <div class="stats" id="statsPanel" style="display: none;">
-            <h3>Connection Stats</h3>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <span class="stat-label">Connection State</span>
-                    <span class="stat-value" id="statState">—</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">ICE State</span>
-                    <span class="stat-value" id="statIce">—</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Video Resolution</span>
-                    <span class="stat-value" id="statResolution">—</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Frames / sec</span>
-                    <span class="stat-value" id="statFps">—</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Bytes Received</span>
-                    <span class="stat-value" id="statBytes">—</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Codec</span>
-                    <span class="stat-value" id="statCodec">—</span>
-                </div>
-            </div>
-        </div>
+      <!-- Status -->
+      <div id="status" class="disconnected">Disconnected</div>
 
-        <!-- Event Log -->
-        <div class="log-container">
-            <h3>Event Log</h3>
-            <div class="log" id="log"></div>
+      <!-- Video -->
+      <div class="video-container">
+        <video id="video" autoplay muted playsinline></video>
+        <div id="placeholder" class="video-placeholder">
+          <svg
+            width="64"
+            height="64"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <path
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+            />
+          </svg>
+          Configure host and camera, then click <strong>Connect</strong>
         </div>
+      </div>
+
+      <!-- Connection Stats -->
+      <div class="stats" id="statsPanel" style="display: none">
+        <h3>Connection Stats</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">Connection State</span>
+            <span class="stat-value" id="statState">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">ICE State</span>
+            <span class="stat-value" id="statIce">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Video Resolution</span>
+            <span class="stat-value" id="statResolution">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Frames / sec</span>
+            <span class="stat-value" id="statFps">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Bytes Received</span>
+            <span class="stat-value" id="statBytes">—</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Codec</span>
+            <span class="stat-value" id="statCodec">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Event Log -->
+      <div class="log-container">
+        <h3>Event Log</h3>
+        <div class="log" id="log"></div>
+      </div>
     </div>
 
     <div class="footer">
-        <a href="https://robopipe.com" target="_blank">robopipe.com</a> · WebRTC Streaming Client
+      <a href="https://robopipe.com" target="_blank">robopipe.com</a> · WebRTC
+      Streaming Client
     </div>
 
     <!-- Error toast -->
     <div class="error-toast" id="errorToast"></div>
 
     <script>
-    (() => {
+      (() => {
         // ─── State ──────────────────────────────────────────────────────
-        let pc = null;           // RTCPeerConnection
+        let pc = null; // RTCPeerConnection
         let statsInterval = null;
 
         // ─── DOM references ─────────────────────────────────────────────
-        const $host       = document.getElementById('host');
-        const $mxid       = document.getElementById('mxid');
-        const $stream     = document.getElementById('stream');
-        const $video      = document.getElementById('video');
-        const $placeholder = document.getElementById('placeholder');
-        const $status     = document.getElementById('status');
-        const $btnConnect = document.getElementById('btnConnect');
-        const $btnDisconnect = document.getElementById('btnDisconnect');
-        const $statsPanel = document.getElementById('statsPanel');
-        const $log        = document.getElementById('log');
+        const $host = document.getElementById("host");
+        const $mxid = document.getElementById("mxid");
+        const $stream = document.getElementById("stream");
+        const $video = document.getElementById("video");
+        const $placeholder = document.getElementById("placeholder");
+        const $status = document.getElementById("status");
+        const $btnConnect = document.getElementById("btnConnect");
+        const $btnDisconnect = document.getElementById("btnDisconnect");
+        const $statsPanel = document.getElementById("statsPanel");
+        const $log = document.getElementById("log");
 
         // Pre-fill host from current page location
-        $host.value = location.host || 'localhost:8000';
+        $host.value = location.host || "localhost:8000";
 
         // ─── Logging ───────────────────────────────────────────────────
-        function log(msg, level = 'info') {
-            const el = document.createElement('div');
-            el.className = level;
-            const ts = new Date().toLocaleTimeString();
-            el.textContent = `[${ts}] ${msg}`;
-            $log.appendChild(el);
-            $log.scrollTop = $log.scrollHeight;
-            console.log(`[RTC ${level}]`, msg);
+        function log(msg, level = "info") {
+          const el = document.createElement("div");
+          el.className = level;
+          const ts = new Date().toLocaleTimeString();
+          el.textContent = `[${ts}] ${msg}`;
+          $log.appendChild(el);
+          $log.scrollTop = $log.scrollHeight;
+          console.log(`[RTC ${level}]`, msg);
         }
 
         // ─── Status helpers ─────────────────────────────────────────────
         function setStatus(text, cls) {
-            $status.textContent = text;
-            $status.className = cls;
+          $status.textContent = text;
+          $status.className = cls;
         }
 
         function showError(msg) {
-            const toast = document.getElementById('errorToast');
-            toast.textContent = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 5000);
+          const toast = document.getElementById("errorToast");
+          toast.textContent = msg;
+          toast.classList.add("show");
+          setTimeout(() => toast.classList.remove("show"), 5000);
         }
 
         // ─── Build the negotiate URL ────────────────────────────────────
         function getRtcUrl() {
-            const host = $host.value.trim();
-            const mxid = $mxid.value.trim();
-            const stream = $stream.value;
+          const host = $host.value.trim();
+          const mxid = $mxid.value.trim();
+          const stream = $stream.value;
 
-            if (!host || !mxid) {
-                throw new Error('Please provide both API Host and Camera MXID.');
-            }
+          if (!host || !mxid) {
+            throw new Error("Please provide both API Host and Camera MXID.");
+          }
 
-            const protocol = location.protocol === 'https:' ? 'https' : 'http';
-            return `${protocol}://${host}/cameras/${mxid}/streams/${stream}/rtc`;
+          const protocol = location.protocol === "https:" ? "https" : "http";
+          return `${protocol}://${host}/cameras/${mxid}/streams/${stream}/video`;
         }
 
         // ─── Load available cameras from the API ────────────────────────
         async function loadCamerasImpl() {
-            const host = $host.value.trim();
-            if (!host) {
-                showError('Enter an API host first.');
-                return;
+          const host = $host.value.trim();
+          if (!host) {
+            showError("Enter an API host first.");
+            return;
+          }
+
+          try {
+            const protocol = location.protocol === "https:" ? "https" : "http";
+            const res = await fetch(`${protocol}://${host}/cameras`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const cameras = await res.json();
+
+            if (cameras.length === 0) {
+              log("No cameras found on the device.", "warn");
+              return;
             }
 
-            try {
-                const protocol = location.protocol === 'https:' ? 'https' : 'http';
-                const res = await fetch(`${protocol}://${host}/cameras`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const cameras = await res.json();
+            // Auto-fill the first camera MXID
+            $mxid.value = cameras[0].mxid || cameras[0];
+            log(`Found ${cameras.length} camera(s). Selected: ${$mxid.value}`);
 
-                if (cameras.length === 0) {
-                    log('No cameras found on the device.', 'warn');
-                    return;
-                }
-
-                // Auto-fill the first camera MXID
-                $mxid.value = cameras[0].mxid || cameras[0];
-                log(`Found ${cameras.length} camera(s). Selected: ${$mxid.value}`);
-
-                // Try loading streams for the selected camera
-                await loadStreams(host, $mxid.value);
-
-            } catch (err) {
-                log(`Failed to load cameras: ${err.message}`, 'error');
-                showError(`Cannot reach API at ${host}`);
-            }
+            // Try loading streams for the selected camera
+            await loadStreams(host, $mxid.value);
+          } catch (err) {
+            log(`Failed to load cameras: ${err.message}`, "error");
+            showError(`Cannot reach API at ${host}`);
+          }
         }
 
         async function loadStreams(host, mxid) {
-            try {
-                const protocol = location.protocol === 'https:' ? 'https' : 'http';
-                const res = await fetch(`${protocol}://${host}/cameras/${mxid}/streams`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const streams = await res.json();
+          try {
+            const protocol = location.protocol === "https:" ? "https" : "http";
+            const res = await fetch(
+              `${protocol}://${host}/cameras/${mxid}/streams`,
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const streams = await res.json();
 
-                $stream.innerHTML = '';
-                streams.forEach(s => {
-                    const name = s.name || s;
-                    const opt = document.createElement('option');
-                    opt.value = name;
-                    opt.textContent = name + (s.active ? ' ●' : '');
-                    $stream.appendChild(opt);
-                });
+            $stream.innerHTML = "";
+            streams.forEach((s) => {
+              const name = s.name || s;
+              const opt = document.createElement("option");
+              opt.value = name;
+              opt.textContent = name + (s.active ? " ●" : "");
+              $stream.appendChild(opt);
+            });
 
-                log(`Loaded ${streams.length} stream(s) for camera ${mxid}`);
-            } catch (err) {
-                log(`Failed to load streams: ${err.message}`, 'warn');
-            }
+            log(`Loaded ${streams.length} stream(s) for camera ${mxid}`);
+          } catch (err) {
+            log(`Failed to load streams: ${err.message}`, "warn");
+          }
         }
 
         // ─── WebRTC Connect ─────────────────────────────────────────────
         async function connectImpl() {
-            if (pc) {
-                log('Already connected — disconnect first.', 'warn');
-                return;
-            }
+          if (pc) {
+            log("Already connected — disconnect first.", "warn");
+            return;
+          }
 
-            let url;
-            try {
-                url = getRtcUrl();
-            } catch (err) {
-                showError(err.message);
-                return;
-            }
+          let url;
+          try {
+            url = getRtcUrl();
+          } catch (err) {
+            showError(err.message);
+            return;
+          }
 
-            setStatus('Connecting…', 'connecting');
-            log(`Negotiating with ${url}`);
-            $btnConnect.disabled = true;
+          setStatus("Connecting…", "connecting");
+          log(`Negotiating with ${url}`);
+          $btnConnect.disabled = true;
 
-            try {
-                // 1. Create RTCPeerConnection
-                pc = new RTCPeerConnection({
-                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-                });
+          try {
+            // 1. Create RTCPeerConnection
+            pc = new RTCPeerConnection({
+              iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+            });
 
-                // Request video track from remote
-                pc.addTransceiver('video', { direction: 'recvonly' });
+            // Request video track from remote
+            pc.addTransceiver("video", { direction: "recvonly" });
 
-                // 2. Bind events
-                pc.ontrack = (event) => {
-                    log('Received remote video track');
-                    $video.srcObject = event.streams[0] || new MediaStream([event.track]);
-                    $placeholder.style.display = 'none';
-                    $video.style.display = 'block';
-                };
+            // 2. Bind events
+            pc.ontrack = (event) => {
+              log("Received remote video track");
+              $video.srcObject =
+                event.streams[0] || new MediaStream([event.track]);
+              $placeholder.style.display = "none";
+              $video.style.display = "block";
+            };
 
-                pc.oniceconnectionstatechange = () => {
-                    const state = pc.iceConnectionState;
-                    log(`ICE connection state: ${state}`);
-                    document.getElementById('statIce').textContent = state;
+            pc.oniceconnectionstatechange = () => {
+              const state = pc.iceConnectionState;
+              log(`ICE connection state: ${state}`);
+              document.getElementById("statIce").textContent = state;
 
-                    if (state === 'connected' || state === 'completed') {
-                        setStatus('Connected', 'connected');
-                    } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-                        setStatus('Disconnected', 'disconnected');
-                        cleanup();
-                    }
-                };
-
-                pc.onconnectionstatechange = () => {
-                    const state = pc.connectionState;
-                    log(`Connection state: ${state}`);
-                    document.getElementById('statState').textContent = state;
-
-                    if (state === 'failed' || state === 'closed') {
-                        log('Peer connection closed.', 'warn');
-                        cleanup();
-                    }
-                };
-
-                pc.onicegatheringstatechange = () => {
-                    log(`ICE gathering state: ${pc.iceGatheringState}`);
-                };
-
-                // 3. Create offer
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                log('SDP offer created, waiting for ICE gathering…');
-
-                // Wait for ICE gathering to complete (or timeout)
-                await waitForIceGathering(pc, 3000);
-                log('ICE gathering complete, sending offer to server');
-
-                // 4. Send offer to server
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sdp: pc.localDescription.sdp,
-                        type: pc.localDescription.type,
-                    }),
-                });
-
-                if (!response.ok) {
-                    const errText = await response.text();
-                    throw new Error(`Server returned ${response.status}: ${errText}`);
-                }
-
-                const answer = await response.json();
-                log('Received SDP answer from server');
-
-                // 5. Set remote description
-                await pc.setRemoteDescription(new RTCSessionDescription(answer));
-                log('Remote description set — waiting for media…');
-
-                $btnDisconnect.disabled = false;
-                $statsPanel.style.display = '';
-                startStatsPolling();
-
-            } catch (err) {
-                log(`Connection failed: ${err.message}`, 'error');
-                showError(`Connection failed: ${err.message}`);
-                setStatus('Disconnected', 'disconnected');
+              if (state === "connected" || state === "completed") {
+                setStatus("Connected", "connected");
+              } else if (
+                state === "disconnected" ||
+                state === "failed" ||
+                state === "closed"
+              ) {
+                setStatus("Disconnected", "disconnected");
                 cleanup();
+              }
+            };
+
+            pc.onconnectionstatechange = () => {
+              const state = pc.connectionState;
+              log(`Connection state: ${state}`);
+              document.getElementById("statState").textContent = state;
+
+              if (state === "failed" || state === "closed") {
+                log("Peer connection closed.", "warn");
+                cleanup();
+              }
+            };
+
+            pc.onicegatheringstatechange = () => {
+              log(`ICE gathering state: ${pc.iceGatheringState}`);
+            };
+
+            // 3. Create offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            log("SDP offer created, waiting for ICE gathering…");
+
+            // Wait for ICE gathering to complete (short timeout — local network)
+            await waitForIceGathering(pc, 1000);
+            log("ICE gathering complete, sending offer to server");
+
+            // 4. Send offer to server
+            const response = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sdp: pc.localDescription.sdp,
+                type: pc.localDescription.type,
+              }),
+            });
+
+            if (!response.ok) {
+              const errText = await response.text();
+              throw new Error(`Server returned ${response.status}: ${errText}`);
             }
+
+            const answer = await response.json();
+            log("Received SDP answer from server");
+
+            // 5. Set remote description
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            log("Remote description set — waiting for media…");
+
+            $btnDisconnect.disabled = false;
+            $statsPanel.style.display = "";
+            startStatsPolling();
+          } catch (err) {
+            log(`Connection failed: ${err.message}`, "error");
+            showError(`Connection failed: ${err.message}`);
+            setStatus("Disconnected", "disconnected");
+            cleanup();
+          }
         }
 
         // ─── Wait for ICE gathering ─────────────────────────────────────
         function waitForIceGathering(pc, timeoutMs) {
-            return new Promise((resolve) => {
-                if (pc.iceGatheringState === 'complete') {
-                    resolve();
-                    return;
-                }
+          return new Promise((resolve) => {
+            if (pc.iceGatheringState === "complete") {
+              resolve();
+              return;
+            }
 
-                const timeout = setTimeout(() => {
-                    log('ICE gathering timed out, proceeding with available candidates', 'warn');
-                    resolve();
-                }, timeoutMs);
+            const timeout = setTimeout(() => {
+              log(
+                "ICE gathering timed out, proceeding with available candidates",
+                "warn",
+              );
+              resolve();
+            }, timeoutMs);
 
-                pc.onicegatheringstatechange = () => {
-                    if (pc.iceGatheringState === 'complete') {
-                        clearTimeout(timeout);
-                        resolve();
-                    }
-                };
-            });
+            pc.onicegatheringstatechange = () => {
+              if (pc.iceGatheringState === "complete") {
+                clearTimeout(timeout);
+                resolve();
+              }
+            };
+          });
         }
 
         // ─── Disconnect ─────────────────────────────────────────────────
         function disconnectImpl() {
-            log('Disconnecting…');
-            cleanup();
-            setStatus('Disconnected', 'disconnected');
+          log("Disconnecting…");
+          cleanup();
+          setStatus("Disconnected", "disconnected");
         }
 
         function cleanup() {
-            if (statsInterval) {
-                clearInterval(statsInterval);
-                statsInterval = null;
-            }
+          if (statsInterval) {
+            clearInterval(statsInterval);
+            statsInterval = null;
+          }
 
-            if (pc) {
-                pc.ontrack = null;
-                pc.oniceconnectionstatechange = null;
-                pc.onconnectionstatechange = null;
-                pc.onicegatheringstatechange = null;
-                pc.close();
-                pc = null;
-            }
+          if (pc) {
+            pc.ontrack = null;
+            pc.oniceconnectionstatechange = null;
+            pc.onconnectionstatechange = null;
+            pc.onicegatheringstatechange = null;
+            pc.close();
+            pc = null;
+          }
 
-            $video.srcObject = null;
-            $video.style.display = 'none';
-            $placeholder.style.display = '';
-            $btnConnect.disabled = false;
-            $btnDisconnect.disabled = true;
+          $video.srcObject = null;
+          $video.style.display = "none";
+          $placeholder.style.display = "";
+          $btnConnect.disabled = false;
+          $btnDisconnect.disabled = true;
         }
 
         // ─── Stats polling ──────────────────────────────────────────────
         function startStatsPolling() {
-            let prevBytesReceived = 0;
-            let prevFramesDecoded = 0;
-            let prevTimestamp = 0;
+          let prevBytesReceived = 0;
+          let prevFramesDecoded = 0;
+          let prevTimestamp = 0;
 
-            statsInterval = setInterval(async () => {
-                if (!pc) return;
+          statsInterval = setInterval(async () => {
+            if (!pc) return;
 
-                try {
-                    const stats = await pc.getStats();
+            try {
+              const stats = await pc.getStats();
 
-                    stats.forEach(report => {
-                        if (report.type === 'inbound-rtp' && report.kind === 'video') {
-                            // FPS
-                            const now = report.timestamp;
-                            const framesDelta = report.framesDecoded - prevFramesDecoded;
-                            const timeDelta = (now - prevTimestamp) / 1000;
-                            if (timeDelta > 0 && prevTimestamp > 0) {
-                                const fps = (framesDelta / timeDelta).toFixed(1);
-                                document.getElementById('statFps').textContent = `${fps}`;
-                            }
-                            prevFramesDecoded = report.framesDecoded;
-                            prevTimestamp = now;
+              stats.forEach((report) => {
+                if (report.type === "inbound-rtp" && report.kind === "video") {
+                  // FPS
+                  const now = report.timestamp;
+                  const framesDelta = report.framesDecoded - prevFramesDecoded;
+                  const timeDelta = (now - prevTimestamp) / 1000;
+                  if (timeDelta > 0 && prevTimestamp > 0) {
+                    const fps = (framesDelta / timeDelta).toFixed(1);
+                    document.getElementById("statFps").textContent = `${fps}`;
+                  }
+                  prevFramesDecoded = report.framesDecoded;
+                  prevTimestamp = now;
 
-                            // Bytes
-                            const bytes = report.bytesReceived;
-                            document.getElementById('statBytes').textContent = formatBytes(bytes);
-                            prevBytesReceived = bytes;
+                  // Bytes
+                  const bytes = report.bytesReceived;
+                  document.getElementById("statBytes").textContent =
+                    formatBytes(bytes);
+                  prevBytesReceived = bytes;
 
-                            // Resolution
-                            if (report.frameWidth && report.frameHeight) {
-                                document.getElementById('statResolution').textContent =
-                                    `${report.frameWidth}×${report.frameHeight}`;
-                            }
+                  // Resolution
+                  if (report.frameWidth && report.frameHeight) {
+                    document.getElementById("statResolution").textContent =
+                      `${report.frameWidth}×${report.frameHeight}`;
+                  }
 
-                            // Codec
-                            const codecId = report.codecId;
-                            if (codecId) {
-                                const codecReport = stats.get(codecId);
-                                if (codecReport) {
-                                    document.getElementById('statCodec').textContent =
-                                        codecReport.mimeType || '—';
-                                }
-                            }
-                        }
-                    });
-                } catch (e) {
-                    // Stats may fail if connection is closing
+                  // Codec
+                  const codecId = report.codecId;
+                  if (codecId) {
+                    const codecReport = stats.get(codecId);
+                    if (codecReport) {
+                      document.getElementById("statCodec").textContent =
+                        codecReport.mimeType || "—";
+                    }
+                  }
                 }
-            }, 1000);
+              });
+            } catch (e) {
+              // Stats may fail if connection is closing
+            }
+          }, 1000);
         }
 
         // ─── Utilities ──────────────────────────────────────────────────
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+          if (bytes === 0) return "0 B";
+          const k = 1024;
+          const sizes = ["B", "KB", "MB", "GB"];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return (
+            parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+          );
         }
 
         // ─── Expose to onclick handlers ─────────────────────────────────
         window.connect = connectImpl;
         window.disconnect = disconnectImpl;
         window.loadCameras = loadCamerasImpl;
-    })();
+      })();
     </script>
-</body>
+  </body>
 </html>
