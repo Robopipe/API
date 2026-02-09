@@ -9,6 +9,8 @@ import uvicorn
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 import os
+from pathlib import Path
+
 
 from .camera.camera_manager import camera_manager_factory
 from .controller.config import EvokConfig, HWDict, create_devices
@@ -19,8 +21,8 @@ from .error import (
 )
 from .routers import cameras, controller, streams
 from .stream import stream_service_factory
+from .webrtc_manager import webrtc_manager_factory
 from . import __version__
-from pathlib import Path
 
 
 def setup():
@@ -35,6 +37,7 @@ async def lifespan(app: FastAPI):
     camera_manager = camera_manager_factory()
     camera_manager.boot_cameras()
     stream_service = stream_service_factory(camera_manager)
+    webrtc_manager = webrtc_manager_factory()
     controller_config_path = os.getenv("CONTROLLER_CONFIG")
 
     if controller_config_path is not None and os.path.exists(controller_config_path):
@@ -65,6 +68,7 @@ async def lifespan(app: FastAPI):
         yield
 
     stream_service.stop()
+    await webrtc_manager.remove_all_pcs()
 
 
 app = FastAPI(
