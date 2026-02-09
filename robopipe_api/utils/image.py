@@ -50,7 +50,4 @@ def img_frame_to_video_frame(img_frame: dai.ImgFrame) -> av.VideoFrame:
         return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
 
     img_frame = av.VideoFrame.from_ndarray(img_frame.getFrame(), FORMAT_MAP[img_type])
-    # remove last 4 bottom pixels which are padding in depthai NV12 frames
-    # if img_type == dai.ImgFrame.Type.NV12:
-    #     img_frame = img_frame.crop(0, 0, img_frame.width, img_frame.height - 4)
     return img_frame
