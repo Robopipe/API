@@ -537,9 +537,9 @@
 
         /** Configuration */
         CONFIG: {
-            MAX_WIDTH: 1280,        // Scale down videos wider than this
+            MAX_WIDTH: 1920,        // Scale down videos wider than this
             CAPTURE_FPS: 15,        // Canvas capture frame rate
-            BITRATE: 800000,        // 800 Kbps
+            BITRATE: 80000000,        // 800 Kbps
             CHUNK_INTERVAL: 1000    // Collect data every 1 second
         },
 
@@ -795,7 +795,7 @@
             const mjpegImg = document.getElementById('mjpegStream');
             const wsVideo = document.getElementById('wsStream');
             const canvas = document.getElementById('recordingCanvas');
-            const streamUrl = `${UI.getApiUrl()}/cameras/${mxid}/streams/${streamName}/mjpeg`;
+            const streamUrl = `${UI.getApiUrl()}/cameras/${mxid}/streams/${streamName}/mjpeg?fps=30`;
             const recordOption = document.getElementById('recordVideo').value;
 
             wsVideo.classList.add('hidden');

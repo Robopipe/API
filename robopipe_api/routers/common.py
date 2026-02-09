@@ -1,3 +1,4 @@
+from aiortc.contrib.media import MediaRelay
 from fastapi import Depends, Path, Request, Form, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 
@@ -5,13 +6,16 @@ from pydantic import ValidationError
 
 from typing import Annotated
 
+
 from ..camera.camera import Camera
 from ..camera.camera_manager import CameraManager, camera_manager_factory
 from ..camera.sensor.sensor_base import SensorBase
 from ..models.nn_config import NNConfig, NNType, NNYoloConfig, NNMobileNetConfig
 from ..stream import StreamService, stream_service_factory
+from ..video_track import media_relay_factory, video_track_factory, VideoTrack
 from ..controller.devices import DeviceList, Devices, Device
 from ..controller.devices import *
+from ..webrtc_manager import WebRTCManager, webrtc_manager_factory
 
 CameraManagerDep = Annotated[CameraManager, Depends(camera_manager_factory)]
 Mxid = Annotated[str, Path(regex=r"[A-Z0-9]+")]
@@ -37,6 +41,22 @@ def get_stream_service(camera_manager: CameraManagerDep):
 
 
 StreamServiceDep = Annotated[StreamService, Depends(get_stream_service)]
+
+
+def get_video_track(sensor: SensorDep):
+    return video_track_factory(sensor)
+
+
+VideoTrackDep = Annotated[VideoTrack, Depends(get_video_track)]
+
+
+def get_video_relay(sensor: SensorDep):
+    return media_relay_factory(sensor)
+
+
+VideoRelayDep = Annotated[MediaRelay, Depends(get_video_relay)]
+
+WebRTCManagerDep = Annotated[WebRTCManager, Depends(lambda: webrtc_manager_factory())]
 
 DEVICE_TYPES = [
     DI,
