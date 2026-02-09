@@ -7,7 +7,7 @@ from typing import Callable
 import av
 
 from ...models.nn_config import NNConfig
-from ...utils.image import img_frame_to_pil_image, img_frame_to_video_frame
+from ...utils.image import img_frame_to_video_frame
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from .sensor_config import SensorConfigProperties
 from .sensor_control import SensorControl
@@ -16,15 +16,15 @@ from .sensor_control import SensorControl
 class SensorBase(ABC):
     def __init__(
         self,
-        input_queues: dict,
-        output_queues: dict,
+        input_queues: dict[PipelineQueueType, dai.InputQueue],
+        output_queues: dict[PipelineQueueType, dai.MessageQueue],
         restart_pipeline: Callable[[], None],
     ):
         self.input_queues = input_queues
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
         self._nn_config = None
-        self.last_frame = None
+        self.last_frame: av.VideoFrame | None = None
 
     @property
     @abstractmethod
@@ -54,42 +54,18 @@ class SensorBase(ABC):
     def __extract_img_properties(self, img: dai.ImgFrame):
         pass
 
-    def capture_still(self):
-        try:
-            still_queue = self.output_queues[PipelineQueueType.STILL]
-            # Get all frames and use only the latest, then clean up
-            frames = still_queue.getAll()
-            if not frames:
-                return None
-            img_frame = frames[-1]
-            # Explicitly clean up the list to free memory
-            del frames
-        except Exception as e:
-            print(f"Error capturing still image: {e}")
-            return None
+    def capture_still(self) -> dai.EncodedFrame:
+        still_queue = self.output_queues[PipelineQueueType.STILL]
+        return still_queue.getAll()[-1]
 
-        return img_frame_to_pil_image(img_frame)
-
-    def get_video_frame(self):
+    def get_video_frame(self) -> av.VideoFrame:
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
-        dai_frame = video_queue.tryGet()
+        frames = video_queue.tryGetAll()
 
-        if dai_frame is not None:
-            # Drain any additional queued frames to get the latest and prevent buildup
-            while True:
-                next_frame = video_queue.tryGet()
-                if next_frame is None:
-                    break
-                dai_frame = next_frame
-
-            # Clean up old frame before replacing
-            if self.last_frame is not None:
-                del self.last_frame
-            self.last_frame = img_frame_to_video_frame(dai_frame)
+        if frames:
+            self.last_frame = img_frame_to_video_frame(frames[-1])
         elif self.last_frame is None:
-            # Blocking get only if we have no frame at all
-            dai_frame = video_queue.get()
-            self.last_frame = img_frame_to_video_frame(dai_frame)
+            self.last_frame = img_frame_to_video_frame(video_queue.get())
 
         return self.last_frame
 
@@ -111,9 +87,7 @@ class SensorBase(ABC):
         if frame_data.dtype != np.uint8:
             frame_data = frame_data.astype(np.uint8)
 
-        passthrough_frame = Image.fromarray(
-            np.transpose(frame_data, (1, 2, 0)), "RGB"
-        )
+        passthrough_frame = Image.fromarray(np.transpose(frame_data, (1, 2, 0)), "RGB")
 
         return (passthrough_frame, detections)
 

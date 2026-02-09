@@ -5,26 +5,27 @@ from fastapi import (
     UploadFile,
     WebSocketDisconnect,
     status,
+    Request,
 )
+from aiortc import RTCSessionDescription, RTCPeerConnection
 import anyio
-from fastapi.responses import Response, StreamingResponse
-
-from io import BytesIO
-from typing import AsyncGenerator
+import anyio.to_thread
+from fastapi.responses import Response
 
 from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
 from ..models.sensor_control import SensorControlUpdate
 from ..models.stream_info import StreamInfo
 from ..utils.detections_parser import parse_detections
-from ..utils.ws_adapter import WsAdapter
 from .common import (
     CameraDep,
     SensorDep,
-    Mxid,
     StreamName,
-    StreamServiceDep,
     NNConfigDep,
+    VideoRelayDep,
+    VideoRelayDep,
+    VideoTrackDep,
+    WebRTCManagerDep,
 )
 
 router = APIRouter(
@@ -94,104 +95,14 @@ def update_stream_control(
 
 @stream_router.get(
     "/still",
-    response_description="Image bytes in the selected format",
+    response_description="Image bytes in JPEG format",
     response_model=bytes,
-    response_class=type[Response(media_type="image/*")],
+    response_class=type[Response(media_type="image/jpeg")],
 )
-def capture_still_image(sensor: SensorDep, format: str | None = "jpeg") -> Response:
-    img_buffer = BytesIO()
-    sensor.capture_still().save(img_buffer, format)
+async def capture_still_image(sensor: SensorDep) -> Response:
+    img = await anyio.to_thread.run_sync(sensor.capture_still)
 
-    return Response(img_buffer.getvalue(), media_type=f"image/{format}")
-
-
-async def generate_mjpeg_frames(
-    sensor,
-    fps: int = 15,
-    quality: int = 50,
-    scale: float = 0.8,
-) -> AsyncGenerator[bytes, None]:
-    """Generate MJPEG frames as multipart content.
-
-    Args:
-        sensor: The camera sensor
-        fps: Target frames per second
-        quality: JPEG quality 1-100 (lower = faster, smaller)
-        scale: Resolution scale 0.1-1.0 (lower = faster, smaller)
-    """
-    frame_interval = 1.0 / fps
-    boundary = b"--frame\r\n"
-
-    try:
-        while True:
-            img_buffer = None
-            try:
-                # Get video frame and convert to JPEG
-                video_frame = await anyio.to_thread.run_sync(sensor.get_video_frame)
-                pil_image = video_frame.to_image()
-
-                # Downscale if requested (significant latency reduction)
-                if scale < 1.0:
-                    new_size = (int(pil_image.width * scale), int(pil_image.height * scale))
-                    pil_image = pil_image.resize(new_size, resample=0)  # 0 = NEAREST (fastest)
-
-                img_buffer = BytesIO()
-                # Lower quality = faster encoding + smaller payload
-                pil_image.save(img_buffer, "JPEG", quality=quality, optimize=False)
-                frame_data = img_buffer.getvalue()
-
-                yield (
-                    boundary +
-                    b"Content-Type: image/jpeg\r\n" +
-                    f"Content-Length: {len(frame_data)}\r\n\r\n".encode() +
-                    frame_data +
-                    b"\r\n"
-                )
-
-                await anyio.sleep(frame_interval)
-            except GeneratorExit:
-                break
-            except Exception as e:
-                print(f"MJPEG stream error: {e}")
-                break
-            finally:
-                # Clean up BytesIO buffer
-                if img_buffer is not None:
-                    img_buffer.close()
-                    del img_buffer
-    finally:
-        # Generator cleanup
-        pass
-
-
-@stream_router.get(
-    "/mjpeg",
-    response_class=StreamingResponse,
-    responses={200: {"content": {"multipart/x-mixed-replace": {}}}},
-)
-async def stream_mjpeg(
-    sensor: SensorDep,
-    fps: int = 15,
-    quality: int = 50,
-    scale: float = 0.8,
-):
-    """Stream video as MJPEG. Works in any browser via img tag.
-
-    Query params:
-        fps: Target frame rate (default 15)
-        quality: JPEG quality 1-100 (default 50, lower = faster/smaller)
-        scale: Resolution scale 0.1-1.0 (default 1.0, lower = faster/smaller)
-
-    Example for low latency: /mjpeg?fps=30&quality=30&scale=0.5
-    """
-    # Clamp values to valid ranges
-    quality = max(1, min(100, quality))
-    scale = max(0.1, min(1.0, scale))
-
-    return StreamingResponse(
-        generate_mjpeg_frames(sensor, fps, quality, scale),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-    )
+    return Response(img.getData().tobytes(), media_type="image/jpeg")
 
 
 @stream_router.get("/nn", tags=["nn"])
@@ -211,7 +122,10 @@ async def deploy_neural_network(
         # NNArchive requires a file path, so save temporarily
         import tempfile
         import os
-        with tempfile.NamedTemporaryFile(delete=False, suffix=filename[filename.rfind(".tar"):]) as tmp:
+
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=filename[filename.rfind(".tar") :]
+        ) as tmp:
             tmp.write(model_bytes)
             tmp_path = tmp.name
         try:
@@ -246,9 +160,9 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
             if isinstance(detections, dai.NNData):
                 # v3 API: use getTensor or getFirstTensor
                 try:
-                    if hasattr(detections, 'getFirstTensor'):
+                    if hasattr(detections, "getFirstTensor"):
                         tensor = detections.getFirstTensor()
-                    elif hasattr(detections, 'getTensor'):
+                    elif hasattr(detections, "getTensor"):
                         layer_names = detections.getAllLayerNames()
                         if layer_names:
                             tensor = detections.getTensor(layer_names[0])
@@ -272,7 +186,9 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
                             mask_uint8 = (mask > 0.5).astype(np.uint8) * 255
 
                             # Find contours
-                            contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                            contours, _ = cv2.findContours(
+                                mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                            )
 
                             # Extract contour points (simplify to reduce data)
                             parsed_detections = []
@@ -305,29 +221,34 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
             pass
 
 
-@stream_router.websocket("/video")
-async def get_stream_video(
-    ws: WebSocket, mxid: Mxid, stream_name: StreamName, stream_service: StreamServiceDep
+@stream_router.post("/video")
+async def stream_video_offer(
+    req: Request,
+    video_track: VideoTrackDep,
+    video_relay: VideoRelayDep,
+    webrtc_manager: WebRTCManagerDep,
 ):
-    tg = anyio.create_task_group()
+    params = await req.json()
+    rtc_offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+    pc = RTCPeerConnection()
+    webrtc_manager.add_pc(pc)
+    pc.addTrack(video_relay.subscribe(video_track))
+    await pc.setRemoteDescription(rtc_offer)
 
-    async def sleep():
-        async with tg:
-            tg.start_soon(anyio.sleep_forever)
+    @pc.on("iceconnectionstatechange")
+    async def on_iceconnectionstatechange():
+        if pc.iceConnectionState in ("failed", "disconnected", "closed"):
+            await webrtc_manager.remove_pc(pc)
 
-    def on_close():
-        tg.cancel_scope.cancel()
-        stream_service.unsubscribe((mxid, stream_name), ws_adapter)
+    @pc.on("connectionstatechange")
+    async def on_connectionstatechange():
+        if pc.connectionState in ("failed", "disconnected", "closed"):
+            await webrtc_manager.remove_pc(pc)
 
-    ws_adapter = WsAdapter(ws)
-    await ws_adapter.accept()
-    await stream_service.subscribe((mxid, stream_name), ws_adapter, on_close)
-    await sleep()
+    answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
 
-    try:
-        await ws_adapter.close()
-    except:
-        pass
+    return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 
 
 router.include_router(stream_router)
