@@ -150,68 +150,8 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
 
     try:
         while True:
-            detections = sensor.get_nn_detections()
-
-            if detections is None:
-                await ws.send_json({"error": "NN queue not available"})
-                await anyio.sleep(1)
-                continue
-
-            if isinstance(detections, dai.NNData):
-                # v3 API: use getTensor or getFirstTensor
-                try:
-                    if hasattr(detections, "getFirstTensor"):
-                        tensor = detections.getFirstTensor()
-                    elif hasattr(detections, "getTensor"):
-                        layer_names = detections.getAllLayerNames()
-                        if layer_names:
-                            tensor = detections.getTensor(layer_names[0])
-                        else:
-                            tensor = None
-                    else:
-                        tensor = None
-
-                    if tensor is not None:
-                        # Check if this is a segmentation mask (2D output)
-                        import cv2
-                        import numpy as np
-
-                        # Reshape to 2D if needed (assumes square output like 256x256)
-                        flat = tensor.flatten()
-                        size = int(np.sqrt(len(flat)))
-                        if size * size == len(flat):
-                            # It's a segmentation mask
-                            mask = flat.reshape((size, size))
-                            # Convert to uint8 binary mask
-                            mask_uint8 = (mask > 0.5).astype(np.uint8) * 255
-
-                            # Find contours
-                            contours, _ = cv2.findContours(
-                                mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-                            )
-
-                            # Extract contour points (simplify to reduce data)
-                            parsed_detections = []
-                            for contour in contours:
-                                # Approximate contour to reduce points
-                                epsilon = 0.01 * cv2.arcLength(contour, True)
-                                approx = cv2.approxPolyDP(contour, epsilon, True)
-                                points = approx.reshape(-1, 2).tolist()
-                                if len(points) >= 3:  # Valid polygon
-                                    parsed_detections.append(points)
-                        else:
-                            # Not a square mask, return raw
-                            parsed_detections = flat.tolist()
-                    else:
-                        parsed_detections = []
-                except Exception as e:
-                    print(f"[NN] Error processing: {e}")
-                    parsed_detections = []
-            else:
-                parsed_detections = parse_detections(detections)
-
-            await ws.send_json({"detections": parsed_detections})
-            await anyio.sleep(0.05)  # 50ms = ~20fps max
+            detections = await anyio.to_thread.run_sync(sensor.get_nn_detections)
+            await ws.send_json(parse_detections(detections))
     except WebSocketDisconnect:
         pass
     finally:

@@ -1,4 +1,5 @@
 import depthai as dai
+from depthai_nodes import Classifications, ImgDetectionsExtended
 import numpy as np
 from PIL import Image
 
@@ -60,10 +61,10 @@ class SensorBase(ABC):
 
     def get_video_frame(self) -> av.VideoFrame:
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
-        frames = video_queue.tryGetAll()
+        frames = video_queue.tryGet()
 
         if frames:
-            self.last_frame = img_frame_to_video_frame(frames[-1])
+            self.last_frame = img_frame_to_video_frame(frames)
         elif self.last_frame is None:
             self.last_frame = img_frame_to_video_frame(video_queue.get())
 
@@ -93,22 +94,11 @@ class SensorBase(ABC):
 
     def get_nn_detections(
         self,
-    ) -> dai.NNData | dai.ImgDetections | dai.SpatialImgDetections | None:
-        nn_queue = self.output_queues.get(PipelineQueueType.NN)
-        if nn_queue is None:
-            return None
+    ) -> dai.ImgDetections | Classifications | ImgDetectionsExtended:
+        nn_queue = self.output_queues[PipelineQueueType.NN]
+        detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
 
-        # Try to get the latest detection, draining any queued ones
-        detections = nn_queue.tryGet()
-        if detections is not None:
-            # Drain queue to get most recent and prevent buildup
-            while True:
-                next_det = nn_queue.tryGet()
-                if next_det is None:
-                    break
-                detections = next_det
-        else:
-            # Blocking get if no detection available yet
-            detections = nn_queue.get()
+        if detections is None:
+            return nn_queue.get()
 
         return detections
