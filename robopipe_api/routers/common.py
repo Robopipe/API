@@ -10,7 +10,13 @@ from typing import Annotated
 from ..camera.camera import Camera
 from ..camera.camera_manager import CameraManager, camera_manager_factory
 from ..camera.sensor.sensor_base import SensorBase
-from ..models.nn_config import NNConfig, NNType, NNYoloConfig, NNMobileNetConfig
+from ..models.nn_config import (
+    NNType,
+    NNConfig,
+    NNGenericConfig,
+    NNDetectionConfig,
+    NNSpatialDetectionConfig,
+)
 from ..stream import StreamService, stream_service_factory
 from ..video_track import media_relay_factory, video_track_factory, VideoTrack
 from ..controller.devices import DeviceList, Devices, Device
@@ -22,7 +28,12 @@ Mxid = Annotated[str, Path(regex=r"[A-Z0-9]+")]
 
 
 def get_camera(camera_manager: CameraManagerDep, mxid: Mxid):
-    return camera_manager[mxid]
+    camera = camera_manager.get(mxid)
+    if camera is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, detail=f"Camera with mxid {mxid} not found"
+        )
+    return camera
 
 
 CameraDep = Annotated[Camera, Depends(get_camera)]
@@ -30,7 +41,13 @@ StreamName = Annotated[str, Path(regex=r"CAM_[A-H]|DEPTH_[A-H]_[A-H]")]
 
 
 def get_sensor(camera: CameraDep, stream_name: StreamName):
-    return camera.sensors[stream_name]
+    sensor = camera.sensors.get(stream_name)
+    if sensor is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=f"Stream {stream_name} not found for camera {camera.mxid}",
+        )
+    return sensor
 
 
 SensorDep = Annotated[SensorBase, Depends(get_sensor)]
@@ -90,9 +107,9 @@ DeviceDep = Annotated[Device, Depends(get_device)]
 
 def nn_config_checker(config: Annotated[str, Form()]):
     NN_CONFIG_MAP = {
-        NNType.Generic: type(None),
-        NNType.YOLO: NNYoloConfig,
-        NNType.MobileNet: NNMobileNetConfig,
+        NNType.Generic: NNGenericConfig,
+        NNType.Detection: NNDetectionConfig,
+        NNType.SpatialDetection: NNSpatialDetectionConfig,
     }
 
     try:
