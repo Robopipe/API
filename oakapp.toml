@@ -1,0 +1,26 @@
+# (Required) App Identifier
+identifier = "io.robopipe.camera_api"
+app_version = "0.1.0"
+# (Required) App Entrypoint
+entrypoint = ["bash", "-c", "cd /app && python3 -m robopipe_api"]
+
+# (Optional) Prepare container commands
+# Here is the place where you can install all the dependencies that are needed at run-time
+prepare_container = [
+    { type = "COPY", source = "requirements.txt", target = "requirements.txt" },
+    { type = "COPY", source = "robopipe_api/", target = "robopipe_api/" },
+    { type = "RUN", command = "apt-get update" },
+    { type = "RUN", command = "apt-get install -y python3-pip git ffmpeg libsm6 libxext6" },
+    { type = "RUN", command = "pip3 install -r /app/requirements.txt --break-system-packages" },
+]
+
+# (Optional) Prepare build dependencies
+# Here is the place where you can install all the dependencies that are needed at build-time
+prepare_build_container = []
+
+# (Optional) Additional commands after all the app files are copied to the container
+build_steps = []
+
+[env]
+CORS_ORIGIN = "*"
+PORT = "8080"
