@@ -45,7 +45,10 @@ def img_frame_to_video_frame(img_frame: dai.ImgFrame) -> av.VideoFrame:
     if img_type == dai.ImgFrame.Type.RAW16:
         img_frame = (img_frame.getFrame() / 256).astype(np.uint8)
         return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
-    elif img_type in (dai.ImgFrame.Type.BGR888p, dai.ImgFrame.Type.BGR888i):
+    elif img_type == dai.ImgFrame.Type.BGR888i:
+        img_frame = img_frame.getFrame()
+        return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
+    elif img_type == dai.ImgFrame.Type.BGR888p:
         img_frame = img_frame.getFrame().transpose((1, 2, 0))
         return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
 
