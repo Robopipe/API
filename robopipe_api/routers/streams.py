@@ -4,7 +4,6 @@ from fastapi import (
     HTTPException,
     WebSocket,
     UploadFile,
-    WebSocketDisconnect,
     status,
     Request,
 )
@@ -33,6 +32,7 @@ from .common import (
     VideoRelayDep,
     VideoTrackDep,
     WebRTCManagerDep,
+    WSRelayDep,
     Mxid,
 )
 
@@ -158,25 +158,21 @@ async def delete_neural_network(camera: CameraDep, stream_name: StreamName):
 
 
 @stream_router.websocket("/nn")
-async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
+async def get_sensor_detections(
+    ws: WebSocket,
+    sensor: SensorDep,
+    mxid: Mxid,
+    stream_name: StreamName,
+    relay: WSRelayDep,
+):
     await ws.accept()
 
-    try:
-        while True:
-            detections = await anyio.to_thread.run_sync(sensor.get_nn_detections)
-            parsed_detections = parse_detections(detections)
-            handled_detections = handle_detections(
-                sensor.dashboard_config, parsed_detections
-            )
+    def producer():
+        detections = sensor.get_nn_detections()
+        parsed_detections = parse_detections(detections)
+        return handle_detections(sensor.dashboard_config, parsed_detections)
 
-            await ws.send_json(handled_detections)
-    except WebSocketDisconnect:
-        pass
-    finally:
-        try:
-            await ws.close()
-        except Exception:
-            pass
+    await relay.subscribe(key=(mxid, stream_name, "nn"), ws=ws, producer=producer)
 
 
 @stream_router.post("/video")
