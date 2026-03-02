@@ -1,4 +1,7 @@
+from pydantic import Field
+
 from enum import Enum
+from typing import Annotated
 
 from ..base_model import BaseModel
 from .label import Label
@@ -29,6 +32,11 @@ class DashboardItemLimitUnit(str, Enum):
     COUNT = "COUNT"
 
 
+class DashboardItemLimit(BaseModel):
+    from_value: Annotated[float | None, Field(alias="from")]
+    to_value: Annotated[float | None, Field(alias="to")]
+
+
 class DashboardItem(BaseModel):
     id: int
     name: str
@@ -38,5 +46,4 @@ class DashboardItem(BaseModel):
     unit: DashboardItemLimitUnit
     targetLabel: Label
     targetParentLabel: Label | None = None
-    limitFrom: float | None = None
-    limitTo: float | None = None
+    limits: list[DashboardItemLimit] = []

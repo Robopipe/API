@@ -190,11 +190,14 @@ def _evaluate_positional_item(
             ref = (0.0, 0.0, 1.0, 1.0)
 
         pct = _compute_position_pct(t.coords, ref, item.position)
-        within = _value_within_limits(pct, item.limitFrom, item.limitTo)
+        within = map(
+            lambda lim: _value_within_limits(pct, lim.from_value, lim.to_value),
+            item.limits,
+        )
 
-        if item.type == DashboardItemType.CHECK and not within:
+        if item.type == DashboardItemType.CHECK and not any(within):
             return True
-        elif item.type == DashboardItemType.DEFECT and within:
+        elif item.type == DashboardItemType.DEFECT and any(within):
             return True
 
     return False
@@ -208,11 +211,14 @@ def _evaluate_item(
     """Evaluate a dashboard item. Returns True if violated."""
     if item.position in (DashboardItemPosition.COUNT, DashboardItemPosition.AREA):
         metric = _compute_metric(item, detections, dashboard_config)
-        within = _value_within_limits(metric, item.limitFrom, item.limitTo)
+        within = map(
+            lambda lim: _value_within_limits(metric, lim.from_value, lim.to_value),
+            item.limits,
+        )
         if item.type == DashboardItemType.CHECK:
-            return not within
+            return not any(within)
         elif item.type == DashboardItemType.DEFECT:
-            return within
+            return any(within)
         return False
     else:
         return _evaluate_positional_item(item, detections, dashboard_config)
