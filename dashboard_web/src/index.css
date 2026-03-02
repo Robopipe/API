@@ -145,7 +145,3 @@
   --color-text-secondary: var(--color-gray-600);
   --color-text-disabled: var(--color-gray-400);
 }
-
-body {
-  @apply bg-gray-950;
-}
