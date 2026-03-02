@@ -27,5 +27,6 @@ class NNSpatialDetectionConfig(BaseModel):
 
 class NNConfig(BaseModel):
     type: NNType
+    model_id: int | None = None
     num_inference_threads: int = 2
     nn_config: NNGenericConfig | NNDetectionConfig | NNSpatialDetectionConfig = None
