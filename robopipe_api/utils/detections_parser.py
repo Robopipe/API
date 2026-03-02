@@ -3,27 +3,29 @@ import math
 import depthai as dai
 from depthai_nodes import Classifications, ImgDetectionsExtended, ImgDetectionExtended
 
+from ..models.detection.bbox_detection import BBoxDetection, BBoxDetections
+from ..models.detection.segmentation_detection import (
+    SegmentationDetection,
+    SegmentationDetections,
+)
 
-def parse_detections(detections: dai.ImgDetections):
-    def parse_detection(detection: dai.ImgDetection):
+
+def parse_detections(detections: dai.ImgDetections) -> BBoxDetections:
+    def parse_detection(detection: dai.ImgDetection) -> BBoxDetection:
         res = {
             "label": detection.label,
             "confidence": detection.confidence,
             "coords": [detection.xmin, detection.ymin, detection.xmax, detection.ymax],
         }
 
-        return res
+        return BBoxDetection(**res)
 
-    return {"detections": list(map(parse_detection, detections.detections))}
-
-
-def parse_classifications(classifications: Classifications):
-    pass
+    return BBoxDetections(detections=list(map(parse_detection, detections.detections)))
 
 
 def parse_img_detections_extended(
     img_detections_extended: ImgDetectionsExtended,
-):
+) -> SegmentationDetections:
     def parse_rect(rect: dai.RotatedRect) -> list[float]:
         cx, cy = rect.center.x, rect.center.y
         w, h = rect.size.width, rect.size.height
@@ -60,14 +62,29 @@ def parse_img_detections_extended(
             "coords": coords,
         }
 
-        return res
+        return SegmentationDetection(**res)
 
     res = {
         "detections": list(map(parse_detection, img_detections_extended.detections)),
         "masks": img_detections_extended.masks.tolist(),
     }
 
-    return res
+    return SegmentationDetections(**res)
+
+
+def parse_classifications(classifications: Classifications):
+    # For now, we will just return the top classification as a bbox detection with full frame coords
+    if len(classifications.classifications) == 0:
+        return BBoxDetections(detections=[])
+
+    classification = classifications.classifications[0]
+    res = {
+        "label": classification.label,
+        "confidence": classification.confidence,
+        "coords": [0, 0, 1, 1],
+    }
+
+    return BBoxDetections(detections=[BBoxDetection(**res)])
 
 
 def parse_detections(

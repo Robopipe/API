@@ -1,6 +1,7 @@
 import depthai as dai
 from fastapi import (
     APIRouter,
+    HTTPException,
     WebSocket,
     UploadFile,
     WebSocketDisconnect,
@@ -10,12 +11,18 @@ from fastapi import (
 from aiortc import RTCSessionDescription, RTCPeerConnection
 import anyio
 import anyio.to_thread
-from fastapi.responses import Response
+from fastapi.responses import Response, HTMLResponse
+from pathlib import Path
+from bs4 import BeautifulSoup
+import json
+
+from robopipe_api.dashboard.dashboard_handler import handle_detections
 
 from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
 from ..models.sensor_control import SensorControlUpdate
 from ..models.stream_info import StreamInfo
+from ..models.dashboard.dashboard_config import DashboardConfig
 from ..utils.detections_parser import parse_detections
 from .common import (
     CameraDep,
@@ -26,6 +33,7 @@ from .common import (
     VideoRelayDep,
     VideoTrackDep,
     WebRTCManagerDep,
+    Mxid,
 )
 
 router = APIRouter(
@@ -112,7 +120,11 @@ def get_neural_network(sensor: SensorDep):
 
 @stream_router.post("/nn", status_code=status.HTTP_201_CREATED, tags=["nn"])
 async def deploy_neural_network(
-    camera: CameraDep, stream_name: StreamName, model: UploadFile, config: NNConfigDep
+    camera: CameraDep,
+    stream_name: StreamName,
+    model: UploadFile,
+    config: NNConfigDep,
+    sensor: SensorDep,
 ):
     model_bytes = await model.read()
     filename = model.filename or ""
@@ -136,6 +148,7 @@ async def deploy_neural_network(
         # Assume .blob format
         blob = dai.OpenVINO.Blob(list(model_bytes))
 
+    sensor.nn_config = config
     camera.deploy_nn(stream_name, blob, config)
 
 
@@ -151,7 +164,12 @@ async def get_sensor_detections(ws: WebSocket, sensor: SensorDep):
     try:
         while True:
             detections = await anyio.to_thread.run_sync(sensor.get_nn_detections)
-            await ws.send_json(parse_detections(detections))
+            parsed_detections = parse_detections(detections)
+            handled_detections = handle_detections(
+                sensor.dashboard_config, parsed_detections
+            )
+
+            await ws.send_json(handled_detections)
     except WebSocketDisconnect:
         pass
     finally:
@@ -189,6 +207,58 @@ async def stream_video_offer(
     await pc.setLocalDescription(answer)
 
     return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+
+
+@stream_router.get("/dashboard", response_class=HTMLResponse)
+def serve_dashboard(request: Request, sensor: SensorDep):
+    if sensor.dashboard_config is None:
+        return Response("No dashboard configured for this stream", status_code=404)
+
+    dashboard_index = (
+        Path(__file__).parent.parent / "static" / "dashboard" / "index.html"
+    )
+    soup = BeautifulSoup(dashboard_index.read_text(), "html.parser")
+    head = soup.head
+    if head:
+        dashboard_config = {
+            "apiBase": str(request.url).rstrip("/dashboard"),
+            "labels": [label.model_dump() for label in sensor.dashboard_config.labels],
+            "dashboardItems": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "severity": item.severity,
+                }
+                for item in sensor.dashboard_config.items
+            ],
+        }
+        script_tag = soup.new_tag("script")
+        script_tag.string = f"""
+            window.DASHBOARD_CONFIG = {json.dumps(dashboard_config)};
+        """
+        head.append(script_tag)
+
+    return HTMLResponse(content=str(soup))
+
+
+@stream_router.post("/dashboard")
+def set_dashboard_config(
+    config: DashboardConfig, mxid: Mxid, stream_name: StreamName, sensor: SensorDep
+):
+    if sensor.nn_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Dashboard can only be set for streams with deployed neural networks",
+        )
+
+    sensor.dashboard_config = config
+
+    return {"dashboard_url": f"/cameras/{mxid}/streams/{stream_name}/dashboard"}
+
+
+@stream_router.delete("/dashboard")
+def delete_dashboard_config(sensor: SensorDep):
+    sensor.dashboard_config = None
 
 
 router.include_router(stream_router)
