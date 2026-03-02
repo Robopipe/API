@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from typing import Callable
 import av
 
+
+from ...models.dashboard.dashboard_config import DashboardConfig
 from ...models.nn_config import NNConfig
 from ...utils.image import img_frame_to_video_frame
 from ..pipeline.pipeline_queue_type import PipelineQueueType
@@ -25,6 +27,7 @@ class SensorBase(ABC):
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
         self._nn_config = None
+        self._dashboard_config = None
         self.last_frame: av.VideoFrame | None = None
 
     @property
@@ -51,6 +54,15 @@ class SensorBase(ABC):
     def nn_config(self, value: NNConfig | None) -> NNConfig | None:
         self._nn_config = value
         return self._nn_config
+
+    @property
+    def dashboard_config(self) -> DashboardConfig | None:
+        return self._dashboard_config
+
+    @dashboard_config.setter
+    def dashboard_config(self, value: DashboardConfig | None):
+        self._dashboard_config = value
+        return self._dashboard_config
 
     def __extract_img_properties(self, img: dai.ImgFrame):
         pass

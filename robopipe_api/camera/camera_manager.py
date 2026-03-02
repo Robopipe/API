@@ -33,7 +33,8 @@ class CameraManager:
             if mxid not in self.cameras:
                 self.cameras[dev.deviceId] = Camera(mxid, dev.name)
 
-        for mxid in self.cameras.keys():
+        current_mxids = set(self.cameras.keys())
+        for mxid in current_mxids:
             if mxid not in mxids:
                 del self.cameras[mxid]
 
