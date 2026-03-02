@@ -22,6 +22,7 @@ from ..video_track import media_relay_factory, video_track_factory, VideoTrack
 from ..controller.devices import DeviceList, Devices, Device
 from ..controller.devices import *
 from ..webrtc_manager import WebRTCManager, webrtc_manager_factory
+from ..ws_relay import WebSocketRelay, ws_relay_factory
 
 CameraManagerDep = Annotated[CameraManager, Depends(camera_manager_factory)]
 Mxid = Annotated[str, Path(regex=r"[A-Z0-9]+")]
@@ -74,6 +75,7 @@ def get_video_relay(sensor: SensorDep):
 VideoRelayDep = Annotated[MediaRelay, Depends(get_video_relay)]
 
 WebRTCManagerDep = Annotated[WebRTCManager, Depends(lambda: webrtc_manager_factory())]
+WSRelayDep = Annotated[WebSocketRelay, Depends(lambda: ws_relay_factory())]
 
 DEVICE_TYPES = [
     DI,
