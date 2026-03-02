@@ -1,6 +1,6 @@
 # (Required) App Identifier
 identifier = "io.robopipe.camera_api"
-app_version = "0.1.0"
+app_version = "0.2.0"
 # (Required) App Entrypoint
 entrypoint = ["bash", "-c", "cd /app && python3 -m robopipe_api"]
 
@@ -8,7 +8,6 @@ entrypoint = ["bash", "-c", "cd /app && python3 -m robopipe_api"]
 # Here is the place where you can install all the dependencies that are needed at run-time
 prepare_container = [
     { type = "COPY", source = "requirements.txt", target = "requirements.txt" },
-    { type = "COPY", source = "robopipe_api/", target = "robopipe_api/" },
     { type = "RUN", command = "apt-get update" },
     { type = "RUN", command = "apt-get install -y python3-pip git ffmpeg libsm6 libxext6" },
     { type = "RUN", command = "pip3 install -r /app/requirements.txt --break-system-packages" },
@@ -16,10 +15,17 @@ prepare_container = [
 
 # (Optional) Prepare build dependencies
 # Here is the place where you can install all the dependencies that are needed at build-time
-prepare_build_container = []
+prepare_build_container = [
+    { type = "RUN", command = "bash -c 'sed -i /messagebus/d /var/lib/dpkg/statoverride 2>/dev/null || true'" },
+    { type = "RUN", command = "apt-get update" },
+    { type = "RUN", command = "apt-get install -y curl" },
+    { type = "RUN", command = "bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash && . \"$HOME/.nvm/nvm.sh\" && nvm install 24'" },
+]
 
 # (Optional) Additional commands after all the app files are copied to the container
-build_steps = []
+build_steps = [
+    "bash -c 'cd app/dashboard_web && source $HOME/.nvm/nvm.sh && npm install && npm run build'",
+]
 
 [env]
 CORS_ORIGIN = "*"

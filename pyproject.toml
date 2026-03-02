@@ -1,6 +1,7 @@
 [build-system]
 requires = ["setuptools>=61.0", "setuptools_scm>=8"]
-build-backend = "setuptools.build_meta"
+build-backend = "build_backend"
+backend-path = ["."]
 
 [project]
 name = "robopipe-api"
@@ -25,6 +26,9 @@ keywords = [
 requires-python = ">=3.11"
 dynamic = ["dependencies", "version"]
 
+[tool.setuptools.packages.find]
+include = ["robopipe_api*"]
+
 [project.urls]
 Homepage = "https://robopipe.io"
 Documentation = "https://robopipe.gitbook.io/robopipe"
@@ -32,7 +36,9 @@ Repository = "https://github.com/Robopipe/API"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
-version = { attr = "robopipe_api._version.__version__" }
+
+[tool.setuptools.package-data]
+robopipe_api = ["static/dashboard/**/*"]
 
 [tool.setuptools_scm]
 version_file = "robopipe_api/_version.py"
