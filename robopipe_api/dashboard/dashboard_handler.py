@@ -1,4 +1,4 @@
-from ..models.dashboard.dashboard_config import DashboardConfig
+from ..models.dashboard.dashboard_config import DashboardConfig, DashboardLineDirection
 from ..models.dashboard.dashboard_item import (
     DashboardItem,
     DashboardItemLimitUnit,
@@ -7,6 +7,10 @@ from ..models.dashboard.dashboard_item import (
 )
 from ..models.detection.bbox_detection import BBoxDetection
 from ..models.detection.detection import BaseNNDetections
+
+# Per-config state tracking for line crossing:
+# config_id -> [(label, cx, cy, is_past_line, has_crossed)]
+_line_crossing_state: dict[int, list[tuple[int, float, float, bool, bool]]] = {}
 
 
 def _bbox_area(coords: tuple[float, float, float, float]) -> float:
@@ -203,6 +207,83 @@ def _evaluate_positional_item(
     return False
 
 
+def _is_past_line(
+    coords: tuple[float, float, float, float],
+    config: DashboardConfig,
+) -> bool:
+    """Check if a detection center is past the line.
+
+    HORIZONTAL line: past means center Y >= line_position (top-to-bottom).
+    VERTICAL   line: past means center X >= line_position (left-to-right).
+    """
+    cx, cy = _bbox_center(coords)
+    if config.lineDirection == DashboardLineDirection.HORIZONTAL:
+        return cy >= config.linePosition
+    return cx >= config.linePosition
+
+
+def _find_crossed_detections(
+    detections: list[BBoxDetection],
+    config: DashboardConfig,
+) -> tuple[list[BBoxDetection], bool]:
+    """Return all currently-visible detections that have crossed the line,
+    plus a flag indicating whether any NEW crossings happened this frame.
+
+    Matching between frames is done per-label using nearest-neighbour distance.
+    A detection is marked as "has_crossed" when its center transitions from
+    before the line to past it (or appears for the first time already past it).
+    Once marked, it stays crossed as long as it remains visible, so aggregate
+    metrics like COUNT accumulate correctly across frames.
+
+    Returns:
+        (crossed, has_new): crossed is the full accumulated list of visible
+        detections that have ever crossed; has_new is True only when at least
+        one detection crossed for the first time in this frame.
+    """
+    prev = _line_crossing_state.get(config.id, [])
+
+    current_info: list[tuple[int, float, float, bool]] = []
+    for det in detections:
+        cx, cy = _bbox_center(det.coords)
+        current_info.append((det.label, cx, cy, _is_past_line(det.coords, config)))
+
+    crossed: list[BBoxDetection] = []
+    new_state: list[tuple[int, float, float, bool, bool]] = []
+    used_prev: set[int] = set()
+    has_new = False
+
+    for i, (label, cx, cy, past) in enumerate(current_info):
+        best_match: int | None = None
+        best_dist = float("inf")
+        for j, (plabel, pcx, pcy, _ppast, _pcrossed) in enumerate(prev):
+            if j in used_prev or plabel != label:
+                continue
+            dist = (cx - pcx) ** 2 + (cy - pcy) ** 2
+            if dist < best_dist:
+                best_dist = dist
+                best_match = j
+
+        if best_match is not None:
+            used_prev.add(best_match)
+            prev_past, prev_crossed = prev[best_match][3], prev[best_match][4]
+            just_crossed = not prev_past and past
+            has_crossed = prev_crossed or just_crossed
+            if just_crossed:
+                has_new = True
+        else:
+            # New detection: crossed if it appeared already past the line
+            has_crossed = past
+            if has_crossed:
+                has_new = True
+
+        new_state.append((label, cx, cy, past, has_crossed))
+        if has_crossed:
+            crossed.append(detections[i])
+
+    _line_crossing_state[config.id] = new_state
+    return crossed, has_new
+
+
 def _evaluate_item(
     item: DashboardItem,
     detections: list[BBoxDetection],
@@ -241,10 +322,16 @@ def handle_detections(
     if dashboard_config is None:
         return result
 
+    crossed, has_new = _find_crossed_detections(detections.detections, dashboard_config)
+
+    if not has_new:
+        result["dashboard_detections"] = None
+        return result
+
     dashboard_detections: list[dict] = []
 
     for item in dashboard_config.items:
-        if _evaluate_item(item, detections.detections, dashboard_config):
+        if _evaluate_item(item, crossed, dashboard_config):
             dashboard_detections.append(
                 {
                     "item_id": item.id,

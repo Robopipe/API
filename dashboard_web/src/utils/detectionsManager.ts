@@ -1,4 +1,4 @@
-import type { NNDetections } from "../types/detections";
+import type { DashboardDetection, NNDetections } from "../types/detections";
 
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -87,6 +87,9 @@ class DetectionsManager {
           const parsed: NNDetections = Array.isArray(data)
             ? { detections: data }
             : data;
+          if (parsed.dashboard_detections?.length) {
+            void this.reportDashboardDetections(parsed.dashboard_detections);
+          }
           this.setSnapshot({ detections: parsed });
           for (const cb of this.callbacks) cb(parsed);
         } catch {
@@ -121,6 +124,42 @@ class DetectionsManager {
       });
     }
   };
+
+  private async reportDashboardDetections(detections: DashboardDetection[]) {
+    const { remoteBackendUrl, apiBase } = window.DASHBOARD_CONFIG;
+    if (!remoteBackendUrl) return;
+
+    const timestamp = new Date().toISOString();
+    const events = detections.map((d) => ({
+      id: crypto.randomUUID(),
+      item_id: d.item_id,
+      type: d.type,
+      timestamp,
+    }));
+
+    try {
+      const resp = await fetch(remoteBackendUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(events),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) return;
+    } catch {
+      // fall through to camera API cache
+    }
+
+    try {
+      await fetch(`${apiBase}/dashboard/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(events),
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch {
+      // nothing we can do
+    }
+  }
 
   private disconnect() {
     if (this.reconnectTimeout) {

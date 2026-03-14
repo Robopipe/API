@@ -1,4 +1,4 @@
-import type { Label } from "../types";
+import { DashboardLineDirection, type Label } from "../types";
 import type {
   BBDetection,
   ClassificationDetection,
@@ -117,4 +117,26 @@ export const renderSegmentationMask = (
   ctx.drawImage(offscreen, 0, 0, canvasWidth, canvasHeight);
   ctx.imageSmoothingEnabled = prevSmoothing;
   ctx.imageSmoothingQuality = prevQuality;
+};
+
+export const renderLine = (
+  ctx: CanvasRenderingContext2D,
+  direction: DashboardLineDirection,
+  position: number,
+) => {
+  const { width, height } = ctx.canvas;
+  ctx.strokeStyle = "#ff0000";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10, 5]);
+  ctx.beginPath();
+  if (direction === DashboardLineDirection.HORIZONTAL) {
+    const y = position * height;
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+  } else {
+    const x = position * width;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+  }
+  ctx.stroke();
 };

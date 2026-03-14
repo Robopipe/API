@@ -3,6 +3,7 @@ import type { NNDetections } from "../types/detections";
 import {
   renderBBoxDetection,
   renderClassificationDetection,
+  renderLine,
   renderSegmentationMask,
 } from "../utils/renderDetections";
 
@@ -73,6 +74,11 @@ export const useDetectionsRenderer = ({
 
       // Single
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      renderLine(
+        offCtx,
+        window.DASHBOARD_CONFIG.lineDirection,
+        window.DASHBOARD_CONFIG.linePosition,
+      );
       ctx.drawImage(offscreen, 0, 0);
     },
     [videoRef, enabled, getOffscreenCanvas],

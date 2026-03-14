@@ -15,6 +15,8 @@ from pathlib import Path
 from .camera.camera_manager import camera_manager_factory
 from .controller.config import EvokConfig, HWDict, create_devices
 from .controller.devices import Devices, RUN, OWBUS, TCPBUS, SERIALBUS, MODBUS_SLAVE
+from .dashboard.events_store import events_store_factory
+from .dashboard.sync_task import sync_task_factory
 from .error import (
     CameraNotFoundException,
     SensorNotFoundException,
@@ -40,14 +42,20 @@ async def lifespan(app: FastAPI):
     webrtc_manager = webrtc_manager_factory()
     controller_config_path = os.getenv("CONTROLLER_CONFIG")
 
-    if controller_config_path is not None and os.path.exists(controller_config_path):
-        hw_dict = HWDict([f"{controller_config_path}/hw_definitions/"])
-        controller_config = EvokConfig(controller_config_path)
+    events_store = events_store_factory()
+    events_store.init()
+    sync_task = sync_task_factory()
 
-        create_devices(controller_config, hw_dict)
-        Devices.register_device(RUN, Devices.aliases)
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(sync_task.run)
 
-        async with anyio.create_task_group() as tg:
+        if controller_config_path is not None and os.path.exists(controller_config_path):
+            hw_dict = HWDict([f"{controller_config_path}/hw_definitions/"])
+            controller_config = EvokConfig(controller_config_path)
+
+            create_devices(controller_config, hw_dict)
+            Devices.register_device(RUN, Devices.aliases)
+
             for owbus in Devices.by_int(OWBUS):
                 tg.start_soon(owbus.bus_driver.switch_to_async)
 
@@ -61,11 +69,9 @@ async def lifespan(app: FastAPI):
                 if modbus_slave.scan_enabled:
                     tg.start_soon(modbus_slave.start_scanning)
 
-            yield
-
-            tg.cancel_scope.cancel()
-    else:
         yield
+
+        tg.cancel_scope.cancel()
 
     stream_service.stop()
     await webrtc_manager.remove_all_pcs()

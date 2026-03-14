@@ -19,6 +19,7 @@ export type NNDetection =
 
 export interface DashboardDetection {
   item_id: number;
+  type: string;
 }
 
 export type NNDetections = {
