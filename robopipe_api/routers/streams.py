@@ -16,12 +16,14 @@ from bs4 import BeautifulSoup
 import json
 
 from robopipe_api.dashboard.dashboard_handler import handle_detections
+from robopipe_api.dashboard.events_store import events_store_factory
 
 from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
 from ..models.sensor_control import SensorControlUpdate
 from ..models.stream_info import StreamInfo
 from ..models.dashboard.dashboard_config import DashboardConfig
+from ..models.dashboard.detection_event import DetectionEvent
 from ..utils.detections_parser import parse_detections
 from .common import (
     CameraDep,
@@ -33,6 +35,7 @@ from .common import (
     VideoTrackDep,
     WebRTCManagerDep,
     WSRelayDep,
+    SyncTaskDep,
     Mxid,
 )
 
@@ -160,7 +163,7 @@ async def delete_neural_network(camera: CameraDep, stream_name: StreamName):
 @stream_router.websocket("/nn")
 async def get_sensor_detections(
     ws: WebSocket,
-    sensor: SensorDep,
+    camera: CameraDep,
     mxid: Mxid,
     stream_name: StreamName,
     relay: WSRelayDep,
@@ -168,6 +171,9 @@ async def get_sensor_detections(
     await ws.accept()
 
     def producer():
+        sensor = camera.sensors.get(stream_name)
+        if sensor is None:
+            raise RuntimeError(f"Sensor {stream_name} no longer available")
         detections = sensor.get_nn_detections()
         parsed_detections = parse_detections(detections)
         return handle_detections(sensor.dashboard_config, parsed_detections)
@@ -206,7 +212,7 @@ async def stream_video_offer(
 
 
 @stream_router.get("/dashboard", response_class=HTMLResponse)
-def serve_dashboard(request: Request, sensor: SensorDep):
+def serve_dashboard(request: Request, mxid: Mxid, stream_name: StreamName, sensor: SensorDep):
     if sensor.dashboard_config is None:
         return Response("No dashboard configured for this stream", status_code=404)
 
@@ -218,6 +224,8 @@ def serve_dashboard(request: Request, sensor: SensorDep):
     if head:
         dashboard_config = {
             "apiBase": str(request.url).rstrip("/dashboard"),
+            "mxid": mxid,
+            "streamName": stream_name,
             "labels": [label.model_dump() for label in sensor.dashboard_config.labels],
             "dashboardItems": [
                 {
@@ -227,6 +235,9 @@ def serve_dashboard(request: Request, sensor: SensorDep):
                 }
                 for item in sensor.dashboard_config.items
             ],
+            "lineDirection": sensor.dashboard_config.lineDirection,
+            "linePosition": sensor.dashboard_config.linePosition,
+            "remoteBackendUrl": sensor.dashboard_config.remoteBackendUrl,
         }
         script_tag = soup.new_tag("script")
         script_tag.string = f"""
@@ -255,6 +266,31 @@ def set_dashboard_config(
 @stream_router.delete("/dashboard")
 def delete_dashboard_config(sensor: SensorDep):
     sensor.dashboard_config = None
+
+
+@stream_router.post("/dashboard/events", status_code=status.HTTP_202_ACCEPTED)
+async def cache_detection_events(
+    events: list[DetectionEvent],
+    mxid: Mxid,
+    stream_name: StreamName,
+    sensor: SensorDep,
+    sync_task: SyncTaskDep,
+):
+    if sensor.dashboard_config is None or sensor.dashboard_config.remoteBackendUrl is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No remote backend URL configured for this dashboard",
+        )
+
+    await anyio.to_thread.run_sync(
+        lambda: events_store_factory().save_events(
+            [e.model_dump() for e in events],
+            mxid,
+            stream_name,
+            sensor.dashboard_config.remoteBackendUrl,
+        )
+    )
+    sync_task.notify_new_events()
 
 
 router.include_router(stream_router)

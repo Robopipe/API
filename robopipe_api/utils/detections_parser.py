@@ -10,7 +10,7 @@ from ..models.detection.segmentation_detection import (
 )
 
 
-def parse_detections(detections: dai.ImgDetections) -> BBoxDetections:
+def parse_img_detections(detections: dai.ImgDetections) -> BBoxDetections:
     def parse_detection(detection: dai.ImgDetection) -> BBoxDetection:
         res = {
             "label": detection.label,
@@ -91,7 +91,7 @@ def parse_detections(
     detections: dai.ImgDetections | Classifications | ImgDetectionsExtended,
 ):
     if isinstance(detections, dai.ImgDetections):
-        return parse_detections(detections)
+        return parse_img_detections(detections)
     elif isinstance(detections, Classifications):
         return parse_classifications(detections)
     elif isinstance(detections, ImgDetectionsExtended):

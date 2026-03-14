@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from functools import lru_cache
 from typing import Any, Callable, Hashable
@@ -15,8 +16,8 @@ class _Channel:
     """Internal state for a single relay channel."""
 
     def __init__(self):
-        self.subscribers: set[WebSocket] = set()
-        self.task: asyncio.Task | None = None
+        self.queues: set[asyncio.Queue[str]] = set()
+        self.producer_task: asyncio.Task | None = None
 
 
 class WebSocketRelay:
@@ -51,41 +52,43 @@ class WebSocketRelay:
         producer: Callable[[], Any],
     ):
         """
-        Subscribe a WebSocket to a channel and block until the connection closes.
+        Subscribe *ws* to *key* and block until the connection closes.
 
-        The caller must ``await ws.accept()`` **before** calling this method.
-
-        Args:
-            key: Hashable channel identifier (e.g. ``(mxid, stream_name)``).
-            ws: An already-accepted FastAPI ``WebSocket``.
-            producer: A **sync** callable that returns a JSON-serialisable
-                      message.  It is executed in a worker thread and may
-                      block (e.g. waiting on a hardware queue).  The
-                      returned value is broadcast to every subscriber on
-                      the channel via ``ws.send_json``.
+        The caller must ``await ws.accept()`` **before** calling this.
         """
         channel = self._channels.get(key)
-
         if channel is None:
             channel = _Channel()
             self._channels[key] = channel
 
-        channel.subscribers.add(ws)
+        # Each subscriber gets a 1-slot queue.  The producer replaces
+        # stale data so the subscriber always gets the latest message.
+        q: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
+        channel.queues.add(q)
 
-        # Start the producer loop when the first subscriber arrives.
-        if channel.task is None or channel.task.done():
-            channel.task = asyncio.create_task(self._produce(key, producer))
+        if channel.producer_task is None or channel.producer_task.done():
+            channel.producer_task = asyncio.create_task(self._produce(key, producer))
+
+        # Two concurrent loops: one sends data, one detects disconnect.
+        # Local variables keep strong references — no GC risk.
+        send_task = asyncio.create_task(self._send_loop(ws, q))
+        recv_task = asyncio.create_task(self._recv_loop(ws))
 
         try:
-            # Block until the client disconnects.
-            # We don't expect inbound messages, but receive_text() will
-            # raise on disconnect / close.
-            while True:
-                await ws.receive_text()
-        except Exception:
-            pass
+            # When *either* task finishes (disconnect or send error),
+            # cancel the other and clean up.
+            _done, pending = await asyncio.wait(
+                [send_task, recv_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
         finally:
-            self._remove_subscriber(key, ws)
+            channel.queues.discard(q)
+            if not channel.queues:
+                if channel.producer_task is not None:
+                    channel.producer_task.cancel()
+                self._channels.pop(key, None)
             try:
                 await ws.close()
             except Exception:
@@ -95,44 +98,54 @@ class WebSocketRelay:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _remove_subscriber(self, key: ChannelKey, ws: WebSocket):
-        channel = self._channels.get(key)
-        if channel is None:
-            return
-
-        channel.subscribers.discard(ws)
-
-        if not channel.subscribers:
-            if channel.task is not None:
-                channel.task.cancel()
-            del self._channels[key]
-
     async def _produce(self, key: ChannelKey, producer: Callable[[], Any]):
-        """Fetch data from *producer* in a thread and broadcast to subscribers."""
+        """Fetch data from *producer* in a thread and push to every queue."""
         try:
             while True:
                 channel = self._channels.get(key)
-                if channel is None or not channel.subscribers:
-                    break
+                if channel is None or not channel.queues:
+                    return
 
                 try:
-                    data = await anyio.to_thread.run_sync(producer)
+                    data = await anyio.to_thread.run_sync(
+                        producer, abandon_on_cancel=True
+                    )
                 except Exception:
                     logger.exception("Producer error on channel %s", key)
+                    await asyncio.sleep(0.1)
                     continue
 
-                # Snapshot the subscriber set so mutations during iteration
-                # don't cause issues.
-                disconnected: list[WebSocket] = []
-                for ws in list(channel.subscribers):
-                    try:
-                        await ws.send_json(data)
-                    except Exception:
-                        disconnected.append(ws)
+                text = json.dumps(data, separators=(",", ":"))
 
-                for ws in disconnected:
-                    self._remove_subscriber(key, ws)
+                for q in list(channel.queues):
+                    # Drop old data so the subscriber always gets the
+                    # latest message rather than falling behind.
+                    if q.full():
+                        try:
+                            q.get_nowait()
+                        except asyncio.QueueEmpty:
+                            pass
+                    try:
+                        q.put_nowait(text)
+                    except asyncio.QueueFull:
+                        pass
         except asyncio.CancelledError:
+            pass
+
+    @staticmethod
+    async def _send_loop(ws: WebSocket, q: asyncio.Queue[str]):
+        """Read from *q* and forward to the WebSocket."""
+        while True:
+            text = await q.get()
+            await ws.send_text(text)
+
+    @staticmethod
+    async def _recv_loop(ws: WebSocket):
+        """Block until the client disconnects."""
+        try:
+            while True:
+                await ws.receive_text()
+        except Exception:
             pass
 
 

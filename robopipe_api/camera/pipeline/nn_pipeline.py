@@ -41,13 +41,14 @@ class NNPipeline(DepthPipeline):
         ]
 
     def add_nn_config(self, nn_config: CameraNNConfig):
+        self.remove_sensor(nn_config.sensor_name)
         self.nn_configs[nn_config.sensor_name] = nn_config
 
     def add_nn(self, nn: CameraNNConfig):
         sensor_name = nn.sensor_name
-        self.nn_configs[sensor_name] = nn
         self.remove_nn(sensor_name)
         self.remove_sensor(sensor_name)
+        self.nn_configs[sensor_name] = nn
 
         if sensor_name not in self.cameras:
             cam = self.pipeline.create(dai.node.Camera).build()

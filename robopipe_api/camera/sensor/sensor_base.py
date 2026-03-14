@@ -1,3 +1,5 @@
+import datetime
+
 import depthai as dai
 from depthai_nodes import Classifications, ImgDetectionsExtended
 import numpy as np
@@ -111,6 +113,8 @@ class SensorBase(ABC):
         detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
 
         if detections is None:
-            return nn_queue.get()
+            detections = nn_queue.get(timeout=datetime.timedelta(seconds=2))
+            if detections is None:
+                raise TimeoutError("NN queue get() timed out")
 
         return detections
