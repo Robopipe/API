@@ -15,7 +15,7 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 import json
 
-from robopipe_api.dashboard.dashboard_handler import handle_detections
+from robopipe_api.dashboard.dashboard_handler import handle_detections, reset_line_crossing
 from robopipe_api.dashboard.events_store import events_store_factory
 
 from ..camera.sensor.sensor_config import SensorConfigProperties
@@ -176,7 +176,9 @@ async def get_sensor_detections(
             raise RuntimeError(f"Sensor {stream_name} no longer available")
         detections = sensor.get_nn_detections()
         parsed_detections = parse_detections(detections)
-        return handle_detections(sensor.dashboard_config, parsed_detections)
+        return handle_detections(
+            sensor.dashboard_config, parsed_detections, sensor.dashboard_running
+        )
 
     await relay.subscribe(key=(mxid, stream_name, "nn"), ws=ws, producer=producer)
 
@@ -227,17 +229,19 @@ def serve_dashboard(request: Request, mxid: Mxid, stream_name: StreamName, senso
             "mxid": mxid,
             "streamName": stream_name,
             "labels": [label.model_dump() for label in sensor.dashboard_config.labels],
-            "dashboardItems": [
+            "testCases": [
                 {
-                    "id": item.id,
-                    "name": item.name,
-                    "severity": item.severity,
+                    "id": tc.id,
+                    "name": tc.name,
+                    "severity": tc.severity,
                 }
-                for item in sensor.dashboard_config.items
+                for tc in sensor.dashboard_config.testCases
             ],
             "lineDirection": sensor.dashboard_config.lineDirection,
             "linePosition": sensor.dashboard_config.linePosition,
+            "lineFlow": sensor.dashboard_config.lineFlow,
             "remoteBackendUrl": sensor.dashboard_config.remoteBackendUrl,
+            "running": sensor.dashboard_running,
         }
         script_tag = soup.new_tag("script")
         script_tag.string = f"""
@@ -268,6 +272,29 @@ def delete_dashboard_config(sensor: SensorDep):
     sensor.dashboard_config = None
 
 
+@stream_router.post("/dashboard/start")
+def start_dashboard(sensor: SensorDep):
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+    reset_line_crossing(sensor.dashboard_config.id)
+    sensor.dashboard_running = True
+    return {"running": True}
+
+
+@stream_router.post("/dashboard/stop")
+def stop_dashboard(sensor: SensorDep):
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+    sensor.dashboard_running = False
+    return {"running": False}
+
+
 @stream_router.post("/dashboard/events", status_code=status.HTTP_202_ACCEPTED)
 async def cache_detection_events(
     events: list[DetectionEvent],
@@ -280,6 +307,12 @@ async def cache_detection_events(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No remote backend URL configured for this dashboard",
+        )
+
+    if not sensor.dashboard_running:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dashboard is not running",
         )
 
     await anyio.to_thread.run_sync(

@@ -30,6 +30,7 @@ class SensorBase(ABC):
         self.restart_pipeline = restart_pipeline
         self._nn_config = None
         self._dashboard_config = None
+        self._dashboard_running = False
         self.last_frame: av.VideoFrame | None = None
 
     @property
@@ -64,7 +65,15 @@ class SensorBase(ABC):
     @dashboard_config.setter
     def dashboard_config(self, value: DashboardConfig | None):
         self._dashboard_config = value
-        return self._dashboard_config
+        self._dashboard_running = False
+
+    @property
+    def dashboard_running(self) -> bool:
+        return self._dashboard_running
+
+    @dashboard_running.setter
+    def dashboard_running(self, value: bool):
+        self._dashboard_running = value
 
     def __extract_img_properties(self, img: dai.ImgFrame):
         pass
