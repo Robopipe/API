@@ -3,6 +3,6 @@ from pydantic import BaseModel
 
 class DetectionEvent(BaseModel):
     id: str
-    item_id: int
+    test_case_id: str
     type: str
     timestamp: str

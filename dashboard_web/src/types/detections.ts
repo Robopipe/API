@@ -18,7 +18,7 @@ export type NNDetection =
   | SegmentationDetection;
 
 export interface DashboardDetection {
-  item_id: number;
+  test_case_id: string;
   type: string;
 }
 

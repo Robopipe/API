@@ -3,21 +3,21 @@ import { useWebRTCStream } from "../../hooks";
 import { useDetections } from "../../hooks/useDetections";
 import { useDetectionsRenderer } from "../../hooks/useDetectionsRenderer";
 import { useAppState } from "../../provider";
-import type { DashboardItem, NNDetections } from "../../types";
+import type { TestCase, NNDetections } from "../../types";
 
 export const VideoStream = () => {
   const { running } = useAppState();
   const { videoRef } = useWebRTCStream();
   const { renderDetections, canvasRef } = useDetectionsRenderer({ videoRef });
   const [dashboardDetection, setDashboardDetection] =
-    useState<DashboardItem | null>(null);
+    useState<TestCase | null>(null);
   const onDetections = useCallback(
     (detections: NNDetections) => {
       renderDetections(detections);
       setDashboardDetection(
         detections.dashboard_detections?.[0]
-          ? window.DASHBOARD_CONFIG.dashboardItems.find(
-              (i) => i.id === detections.dashboard_detections?.[0]?.item_id,
+          ? window.DASHBOARD_CONFIG.testCases.find(
+              (tc) => tc.id === detections.dashboard_detections?.[0]?.test_case_id,
             ) || null
           : null,
       );
@@ -25,7 +25,7 @@ export const VideoStream = () => {
     [renderDetections],
   );
   useDetections({ onDetections });
-  const getDetectionClassName = (d: DashboardItem | null): string => {
+  const getDetectionClassName = (d: TestCase | null): string => {
     if (!d) return "bg-emerald-500/80";
     switch (d.severity) {
       case "ALERT":
@@ -62,7 +62,7 @@ export const VideoStream = () => {
       {running && (
         <p className="text-center text-4xl mt-9 mb-12">
           {dashboardDetection
-            ? `${dashboardDetection.severity}: ${window.DASHBOARD_CONFIG.dashboardItems.find((i) => i.id === dashboardDetection.id)?.name || "Unknown Item"}`
+            ? `${dashboardDetection.severity}: ${dashboardDetection.name}`
             : "OK"}
         </p>
       )}

@@ -3,7 +3,7 @@ import { useDetections } from "../../hooks/useDetections";
 import { useAppState } from "../../provider";
 
 export const Counter = () => {
-  const { running, dashboardItemMap } = useAppState();
+  const { running, testCaseMap } = useAppState();
   const [count, setCount] = useState(0);
   const [warnings, setWarnings] = useState(0);
   const [alerts, setAlerts] = useState(0);
@@ -12,9 +12,9 @@ export const Counter = () => {
       setCount(detections.detections.length);
       const { warnings, alerts } = detections.dashboard_detections?.reduce(
         (acc, d) => {
-          if (dashboardItemMap[d.item_id]?.severity === "WARNING")
+          if (testCaseMap[d.test_case_id]?.severity === "WARNING")
             acc.warnings += 1;
-          if (dashboardItemMap[d.item_id]?.severity === "ALERT")
+          if (testCaseMap[d.test_case_id]?.severity === "ALERT")
             acc.alerts += 1;
           return acc;
         },

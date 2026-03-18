@@ -41,7 +41,7 @@ class SyncTask:
                 payload = [
                     {
                         "id": e["id"],
-                        "item_id": e["item_id"],
+                        "test_case_id": e["test_case_id"],
                         "type": e["type"],
                         "timestamp": e["timestamp"],
                         "mxid": e["mxid"],

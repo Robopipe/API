@@ -17,7 +17,7 @@ class EventsStore:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS detection_events (
                     id TEXT PRIMARY KEY,
-                    item_id INTEGER NOT NULL,
+                    test_case_id TEXT NOT NULL,
                     type TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     mxid TEXT NOT NULL,
@@ -37,10 +37,10 @@ class EventsStore:
         with sqlite3.connect(self.db_path) as conn:
             conn.executemany(
                 "INSERT OR IGNORE INTO detection_events"
-                " (id, item_id, type, timestamp, mxid, stream_name, remote_url)"
+                " (id, test_case_id, type, timestamp, mxid, stream_name, remote_url)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 [
-                    (e["id"], e["item_id"], e["type"], e["timestamp"], mxid, stream_name, remote_url)
+                    (e["id"], e["test_case_id"], e["type"], e["timestamp"], mxid, stream_name, remote_url)
                     for e in events
                 ],
             )

@@ -132,7 +132,7 @@ class DetectionsManager {
     const timestamp = new Date().toISOString();
     const events = detections.map((d) => ({
       id: crypto.randomUUID(),
-      item_id: d.item_id,
+      test_case_id: d.test_case_id,
       type: d.type,
       timestamp,
     }));

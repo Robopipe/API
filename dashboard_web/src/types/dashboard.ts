@@ -5,8 +5,13 @@ export enum DashboardLineDirection {
   VERTICAL = "VERTICAL",
 }
 
-export interface DashboardItem {
-  id: number;
+export enum DashboardLineFlow {
+  POSITIVE = "POSITIVE",
+  NEGATIVE = "NEGATIVE",
+}
+
+export interface TestCase {
+  id: string;
   name: string;
   severity: "ALERT" | "WARNING";
 }
@@ -16,8 +21,10 @@ export interface DashboardConfig {
   mxid: string;
   streamName: string;
   labels: Label[];
-  dashboardItems: DashboardItem[];
+  testCases: TestCase[];
   lineDirection: DashboardLineDirection;
   linePosition: number;
+  lineFlow: DashboardLineFlow;
   remoteBackendUrl?: string;
+  running: boolean;
 }

@@ -3,13 +3,18 @@ from enum import Enum
 from pydantic import ConfigDict
 
 from ..base_model import BaseModel
-from .dashboard_item import DashboardItem
+from .eval_models import EvalTestCase
 from .label import Label
 
 
 class DashboardLineDirection(str, Enum):
     HORIZONTAL = "HORIZONTAL"
     VERTICAL = "VERTICAL"
+
+
+class DashboardLineFlow(str, Enum):
+    POSITIVE = "POSITIVE"
+    NEGATIVE = "NEGATIVE"
 
 
 class DashboardConfig(BaseModel):
@@ -19,6 +24,7 @@ class DashboardConfig(BaseModel):
     name: str
     lineDirection: DashboardLineDirection
     linePosition: float
-    items: list[DashboardItem]
+    lineFlow: DashboardLineFlow = DashboardLineFlow.POSITIVE
+    testCases: list[EvalTestCase]
     labels: list[Label]
     remoteBackendUrl: str | None = None
