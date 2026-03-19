@@ -1,8 +1,10 @@
 import type { ThresholdTestCaseStatus } from "../../types/detections";
+import type { WidgetDisplayMode } from "./widgetStorage";
 
 export interface DonutWidgetProps {
   name: string;
   status: ThresholdTestCaseStatus | null;
+  displayMode?: WidgetDisplayMode;
   /** Default color when no threshold status is available */
   defaultColor?: string;
 }
@@ -15,14 +17,39 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 export const DonutWidget = ({
   name,
   status,
+  displayMode = "failures",
   defaultColor = "#20a963",
 }: DonutWidgetProps) => {
   const failures = status?.failures ?? 0;
-  const passRate = status?.pass_rate ?? 100;
+  const total = status?.total ?? 0;
+  const passRate = status?.pass_rate ?? 1.0;
   const zoneColor = status?.zone_color ?? defaultColor;
-  const showWarning = status !== null && status.total > 0 && status.failures > 0;
+  const showWarning =
+    status !== null && status.total > 0 && !status.is_best_zone;
 
-  const fillOffset = CIRCUMFERENCE * (1 - passRate / 100);
+  const fillOffset = CIRCUMFERENCE * (1 - passRate);
+
+  const centerContent = () => {
+    if (displayMode === "pass_rate") {
+      return (
+        <span className="text-2xl font-bold text-white">
+          {(passRate * 100).toFixed(1)}%
+        </span>
+      );
+    }
+    if (displayMode === "failures_of_total") {
+      return (
+        <>
+          <span className="text-2xl font-bold text-white leading-none">
+            {failures}
+          </span>
+          <span className="text-xs text-gray-400 mt-0.5">of {total}</span>
+        </>
+      );
+    }
+    // default: "failures"
+    return <span className="text-3xl font-bold text-white">{failures}</span>;
+  };
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -58,7 +85,7 @@ export const DonutWidget = ({
         </svg>
         {/* Center content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-white">{failures}</span>
+          {centerContent()}
           {showWarning && (
             <svg
               width="16"
@@ -84,6 +111,14 @@ export const DonutWidget = ({
                 !
               </text>
             </svg>
+          )}
+          {status?.zone_name && (
+            <span
+              className="text-xs text-gray-400 mt-0.5 px-1 rounded"
+              style={{ backgroundColor: zoneColor + "33" }}
+            >
+              {status.zone_name}
+            </span>
           )}
         </div>
       </div>

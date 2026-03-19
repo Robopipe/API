@@ -318,7 +318,6 @@ class LimitEvaluator:
 
         # Evaluate items and combine with left-to-right AND/OR
         result = self.item_evaluators[0].evaluate(targets, parents, detections)
-        print(targets, parents, result)
 
         for i in range(1, len(self.item_evaluators)):
             # The operator on item[i-1] sits between item[i-1] and item[i]

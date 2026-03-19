@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Container, type ContainerProps } from "../../ui";
 import { useDetections } from "../../hooks/useDetections";
 import { useAppState } from "../../provider";
@@ -27,6 +27,18 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
 
   useDetections({ onDetections, enabled: running });
 
+  useEffect(() => {
+    if (!running) return;
+    fetch(`${window.DASHBOARD_CONFIG.apiBase}/dashboard/metrics`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && Object.keys(data).length > 0) {
+          setThresholdStatus(data);
+        }
+      })
+      .catch(() => {});
+  }, [running]);
+
   const testCaseMap = window.DASHBOARD_CONFIG.testCases.reduce(
     (acc, tc) => {
       acc[tc.id] = tc;
@@ -34,6 +46,14 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
     },
     {} as Record<string, (typeof window.DASHBOARD_CONFIG.testCases)[number]>,
   );
+
+  const getThresholdDefaultColor = (
+    tc: (typeof window.DASHBOARD_CONFIG.testCases)[number],
+  ) => {
+    if (!tc.thresholds?.length) return "#20a963";
+    const sorted = [...tc.thresholds].sort((a, b) => a.value - b.value);
+    return sorted[sorted.length - 1].color;
+  };
 
   return (
     <Container className={`relative flex flex-col ${className || ""}`} {...props}>
@@ -66,17 +86,19 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
           gridTemplateRows: `repeat(${widgetSlots.gridSize}, 1fr)`,
         }}
       >
-        {widgetSlots.slots.map((slotId, index) => {
-          if (!slotId) return <div key={index} />;
+        {widgetSlots.slots.map((slot, index) => {
+          if (!slot) return <div key={index} />;
 
-          const tc = testCaseMap[slotId];
+          const tc = testCaseMap[slot.id];
           if (!tc) return <div key={index} />;
 
           return (
             <DonutWidget
               key={index}
               name={tc.name}
-              status={thresholdStatus?.[slotId] ?? null}
+              status={thresholdStatus?.[slot.id] ?? null}
+              displayMode={slot.mode}
+              defaultColor={getThresholdDefaultColor(tc)}
             />
           );
         })}

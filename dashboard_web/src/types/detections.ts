@@ -28,6 +28,7 @@ export interface ThresholdTestCaseStatus {
   pass_rate: number;
   zone_name: string;
   zone_color: string;
+  is_best_zone: boolean;
 }
 
 export type ThresholdStatus = Record<string, ThresholdTestCaseStatus>;

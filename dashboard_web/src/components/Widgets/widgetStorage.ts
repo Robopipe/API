@@ -1,16 +1,37 @@
-export const GRID_OPTIONS = [2, 3, 4] as const;
-export type GridSize = (typeof GRID_OPTIONS)[number];
-
-const DEFAULT_GRID_SIZE: GridSize = 3;
+export const MIN_GRID_SIZE = 1;
+export const MAX_GRID_SIZE = 8;
+const DEFAULT_GRID_SIZE = 3;
 const STORAGE_KEY = "robopipe_widget_config";
 
-export interface WidgetSlots {
-  gridSize: GridSize;
-  slots: (string | null)[];
+export type WidgetDisplayMode = "failures" | "pass_rate" | "failures_of_total";
+
+export interface WidgetSlot {
+  id: string;
+  mode: WidgetDisplayMode;
 }
 
-function slotCount(gridSize: GridSize): number {
+export interface WidgetSlots {
+  gridSize: number;
+  slots: (WidgetSlot | null)[];
+}
+
+function slotCount(gridSize: number): number {
   return gridSize * gridSize;
+}
+
+function clampGridSize(value: unknown): number {
+  const n = typeof value === "number" ? value : DEFAULT_GRID_SIZE;
+  return Math.min(MAX_GRID_SIZE, Math.max(MIN_GRID_SIZE, Math.round(n)));
+}
+
+function normalizeSlot(raw: unknown): WidgetSlot | null {
+  if (raw === null || raw === undefined) return null;
+  // Migrate from old format where slots were plain strings (test case IDs)
+  if (typeof raw === "string") return { id: raw, mode: "failures" };
+  if (typeof raw === "object" && raw !== null && "id" in raw) {
+    return raw as WidgetSlot;
+  }
+  return null;
 }
 
 export function loadWidgetSlots(): WidgetSlots {
@@ -18,12 +39,10 @@ export function loadWidgetSlots(): WidgetSlots {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const gs: GridSize = GRID_OPTIONS.includes(parsed.gridSize)
-        ? parsed.gridSize
-        : DEFAULT_GRID_SIZE;
+      const gs = clampGridSize(parsed.gridSize);
       const count = slotCount(gs);
       if (Array.isArray(parsed.slots)) {
-        const slots = parsed.slots.slice(0, count);
+        const slots = parsed.slots.slice(0, count).map(normalizeSlot);
         while (slots.length < count) slots.push(null);
         return { gridSize: gs, slots };
       }
@@ -39,12 +58,13 @@ export function loadWidgetSlots(): WidgetSlots {
 
 export function resizeSlots(
   current: WidgetSlots,
-  newSize: GridSize,
+  newSize: number,
 ): WidgetSlots {
-  const count = slotCount(newSize);
+  const gs = clampGridSize(newSize);
+  const count = slotCount(gs);
   const slots = current.slots.slice(0, count);
   while (slots.length < count) slots.push(null);
-  return { gridSize: newSize, slots };
+  return { gridSize: gs, slots };
 }
 
 export function saveWidgetSlots(config: WidgetSlots) {

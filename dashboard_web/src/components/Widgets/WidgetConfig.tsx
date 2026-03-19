@@ -2,10 +2,11 @@ import type { TestCase } from "../../types/dashboard";
 import type { ThresholdStatus } from "../../types/detections";
 import { DonutWidget } from "./DonutWidget";
 import {
-  GRID_OPTIONS,
+  MAX_GRID_SIZE,
+  MIN_GRID_SIZE,
   resizeSlots,
   saveWidgetSlots,
-  type GridSize,
+  type WidgetDisplayMode,
   type WidgetSlots,
 } from "./widgetStorage";
 
@@ -15,6 +16,12 @@ export interface WidgetConfigProps {
   onSlotsChange: (slots: WidgetSlots) => void;
   thresholdStatus: ThresholdStatus | null;
 }
+
+const DISPLAY_MODES: { value: WidgetDisplayMode; label: string }[] = [
+  { value: "failures", label: "Failures" },
+  { value: "pass_rate", label: "Pass rate" },
+  { value: "failures_of_total", label: "Failures / total" },
+];
 
 export const WidgetConfig = ({
   onClose,
@@ -30,7 +37,7 @@ export const WidgetConfig = ({
     const emptyIndex = slots.slots.indexOf(null);
     if (emptyIndex === -1) return;
     const newSlots = [...slots.slots];
-    newSlots[emptyIndex] = testCaseId;
+    newSlots[emptyIndex] = { id: testCaseId, mode: "failures" };
     const updated: WidgetSlots = { gridSize: slots.gridSize, slots: newSlots };
     onSlotsChange(updated);
     saveWidgetSlots(updated);
@@ -44,16 +51,32 @@ export const WidgetConfig = ({
     saveWidgetSlots(updated);
   };
 
-  const changeGridSize = (size: GridSize) => {
+  const setSlotMode = (index: number, mode: WidgetDisplayMode) => {
+    const slot = slots.slots[index];
+    if (!slot) return;
+    const newSlots = [...slots.slots];
+    newSlots[index] = { ...slot, mode };
+    const updated: WidgetSlots = { gridSize: slots.gridSize, slots: newSlots };
+    onSlotsChange(updated);
+    saveWidgetSlots(updated);
+  };
+
+  const changeGridSize = (size: number) => {
     const updated = resizeSlots(slots, size);
     onSlotsChange(updated);
     saveWidgetSlots(updated);
   };
 
-  const assignedIds = new Set(slots.slots.filter(Boolean));
+  const assignedIds = new Set(slots.slots.filter(Boolean).map((s) => s!.id));
 
   const getTestCase = (id: string): TestCase | undefined =>
     testCases.find((tc) => tc.id === id);
+
+  const getThresholdDefaultColor = (tc: TestCase) => {
+    if (!tc.thresholds?.length) return "#20a963";
+    const sorted = [...tc.thresholds].sort((a, b) => a.value - b.value);
+    return sorted[sorted.length - 1].color;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -69,21 +92,27 @@ export const WidgetConfig = ({
         </div>
 
         {/* Grid size selector */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-3 mb-4">
           <span className="text-sm text-gray-400">Grid size:</span>
-          {GRID_OPTIONS.map((size) => (
+          <div className="flex items-center gap-1">
             <button
-              key={size}
-              onClick={() => changeGridSize(size)}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                slots.gridSize === size
-                  ? "bg-gray-600 text-white"
-                  : "bg-gray-800 text-gray-400 hover:text-white"
-              }`}
+              onClick={() => changeGridSize(slots.gridSize - 1)}
+              disabled={slots.gridSize <= MIN_GRID_SIZE}
+              className="w-7 h-7 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-lg leading-none"
             >
-              {size}x{size}
+              −
             </button>
-          ))}
+            <span className="w-16 text-center text-sm text-white font-medium">
+              {slots.gridSize}×{slots.gridSize}
+            </span>
+            <button
+              onClick={() => changeGridSize(slots.gridSize + 1)}
+              disabled={slots.gridSize >= MAX_GRID_SIZE}
+              className="w-7 h-7 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-lg leading-none"
+            >
+              +
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-6">
@@ -103,6 +132,7 @@ export const WidgetConfig = ({
                 <DonutWidget
                   name={tc.name}
                   status={thresholdStatus?.[tc.id] ?? null}
+                  defaultColor={getThresholdDefaultColor(tc)}
                 />
               </button>
             ))}
@@ -116,9 +146,9 @@ export const WidgetConfig = ({
               gridTemplateRows: `repeat(${slots.gridSize}, 1fr)`,
             }}
           >
-            {slots.slots.map((slotId, index) => {
-              if (slotId) {
-                const tc = getTestCase(slotId);
+            {slots.slots.map((slot, index) => {
+              if (slot) {
+                const tc = getTestCase(slot.id);
                 return (
                   <div
                     key={index}
@@ -132,8 +162,27 @@ export const WidgetConfig = ({
                     </button>
                     <DonutWidget
                       name={tc?.name ?? "Unknown"}
-                      status={thresholdStatus?.[slotId] ?? null}
+                      status={thresholdStatus?.[slot.id] ?? null}
+                      displayMode={slot.mode}
+                      defaultColor={tc ? getThresholdDefaultColor(tc) : undefined}
                     />
+                    {/* Display mode selector */}
+                    <div className="flex gap-1 mt-3">
+                      {DISPLAY_MODES.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => setSlotMode(index, value)}
+                          title={label}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
+                            slot.mode === value
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-700 text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 );
               }
