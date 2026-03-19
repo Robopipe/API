@@ -22,8 +22,19 @@ export interface DashboardDetection {
   type: string;
 }
 
+export interface ThresholdTestCaseStatus {
+  total: number;
+  failures: number;
+  pass_rate: number;
+  zone_name: string;
+  zone_color: string;
+}
+
+export type ThresholdStatus = Record<string, ThresholdTestCaseStatus>;
+
 export type NNDetections = {
   detections: NNDetection[];
   masks?: number[][];
   dashboard_detections?: DashboardDetection[];
+  threshold_status?: ThresholdStatus;
 };

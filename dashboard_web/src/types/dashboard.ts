@@ -10,10 +10,19 @@ export enum DashboardLineFlow {
   NEGATIVE = "NEGATIVE",
 }
 
+export interface EvalThreshold {
+  id: string;
+  name: string;
+  value: number;
+  color: string;
+  testCaseId: string;
+}
+
 export interface TestCase {
   id: string;
   name: string;
   severity: "ALERT" | "WARNING";
+  thresholds: EvalThreshold[];
 }
 
 export interface DashboardConfig {
