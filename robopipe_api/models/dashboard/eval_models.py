@@ -4,6 +4,7 @@ from enum import Enum
 
 from ..base_model import BaseModel
 from .label import Label
+from .eval_threshold import EvalThreshold
 
 
 # --- Limit Item ---
@@ -85,3 +86,4 @@ class EvalTestCase(BaseModel):
     severity: EvalTestCaseSeverity
     limits: list[EvalLimit]
     logicNodes: list[EvalLogicNode] = []
+    thresholds: list[EvalThreshold] = []

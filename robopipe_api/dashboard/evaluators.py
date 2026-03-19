@@ -17,6 +17,7 @@ from ..models.dashboard.eval_models import (
     EvalTestCaseType,
 )
 from ..models.detection.bbox_detection import BBoxDetection
+from .threshold_tracker import ThresholdTracker
 
 
 # ---------------------------------------------------------------------------
@@ -272,9 +273,7 @@ class LimitEvaluator:
     def __init__(self, limit: EvalLimit, config: DashboardConfig) -> None:
         self.limit = limit
         self.config = config
-        self.item_evaluators = [
-            LimitItemEvaluator(item) for item in limit.limitItems
-        ]
+        self.item_evaluators = [LimitItemEvaluator(item) for item in limit.limitItems]
 
     def _get_target_detections(
         self, detections: list[BBoxDetection]
@@ -289,7 +288,9 @@ class LimitEvaluator:
 
         parents = self._get_parent_detections(detections)
         return [
-            t for t in targets if any(is_within_bbox(t.coords, p.coords) for p in parents)
+            t
+            for t in targets
+            if any(is_within_bbox(t.coords, p.coords) for p in parents)
         ]
 
     def _get_parent_detections(
@@ -317,6 +318,7 @@ class LimitEvaluator:
 
         # Evaluate items and combine with left-to-right AND/OR
         result = self.item_evaluators[0].evaluate(targets, parents, detections)
+        print(targets, parents, result)
 
         for i in range(1, len(self.item_evaluators)):
             # The operator on item[i-1] sits between item[i-1] and item[i]
@@ -339,23 +341,18 @@ class LimitEvaluator:
 class LogicTreeEvaluator:
     """Evaluates the logic node tree that combines limit results."""
 
-    def __init__(
-        self, test_case: EvalTestCase, config: DashboardConfig
-    ) -> None:
+    def __init__(self, test_case: EvalTestCase, config: DashboardConfig) -> None:
         self.test_case = test_case
         self.config = config
         self.limit_evaluators: dict[str, LimitEvaluator] = {
-            limit.id: LimitEvaluator(limit, config)
-            for limit in test_case.limits
+            limit.id: LimitEvaluator(limit, config) for limit in test_case.limits
         }
 
     def evaluate(self, detections: list[BBoxDetection]) -> bool:
         """Evaluate the logic tree. Returns True if the combined condition is met."""
         if not self.test_case.logicNodes:
             # Default: AND all limits
-            return all(
-                ev.evaluate(detections) for ev in self.limit_evaluators.values()
-            )
+            return all(ev.evaluate(detections) for ev in self.limit_evaluators.values())
 
         return self._evaluate_nodes(self.test_case.logicNodes, detections)
 
@@ -411,9 +408,7 @@ class LogicTreeEvaluator:
 class TestCaseEvaluator:
     """Evaluates a single test case, applying CHECK/DEFECT semantics."""
 
-    def __init__(
-        self, test_case: EvalTestCase, config: DashboardConfig
-    ) -> None:
+    def __init__(self, test_case: EvalTestCase, config: DashboardConfig) -> None:
         self.test_case = test_case
         self.logic_evaluator = LogicTreeEvaluator(test_case, config)
 
@@ -434,15 +429,21 @@ class TestCaseEvaluator:
 class DashboardEvaluator:
     """Top-level evaluator: manages line crossing state and evaluates test cases."""
 
-    def __init__(self, line_crossing_tracker: LineCrossingTracker) -> None:
+    def __init__(
+        self,
+        line_crossing_tracker: LineCrossingTracker,
+        threshold_tracker: ThresholdTracker,
+    ) -> None:
         self._tracker = line_crossing_tracker
+        self._threshold_tracker = threshold_tracker
 
     def evaluate(
         self, config: DashboardConfig, detections: list[BBoxDetection]
     ) -> list[dict] | None:
         """Evaluate all test cases against detections that crossed the line.
 
-        Returns a list of violation dicts, or None if no new crossings occurred.
+        Returns a list of violation dicts (possibly empty), or None if no new
+        crossings occurred.
         """
         crossed, has_new = self._tracker.find_crossed_detections(detections, config)
 
@@ -455,7 +456,11 @@ class DashboardEvaluator:
 
         violations: list[dict] = []
         for evaluator in test_case_evaluators:
-            if evaluator.is_violated(crossed):
+            violated = evaluator.is_violated(crossed)
+            self._threshold_tracker.record(
+                config.id, evaluator.test_case.id, passed=not violated
+            )
+            if violated:
                 violations.append(
                     {
                         "test_case_id": evaluator.test_case.id,
@@ -463,4 +468,4 @@ class DashboardEvaluator:
                     }
                 )
 
-        return violations or None
+        return violations
