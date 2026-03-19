@@ -16,13 +16,26 @@ from setuptools.build_meta import (
 _DASHBOARD_DIR = "dashboard_web"
 
 
+def _is_npm_available() -> bool:
+    """Check if npm is available on the system."""
+    try:
+        subprocess.check_output(["npm", "--version"], stderr=subprocess.STDOUT)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
 def _build_dashboard() -> None:
-    """Run npm install + npm run build inside dashboard_web/."""
+    """Run npm install + npm run build inside dashboard_web/. Skip if dashboard_web/ is not found or if npm is not available."""
     root = os.path.dirname(os.path.abspath(__file__))
     dashboard_path = os.path.join(root, _DASHBOARD_DIR)
 
     if not os.path.isdir(dashboard_path):
         print(f"[build_backend] {_DASHBOARD_DIR}/ not found – skipping dashboard build")
+        return
+
+    if not _is_npm_available():
+        print(f"[build_backend] npm not available – skipping dashboard build")
         return
 
     print(f"[build_backend] Installing dashboard_web dependencies …")
