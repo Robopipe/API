@@ -18,6 +18,7 @@ import json
 from robopipe_api.dashboard.dashboard_handler import (
     handle_detections,
     reset_line_crossing,
+    _threshold_tracker,
 )
 from robopipe_api.dashboard.events_store import events_store_factory
 
@@ -310,6 +311,15 @@ def stop_dashboard(sensor: SensorDep):
         )
     sensor.dashboard_running = False
     return {"running": False}
+
+
+@stream_router.get("/dashboard/metrics")
+def get_dashboard_metrics(sensor: SensorDep):
+    if sensor.dashboard_config is None or not sensor.dashboard_running:
+        return {}
+    return _threshold_tracker.get_status(
+        sensor.dashboard_config.id, sensor.dashboard_config.testCases
+    ) or {}
 
 
 @stream_router.post("/dashboard/events", status_code=status.HTTP_202_ACCEPTED)
