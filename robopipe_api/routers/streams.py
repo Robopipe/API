@@ -15,7 +15,10 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 import json
 
-from robopipe_api.dashboard.dashboard_handler import handle_detections, reset_line_crossing
+from robopipe_api.dashboard.dashboard_handler import (
+    handle_detections,
+    reset_line_crossing,
+)
 from robopipe_api.dashboard.events_store import events_store_factory
 
 from ..camera.sensor.sensor_config import SensorConfigProperties
@@ -63,6 +66,10 @@ stream_router = APIRouter(
 )
 
 
+class JpegResponse(Response):
+    media_type = "image/jpeg"
+
+
 @stream_router.post("/", status_code=status.HTTP_201_CREATED)
 def activate_stream(camera: CameraDep, stream_name: StreamName):
     camera.activate_sensor(stream_name)
@@ -107,13 +114,20 @@ def update_stream_control(
 @stream_router.get(
     "/still",
     response_description="Image bytes in JPEG format",
-    response_model=bytes,
-    response_class=type[Response(media_type="image/jpeg")],
+    response_class=JpegResponse,
+    responses={
+        200: {
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}}
+            },
+            "description": "Image bytes in JPEG format",
+        }
+    },
 )
-async def capture_still_image(sensor: SensorDep) -> Response:
+async def capture_still_image(sensor: SensorDep) -> JpegResponse:
     img = await anyio.to_thread.run_sync(sensor.capture_still)
 
-    return Response(img.getData().tobytes(), media_type="image/jpeg")
+    return JpegResponse(img.getData().tobytes())
 
 
 @stream_router.get("/nn", tags=["nn"])
@@ -214,7 +228,9 @@ async def stream_video_offer(
 
 
 @stream_router.get("/dashboard", response_class=HTMLResponse)
-def serve_dashboard(request: Request, mxid: Mxid, stream_name: StreamName, sensor: SensorDep):
+def serve_dashboard(
+    request: Request, mxid: Mxid, stream_name: StreamName, sensor: SensorDep
+):
     if sensor.dashboard_config is None:
         return Response("No dashboard configured for this stream", status_code=404)
 
@@ -234,6 +250,7 @@ def serve_dashboard(request: Request, mxid: Mxid, stream_name: StreamName, senso
                     "id": tc.id,
                     "name": tc.name,
                     "severity": tc.severity,
+                    "thresholds": [t.model_dump() for t in tc.thresholds],
                 }
                 for tc in sensor.dashboard_config.testCases
             ],
@@ -303,7 +320,10 @@ async def cache_detection_events(
     sensor: SensorDep,
     sync_task: SyncTaskDep,
 ):
-    if sensor.dashboard_config is None or sensor.dashboard_config.remoteBackendUrl is None:
+    if (
+        sensor.dashboard_config is None
+        or sensor.dashboard_config.remoteBackendUrl is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No remote backend URL configured for this dashboard",
