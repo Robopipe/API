@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ..models.dashboard.dashboard_config import (
     DashboardConfig,
     DashboardLineDirection,
@@ -33,6 +35,10 @@ def bbox_area(coords: tuple[float, float, float, float]) -> float:
 def bbox_center(coords: tuple[float, float, float, float]) -> tuple[float, float]:
     x1, y1, x2, y2 = coords
     return ((x1 + x2) / 2, (y1 + y2) / 2)
+
+
+def euclidean_distance(c1: tuple[float, float], c2: tuple[float, float]) -> float:
+    return ((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2) ** 0.5
 
 
 def is_within_bbox(
@@ -100,12 +106,20 @@ def value_within_limits(
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class TrackedDetection:
+    label: int
+    cx: float
+    cy: float
+    is_past_line: bool
+    has_crossed: bool
+
+
 class LineCrossingTracker:
     """Tracks per-config detection line crossings across frames."""
 
     def __init__(self) -> None:
-        # config_id -> [(label, cx, cy, is_past_line, has_crossed)]
-        self._state: dict[int, list[tuple[int, float, float, bool, bool]]] = {}
+        self._state: dict[int, list[TrackedDetection]] = {}
 
     def _is_past_line(
         self,
@@ -123,52 +137,84 @@ class LineCrossingTracker:
         self,
         detections: list[BBoxDetection],
         config: DashboardConfig,
-    ) -> tuple[list[BBoxDetection], bool]:
-        """Return visible detections that have crossed the line and whether
-        any NEW crossings happened this frame."""
-        prev = self._state.get(config.id, [])
+    ) -> tuple[list[BBoxDetection], set[int]]:
+        """Return (crossed, just_crossed_label_indices).
 
-        current_info: list[tuple[int, float, float, bool]] = []
+        crossed: currently-visible detections that have ever crossed the line.
+        just_crossed_label_indices: set of detection label indices (d.label)
+            that had at least one new crossing this frame.
+        """
+        prev_state = self._state.get(config.id, [])
+
+        prev_not_past = filter(lambda d: not d.is_past_line, prev_state)
+        curr_not_past: list[TrackedDetection] = []
+        curr_past: list[TrackedDetection] = []
+        ret_past: list[BBoxDetection] = []
+        curr_used: set[int] = set()
+
         for det in detections:
             cx, cy = bbox_center(det.coords)
-            current_info.append(
-                (det.label, cx, cy, self._is_past_line(det.coords, config))
-            )
+            past = self._is_past_line(det.coords, config)
 
-        crossed: list[BBoxDetection] = []
-        new_state: list[tuple[int, float, float, bool, bool]] = []
-        used_prev: set[int] = set()
-        has_new = False
+            if past:
+                curr_past.append(TrackedDetection(det.label, cx, cy, True, False))
+                ret_past.append(det)
+            else:
+                curr_not_past.append(TrackedDetection(det.label, cx, cy, False, False))
 
-        for i, (label, cx, cy, past) in enumerate(current_info):
-            best_match: int | None = None
+        for prev in prev_not_past:
             best_dist = float("inf")
-            for j, (plabel, pcx, pcy, _ppast, _pcrossed) in enumerate(prev):
-                if j in used_prev or plabel != label:
+            best_index = None
+            for i, curr in enumerate(curr_past):
+                if curr.label != prev.label or i in curr_used:
                     continue
-                dist = (cx - pcx) ** 2 + (cy - pcy) ** 2
+                dist = euclidean_distance((prev.cx, prev.cy), (curr.cx, curr.cy))
                 if dist < best_dist:
                     best_dist = dist
-                    best_match = j
+                    best_index = i
+            if best_index is not None:
+                curr_used.add(best_index)
+                curr_past[best_index].has_crossed = True
 
-            if best_match is not None:
-                used_prev.add(best_match)
-                prev_past, prev_crossed = prev[best_match][3], prev[best_match][4]
-                just_crossed = not prev_past and past
-                has_crossed = prev_crossed or just_crossed
-                if just_crossed:
-                    has_new = True
-            else:
-                has_crossed = past
-                if has_crossed:
-                    has_new = True
+        self._state[config.id] = curr_not_past + curr_past
+        return ret_past, curr_used
 
-            new_state.append((label, cx, cy, past, has_crossed))
-            if has_crossed:
-                crossed.append(detections[i])
+        # crossed: list[BBoxDetection] = []
+        # used_prev: set[int] = set()
+        # just_crossed_label_indices: set[int] = set()
 
-        self._state[config.id] = new_state
-        return crossed, has_new
+        # for i, det in enumerate(detections):
+        #     cx, cy = bbox_center(det.coords)
+        #     past = self._is_past_line(det.coords, config)
+
+        #     best_match: int | None = None
+        #     best_dist = float("inf")
+        #     for j, prev_det in enumerate(prev_state):
+        #         if j in used_prev or prev_det.label != det.label:
+        #             continue
+        #         dist = (cx - prev_det.cx) ** 2 + (cy - prev_det.cy) ** 2
+        #         if dist < best_dist:
+        #             best_dist = dist
+        #             best_match = j
+
+        #     if best_match is not None:
+        #         used_prev.add(best_match)
+        #         match = prev_state[best_match]
+        #         just_crossed = not match.is_past_line and past
+        #         has_crossed = match.has_crossed or just_crossed
+        #         if just_crossed:
+        #             just_crossed_label_indices.add(det.label)
+        #     else:
+        #         has_crossed = past
+        #         if has_crossed:
+        #             just_crossed_label_indices.add(det.label)
+
+        #     new_state.append(TrackedDetection(det.label, cx, cy, past, has_crossed))
+        #     if has_crossed:
+        #         crossed.append(detections[i])
+
+        # self._state[config.id] = new_state
+        # return crossed, just_crossed_label_indices
 
     def reset(self, config_id: int) -> None:
         """Clear crossing state for a config (e.g. on dashboard start)."""
@@ -196,28 +242,35 @@ class LimitItemEvaluator:
 
     def evaluate(
         self,
-        targets: list[BBoxDetection],
+        count_targets: list[BBoxDetection],
+        eval_targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
-        all_detections: list[BBoxDetection],
-    ) -> bool:
-        """Evaluate this limit item. Returns True if the condition is met."""
-        if self.item.parameter == EvalLimitItemParameter.COUNT:
-            return self._evaluate_count(targets)
-        elif self.item.parameter == EvalLimitItemParameter.AREA:
-            return self._evaluate_area(targets, parent_detections)
-        else:
-            return self._evaluate_positional(targets, parent_detections)
+    ) -> tuple[bool, bool]:
+        """Evaluate this limit item. Returns (is_violated, fired) if the condition is met.
 
-    def _evaluate_count(self, targets: list[BBoxDetection]) -> bool:
-        return value_within_limits(
-            float(len(targets)), self.item.limitFrom, self.item.limitTo
+        count_targets: targets used for COUNT (all visible, or within crossed parents).
+        eval_targets: targets used for AREA/positional (crossed-based).
+        """
+        if self.item.parameter == EvalLimitItemParameter.COUNT:
+            return self._evaluate_count(count_targets)
+        elif self.item.parameter == EvalLimitItemParameter.AREA:
+            return self._evaluate_area(eval_targets, parent_detections)
+        else:
+            return self._evaluate_positional(eval_targets, parent_detections)
+
+    def _evaluate_count(self, targets: list[BBoxDetection]) -> tuple[bool, bool]:
+        return (
+            value_within_limits(
+                float(len(targets)), self.item.limitFrom, self.item.limitTo
+            ),
+            True,
         )
 
     def _evaluate_area(
         self,
         targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
-    ) -> bool:
+    ) -> tuple[bool, bool]:
         """Area is always evaluated as percentage."""
         target_area = sum(bbox_area(d.coords) for d in targets)
 
@@ -228,24 +281,22 @@ class LimitItemEvaluator:
             # Percentage of full frame (frame area = 1.0 in normalized coords)
             pct = target_area * 100
 
-        return value_within_limits(pct, self.item.limitFrom, self.item.limitTo)
+        return value_within_limits(pct, self.item.limitFrom, self.item.limitTo), True
 
     def _evaluate_positional(
         self,
         targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
-    ) -> bool:
+    ) -> tuple[bool, bool]:
         """Positional: ALL targets must be within the range (implicit ALL quantifier)."""
-        if not targets:
-            return False
 
         for t in targets:
             ref = self._get_reference_coords(t, parent_detections)
             pct = compute_position_pct(t.coords, ref, self.item.parameter)
             if not value_within_limits(pct, self.item.limitFrom, self.item.limitTo):
-                return False
+                return False, True
 
-        return True
+        return True, bool(targets)
 
     @staticmethod
     def _get_reference_coords(
@@ -275,54 +326,86 @@ class LimitEvaluator:
         self.config = config
         self.item_evaluators = [LimitItemEvaluator(item) for item in limit.limitItems]
 
-    def _get_target_detections(
-        self, detections: list[BBoxDetection]
-    ) -> list[BBoxDetection]:
-        targets = [
-            d
-            for d in detections
-            if self.config.labels[d.label].id == self.limit.targetLabel.id
-        ]
-        if self.limit.targetParentLabel is None:
-            return targets
-
-        parents = self._get_parent_detections(detections)
-        return [
-            t
-            for t in targets
-            if any(is_within_bbox(t.coords, p.coords) for p in parents)
-        ]
-
     def _get_parent_detections(
-        self, detections: list[BBoxDetection]
+        self, crossed: list[BBoxDetection]
     ) -> list[BBoxDetection]:
+        """Crossed parents — the trigger unit for parent-child limits."""
         if self.limit.targetParentLabel is None:
             return []
         return [
             d
-            for d in detections
+            for d in crossed
             if self.config.labels[d.label].id == self.limit.targetParentLabel.id
         ]
 
-    def evaluate(self, detections: list[BBoxDetection]) -> bool:
-        """Evaluate the limit. Returns True if the combined condition is met."""
-        if not self.item_evaluators:
-            return True
+    def _get_count_targets(
+        self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
+    ) -> list[BBoxDetection]:
+        """Targets for COUNT: all currently visible (no parent) or all within crossed parents."""
+        if self.limit.targetParentLabel is None:
+            return [
+                d
+                for d in all_detections
+                if self.config.labels[d.label].id == self.limit.targetLabel.id
+            ]
+        parents = self._get_parent_detections(crossed)
+        all_targets = [
+            d
+            for d in all_detections
+            if self.config.labels[d.label].id == self.limit.targetLabel.id
+        ]
+        return [
+            t
+            for t in all_targets
+            if any(is_within_bbox(t.coords, p.coords) for p in parents)
+        ]
 
-        targets = self._get_target_detections(detections)
+    def _get_eval_targets(
+        self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
+    ) -> list[BBoxDetection]:
+        """Targets for area/positional: crossed targets (no parent) or all within crossed parents."""
+        if self.limit.targetParentLabel is None:
+            return [
+                d
+                for d in crossed
+                if self.config.labels[d.label].id == self.limit.targetLabel.id
+            ]
+        parents = self._get_parent_detections(crossed)
+        all_targets = [
+            d
+            for d in all_detections
+            if self.config.labels[d.label].id == self.limit.targetLabel.id
+        ]
+        return [
+            t
+            for t in all_targets
+            if any(is_within_bbox(t.coords, p.coords) for p in parents)
+        ]
+
+    def evaluate(
+        self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
+    ) -> tuple[bool, bool]:
+        """Evaluate the limit. Returns (is_violated, fired) if the combined condition is met."""
+        if not self.item_evaluators:
+            return True, False
+
+        count_targets = self._get_count_targets(all_detections, crossed)
+        eval_targets = self._get_eval_targets(all_detections, crossed)
         parents = (
-            self._get_parent_detections(detections)
+            self._get_parent_detections(crossed)
             if self.limit.targetParentLabel is not None
             else None
         )
 
         # Evaluate items and combine with left-to-right AND/OR
-        result = self.item_evaluators[0].evaluate(targets, parents, detections)
+        result = self.item_evaluators[0].evaluate(count_targets, eval_targets, parents)
 
         for i in range(1, len(self.item_evaluators)):
             # The operator on item[i-1] sits between item[i-1] and item[i]
             op = self.item_evaluators[i - 1].item.operator
-            item_result = self.item_evaluators[i].evaluate(targets, parents, detections)
+            item_result = self.item_evaluators[i].evaluate(
+                count_targets, eval_targets, parents
+            )
 
             if op == EvalLimitItemOperator.AND:
                 result = result and item_result
@@ -347,21 +430,31 @@ class LogicTreeEvaluator:
             limit.id: LimitEvaluator(limit, config) for limit in test_case.limits
         }
 
-    def evaluate(self, detections: list[BBoxDetection]) -> bool:
-        """Evaluate the logic tree. Returns True if the combined condition is met."""
+    def evaluate(
+        self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
+    ) -> tuple[bool, bool]:
+        """Evaluate the logic tree. Returns (is_violated, fired) if the combined condition is met."""
         if not self.test_case.logicNodes:
             # Default: AND all limits
-            return all(ev.evaluate(detections) for ev in self.limit_evaluators.values())
+            results = [
+                ev.evaluate(all_detections, crossed)
+                for ev in self.limit_evaluators.values()
+            ]
+            return all(result for result, _ in results), any(
+                fired for _, fired in results
+            )
 
-        return self._evaluate_nodes(self.test_case.logicNodes, detections)
+        return self._evaluate_nodes(self.test_case.logicNodes, all_detections, crossed)
 
     def _evaluate_nodes(
         self,
         nodes: list[EvalLogicNode],
-        detections: list[BBoxDetection],
-    ) -> bool:
+        all_detections: list[BBoxDetection],
+        crossed: list[BBoxDetection],
+    ) -> tuple[bool, bool]:
         """Evaluate a list of logic nodes (infix notation, left-to-right)."""
         result: bool | None = None
+        fired = False
         pending_op: EvalLogicOperatorValue | None = None
         negate_next = False
 
@@ -375,10 +468,12 @@ class LogicTreeEvaluator:
 
             # Operand: LIMIT or GROUP
             if node.type == EvalLogicNodeType.LIMIT:
-                evaluator = self.limit_evaluators.get(node.id)
-                value = evaluator.evaluate(detections) if evaluator else False
+                evaluator = self.limit_evaluators[node.id]
+                value, fired = evaluator.evaluate(all_detections, crossed)
             else:  # GROUP
-                value = self._evaluate_nodes(node.children or [], detections)
+                value, fired = self._evaluate_nodes(
+                    node.children or [], all_detections, crossed
+                )
 
             if negate_next:
                 value = not value
@@ -396,7 +491,7 @@ class LogicTreeEvaluator:
 
             pending_op = None
 
-        return result if result is not None else True
+        return (result, fired) if result is not None else (True, fired)
 
 
 # ---------------------------------------------------------------------------
@@ -411,13 +506,22 @@ class TestCaseEvaluator:
         self.test_case = test_case
         self.logic_evaluator = LogicTreeEvaluator(test_case, config)
 
-    def is_violated(self, detections: list[BBoxDetection]) -> bool:
-        """Returns True if the test case is violated (should trigger alert/warning)."""
-        result = self.logic_evaluator.evaluate(detections)
+    def is_violated(
+        self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
+    ) -> tuple[bool, bool]:
+        """Evaluate the test case and determine if it's violated.
+        CHECK: violated when condition NOT met (e.g. "no red in zone" violated if red detected in zone)
+        DEFECT: violated when condition IS met (e.g. "red in zone" violated if red detected in zone)
+
+        returns (is_violated, fired) where:
+        - is_violated: whether the test case condition is currently violated
+        - fired: whether the test case was triggered by this crossing event (used for tracking purposes)
+        """
+        result, fired = self.logic_evaluator.evaluate(all_detections, crossed)
 
         if self.test_case.type == EvalTestCaseType.CHECK:
-            return not result  # CHECK: violated when condition NOT met
-        return result  # DEFECT: violated when condition IS met
+            return (not result, fired)  # CHECK: violated when condition NOT met
+        return result, fired  # DEFECT: violated when condition IS met
 
 
 # ---------------------------------------------------------------------------
@@ -435,36 +539,120 @@ class DashboardEvaluator:
     ) -> None:
         self._tracker = line_crossing_tracker
         self._threshold_tracker = threshold_tracker
+        # config_id → active display violation (persists until crossed detections leave)
+        # self._active_display_violations: dict[int, dict] = {}
+
+    def reset(self, config_id: int) -> None:
+        """Clear all state for a config (called on dashboard start)."""
+        # self._active_display_violations.pop(config_id, None)
+        return
 
     def evaluate(
         self, config: DashboardConfig, detections: list[BBoxDetection]
-    ) -> list[dict] | None:
-        """Evaluate all test cases against detections that crossed the line.
+    ) -> list[dict]:
+        """Evaluate test cases and return violations.
 
-        Returns a list of violation dicts (possibly empty), or None if no new
-        crossings occurred.
+        violations: list of {"test_case_id": int, "type": "alert" | "warning"} for test cases violated
+        by this frame's detections that are past the trigger boundary.
+
+        Trigger rules per test case:
+        - With targetParentLabel: fires when the parent label crosses.
+        - Without targetParentLabel: fires when the target label crosses.
         """
-        crossed, has_new = self._tracker.find_crossed_detections(detections, config)
+        crossed, just_crossed_indices = self._tracker.find_crossed_detections(
+            detections, config
+        )
+        just_crossed = [d for i, d in enumerate(crossed) if i in just_crossed_indices]
+        tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
+        for evaluator in tc_evaluators:
+            violated, fired = evaluator.is_violated(detections, just_crossed)
+            if fired:
+                self._threshold_tracker.record(
+                    config.id, evaluator.test_case.id, passed=not violated
+                )
 
-        if not has_new:
-            return None
-
-        test_case_evaluators = [
-            TestCaseEvaluator(tc, config) for tc in config.testCases
-        ]
-
-        violations: list[dict] = []
-        for evaluator in test_case_evaluators:
-            violated = evaluator.is_violated(crossed)
-            self._threshold_tracker.record(
-                config.id, evaluator.test_case.id, passed=not violated
-            )
+        violations = []
+        for evaluator in tc_evaluators:
+            violated, _ = evaluator.is_violated(detections, crossed)
             if violated:
                 violations.append(
                     {
                         "test_case_id": evaluator.test_case.id,
-                        "type": evaluator.test_case.severity.value.lower(),
+                        "type": evaluator.test_case.severity.value,
                     }
                 )
 
         return violations
+
+        # crossed, just_crossed_label_indices = self._tracker.find_crossed_detections(
+        #     detections, config
+        # )
+
+        # # No crossed detections visible → clear active display
+        # if not crossed:
+        #     # (
+        #     #     self._active_display_violations.pop(config_id, None)
+        #     #     if (config_id := config.id) or True
+        #     #     else None
+        #     # )
+        #     self._active_display_violations.pop(config.id, None)
+        #     return None, None
+
+        # # No new crossings → maintain current display without re-evaluating
+        # if not just_crossed_label_indices:
+        #     return None, self._active_display_violations.get(config.id)
+
+        # # New crossings — evaluate triggered test cases and record stats
+        # idx_to_label_id = {i: lbl.id for i, lbl in enumerate(config.labels)}
+        # test_case_evaluators = [
+        #     TestCaseEvaluator(tc, config) for tc in config.testCases
+        # ]
+
+        # any_fired = False
+        # violations: list[dict] = []
+
+        # for evaluator in test_case_evaluators:
+        #     trigger_label_ids = {
+        #         (limit.targetParentLabel or limit.targetLabel).id
+        #         for limit in evaluator.test_case.limits
+        #     }
+        #     fired = any(
+        #         idx_to_label_id.get(idx) in trigger_label_ids
+        #         for idx in just_crossed_label_indices
+        #     )
+        #     if not fired:
+        #         continue
+
+        #     any_fired = True
+        #     violated = evaluator.is_violated(detections, crossed)
+        #     self._threshold_tracker.record(
+        #         config.id, evaluator.test_case.id, passed=not violated
+        #     )
+        #     if violated:
+        #         violations.append(
+        #             {
+        #                 "test_case_id": evaluator.test_case.id,
+        #                 "type": evaluator.test_case.severity.value.lower(),
+        #             }
+        #         )
+
+        # # Update active display to highest severity from this crossing event
+        # if any_fired:
+        #     alert = next((v for v in violations if v["type"] == "alert"), None)
+        #     if alert:
+        #         self._active_display_violations[config.id] = {
+        #             "severity": "alert",
+        #             "test_case_id": alert["test_case_id"],
+        #         }
+        #     elif violations:
+        #         self._active_display_violations[config.id] = {
+        #             "severity": "warning",
+        #             "test_case_id": violations[0]["test_case_id"],
+        #         }
+        #     else:
+        #         # Test cases fired but none violated — evaluation passed, clear display
+        #         self._active_display_violations.pop(config.id, None)
+
+        # return violations if any_fired else None, self._active_display_violations.get(
+        #     config.id
+        # )
