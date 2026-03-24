@@ -113,13 +113,15 @@ class TrackedDetection:
     cy: float
     is_past_line: bool
     has_crossed: bool
+    missing_frames: int = 0
 
 
 class LineCrossingTracker:
     """Tracks per-config detection line crossings across frames."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_missing_frames: int = 5) -> None:
         self._state: dict[int, list[TrackedDetection]] = {}
+        self._max_missing_frames = max_missing_frames
 
     def _is_past_line(
         self,
@@ -146,11 +148,13 @@ class LineCrossingTracker:
         """
         prev_state = self._state.get(config.id, [])
 
-        prev_not_past = filter(lambda d: not d.is_past_line, prev_state)
+        prev_not_past = [d for d in prev_state if not d.is_past_line]
         curr_not_past: list[TrackedDetection] = []
         curr_past: list[TrackedDetection] = []
         ret_past: list[BBoxDetection] = []
         curr_used: set[int] = set()
+        not_past_used: set[int] = set()
+        matched_prev: set[int] = set()
 
         for det in detections:
             cx, cy = bbox_center(det.coords)
@@ -162,9 +166,11 @@ class LineCrossingTracker:
             else:
                 curr_not_past.append(TrackedDetection(det.label, cx, cy, False, False))
 
-        for prev in prev_not_past:
+        for pi, prev in enumerate(prev_not_past):
             best_dist = float("inf")
             best_index = None
+            best_in_past = False
+
             for i, curr in enumerate(curr_past):
                 if curr.label != prev.label or i in curr_used:
                     continue
@@ -172,9 +178,32 @@ class LineCrossingTracker:
                 if dist < best_dist:
                     best_dist = dist
                     best_index = i
+                    best_in_past = True
+
+            for i, curr in enumerate(curr_not_past):
+                if curr.label != prev.label or i in not_past_used:
+                    continue
+                dist = euclidean_distance((prev.cx, prev.cy), (curr.cx, curr.cy))
+                if dist < best_dist:
+                    best_dist = dist
+                    best_index = i
+                    best_in_past = False
+
             if best_index is not None:
-                curr_used.add(best_index)
-                curr_past[best_index].has_crossed = True
+                matched_prev.add(pi)
+                if best_in_past:
+                    curr_used.add(best_index)
+                    curr_past[best_index].has_crossed = True
+                else:
+                    not_past_used.add(best_index)
+
+        # Keep unmatched prev not-past detections alive until grace period expires
+        for pi, prev in enumerate(prev_not_past):
+            if pi in matched_prev:
+                continue
+            prev.missing_frames += 1
+            if prev.missing_frames <= self._max_missing_frames:
+                curr_not_past.append(prev)
 
         self._state[config.id] = curr_not_past + curr_past
         return ret_past, curr_used
