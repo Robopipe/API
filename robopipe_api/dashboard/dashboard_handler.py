@@ -22,17 +22,26 @@ def handle_detections(
     if dashboard_config is None or not running:
         return result
 
-    dashboard_detections = _dashboard_evaluator.evaluate(
-        dashboard_config, detections.detections
+    detections = _dashboard_evaluator.evaluate(dashboard_config, detections.detections)
+    result["dashboard_detections"] = detections
+    result["threshold_status"] = _threshold_tracker.get_status(
+        dashboard_config.id, dashboard_config.testCases
     )
-    result["dashboard_detections"] = dashboard_detections
 
-    if dashboard_detections is not None:
-        threshold_status = _threshold_tracker.get_status(
-            dashboard_config.id, dashboard_config.testCases
-        )
-        if threshold_status:
-            result["threshold_status"] = threshold_status
+    # dashboard_detections, display_violation = _dashboard_evaluator.evaluate(
+    #     dashboard_config, detections.detections
+    # )
+    # result["dashboard_detections"] = dashboard_detections
+
+    # if display_violation is not None:
+    #     result["display_violation"] = display_violation
+
+    # if dashboard_detections is not None:
+    #     threshold_status = _threshold_tracker.get_status(
+    #         dashboard_config.id, dashboard_config.testCases
+    #     )
+    #     if threshold_status:
+    #         result["threshold_status"] = threshold_status
 
     return result
 

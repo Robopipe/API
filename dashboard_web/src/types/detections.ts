@@ -19,7 +19,7 @@ export type NNDetection =
 
 export interface DashboardDetection {
   test_case_id: string;
-  type: string;
+  type: "ALERT" | "WARNING";
 }
 
 export interface ThresholdTestCaseStatus {

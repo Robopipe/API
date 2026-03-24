@@ -3,21 +3,23 @@ import { useWebRTCStream } from "../../hooks";
 import { useDetections } from "../../hooks/useDetections";
 import { useDetectionsRenderer } from "../../hooks/useDetectionsRenderer";
 import { useAppState } from "../../provider";
-import type { TestCase, NNDetections } from "../../types";
+import type { NNDetections, TestCase } from "../../types";
 
 export const VideoStream = () => {
   const { running } = useAppState();
   const { videoRef } = useWebRTCStream();
   const { renderDetections, canvasRef } = useDetectionsRenderer({ videoRef });
-  const [dashboardDetection, setDashboardDetection] =
-    useState<TestCase | null>(null);
+  const [dashboardDetection, setDashboardDetection] = useState<TestCase | null>(
+    null,
+  );
   const onDetections = useCallback(
     (detections: NNDetections) => {
       renderDetections(detections);
       setDashboardDetection(
         detections.dashboard_detections?.[0]
           ? window.DASHBOARD_CONFIG.testCases.find(
-              (tc) => tc.id === detections.dashboard_detections?.[0]?.test_case_id,
+              (tc) =>
+                tc.id === detections.dashboard_detections?.[0]?.test_case_id,
             ) || null
           : null,
       );
@@ -33,7 +35,7 @@ export const VideoStream = () => {
       case "WARNING":
         return "bg-pear-500/80";
       default:
-        return "";
+        return "bg-emerald-500/80";
     }
   };
 

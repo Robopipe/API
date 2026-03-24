@@ -48,9 +48,6 @@ class ThresholdTracker:
                 pass_rate = (total - failures) / total
 
             zone_name, zone_color, is_best_zone = self._determine_zone(tc, pass_rate)
-            print(
-                f"Test case {tc.id}: pass_rate={pass_rate}, zone={zone_name}, color={zone_color}, is_best_zone={is_best_zone}"
-            )
 
             result[tc.id] = {
                 "total": total,
