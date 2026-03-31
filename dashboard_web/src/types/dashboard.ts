@@ -26,6 +26,7 @@ export interface TestCase {
 }
 
 export interface DashboardConfig {
+  configId: number;
   apiBase: string;
   mxid: string;
   streamName: string;
@@ -36,4 +37,15 @@ export interface DashboardConfig {
   lineFlow: DashboardLineFlow;
   remoteBackendUrl?: string;
   running: boolean;
+  hasMultipleConfigs: boolean;
+}
+
+export interface StoredConfigSummary {
+  config_id: number;
+  config_name: string;
+}
+
+export interface DashboardConfigsResponse {
+  active_config_id: number | null;
+  configs: StoredConfigSummary[];
 }

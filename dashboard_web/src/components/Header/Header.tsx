@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { useWakeLock } from "../../hooks/useWakeLock";
 import { useAppState } from "../../provider";
+import { WakeLockIcon } from "../../ui";
+import { ModelSwitcher } from "./ModelSwitcher";
 
 const formatElapsed = (ms: number): string => {
   const totalSeconds = Math.floor(ms / 1000);
@@ -16,6 +19,7 @@ export type HeaderProps = object;
 
 export const Header = () => {
   const { running, toggleRunning, runningSince } = useAppState();
+  const wakeLock = useWakeLock();
   const [elapsed, setElapsed] = useState("00:00:00");
 
   useEffect(() => {
@@ -46,6 +50,19 @@ export const Header = () => {
         <span className="block">Runtime:</span>
         <span className="font-mono block pt-1">{elapsed}</span>
       </div>
+      <ModelSwitcher />
+      <button
+        className={
+          "p-3 rounded-xl transition-colors bg-white/5" +
+          (wakeLock.enabled
+            ? " text-emerald-400 hover:text-emerald-300"
+            : " text-gray-400 hover:text-white")
+        }
+        onClick={wakeLock.toggle}
+        title="Wake Lock"
+      >
+        <WakeLockIcon size={20} />
+      </button>
     </header>
   );
 };

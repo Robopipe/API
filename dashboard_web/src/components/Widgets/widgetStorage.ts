@@ -1,7 +1,10 @@
 export const MIN_GRID_SIZE = 1;
 export const MAX_GRID_SIZE = 8;
 const DEFAULT_GRID_SIZE = 3;
-const STORAGE_KEY = "robopipe_widget_config";
+
+function storageKey(configId: number): string {
+  return `robopipe_widget_config_${configId}`;
+}
 
 export type WidgetDisplayMode = "failures" | "pass_rate" | "failures_of_total";
 
@@ -34,9 +37,9 @@ function normalizeSlot(raw: unknown): WidgetSlot | null {
   return null;
 }
 
-export function loadWidgetSlots(): WidgetSlots {
+export function loadWidgetSlots(configId: number): WidgetSlots {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(configId));
     if (raw) {
       const parsed = JSON.parse(raw);
       const gs = clampGridSize(parsed.gridSize);
@@ -67,6 +70,6 @@ export function resizeSlots(
   return { gridSize: gs, slots };
 }
 
-export function saveWidgetSlots(config: WidgetSlots) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+export function saveWidgetSlots(configId: number, config: WidgetSlots) {
+  localStorage.setItem(storageKey(configId), JSON.stringify(config));
 }

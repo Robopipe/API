@@ -29,26 +29,26 @@ export const DonutWidget = ({
 
   const fillOffset = CIRCUMFERENCE * (1 - passRate);
 
-  const centerContent = () => {
+  // Inner usable diameter ≈ 2*(RADIUS - STROKE_WIDTH/2) ≈ 116px; constrain content to 84px for safe wrapping
+  const INNER_CONTENT_WIDTH = 84;
+
+  const secondaryMetric = () => {
     if (displayMode === "pass_rate") {
       return (
-        <span className="text-2xl font-bold text-white">
+        <span className="text-sm text-gray-400">
           {(passRate * 100).toFixed(1)}%
         </span>
       );
     }
     if (displayMode === "failures_of_total") {
       return (
-        <>
-          <span className="text-2xl font-bold text-white leading-none">
-            {failures}
-          </span>
-          <span className="text-xs text-gray-400 mt-0.5">of {total}</span>
-        </>
+        <span className="text-sm text-gray-400">
+          {failures}/{total}
+        </span>
       );
     }
     // default: "failures"
-    return <span className="text-3xl font-bold text-white">{failures}</span>;
+    return <span className="text-sm text-gray-400">{failures} fail</span>;
   };
 
   return (
@@ -84,42 +84,44 @@ export const DonutWidget = ({
           />
         </svg>
         {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {centerContent()}
-          {showWarning && (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="mt-0.5"
-            >
-              <path
-                d="M12 2L1 21h22L12 2z"
-                fill={zoneColor}
-                stroke={zoneColor}
-                strokeWidth="1"
-              />
-              <text
-                x="12"
-                y="18"
-                textAnchor="middle"
-                fill="white"
-                fontSize="12"
-                fontWeight="bold"
-              >
-                !
-              </text>
-            </svg>
-          )}
-          {status?.zone_name && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+          <div
+            className="flex flex-col items-center gap-0.5"
+            style={{ width: INNER_CONTENT_WIDTH }}
+          >
             <span
-              className="text-xs text-gray-400 mt-0.5 px-1 rounded"
+              className="text-base font-bold text-white px-1 rounded leading-snug text-center w-full"
               style={{ backgroundColor: zoneColor + "33" }}
             >
-              {status.zone_name}
+              {status?.zone_name ?? "—"}
             </span>
-          )}
+            {secondaryMetric()}
+            {showWarning && (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <path
+                  d="M12 2L1 21h22L12 2z"
+                  fill={zoneColor}
+                  stroke={zoneColor}
+                  strokeWidth="1"
+                />
+                <text
+                  x="12"
+                  y="18"
+                  textAnchor="middle"
+                  fill="white"
+                  fontSize="12"
+                  fontWeight="bold"
+                >
+                  !
+                </text>
+              </svg>
+            )}
+          </div>
         </div>
       </div>
       <span className="text-sm text-white font-medium text-center">{name}</span>

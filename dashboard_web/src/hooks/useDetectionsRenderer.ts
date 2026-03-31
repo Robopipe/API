@@ -40,10 +40,10 @@ export const useDetectionsRenderer = ({
   );
 
   const renderDetections = useCallback(
-    async (detections: NNDetections) => {
+    (detections: NNDetections) => {
       if (!canvasRef.current || !videoRef.current || !enabled) return;
-      await new Promise((resolve) => setTimeout(resolve, 60));
       const canvas = canvasRef.current;
+      if (canvas.width === 0 || canvas.height === 0) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
