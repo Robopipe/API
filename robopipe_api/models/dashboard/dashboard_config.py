@@ -25,6 +25,6 @@ class DashboardConfig(BaseModel):
     lineDirection: DashboardLineDirection
     linePosition: float
     lineFlow: DashboardLineFlow = DashboardLineFlow.POSITIVE
-    testCases: list[EvalTestCase]
-    labels: list[Label]
+    testCases: list[EvalTestCase] = []
+    labels: list[Label] = []
     remoteBackendUrl: str | None = None

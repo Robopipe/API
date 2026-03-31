@@ -1,4 +1,5 @@
 import datetime
+import threading
 
 import depthai as dai
 from depthai_nodes import Classifications, ImgDetectionsExtended
@@ -30,8 +31,11 @@ class SensorBase(ABC):
         self.restart_pipeline = restart_pipeline
         self._nn_config = None
         self._dashboard_config = None
-        self._dashboard_running = False
+        self._dashboard_run_session_id: int | None = None
+        self._active_config_id = None
         self.last_frame: av.VideoFrame | None = None
+        self._video_seq: int = -1
+        self._video_seq_cond = threading.Condition()
 
     @property
     @abstractmethod
@@ -65,15 +69,20 @@ class SensorBase(ABC):
     @dashboard_config.setter
     def dashboard_config(self, value: DashboardConfig | None):
         self._dashboard_config = value
-        self._dashboard_running = False
+        self._dashboard_run_session_id = None
+        self._active_config_id = value.id if value else None
 
     @property
-    def dashboard_running(self) -> bool:
-        return self._dashboard_running
+    def active_config_id(self) -> int | None:
+        return self._active_config_id
 
-    @dashboard_running.setter
-    def dashboard_running(self, value: bool):
-        self._dashboard_running = value
+    @property
+    def dashboard_run_session_id(self) -> int | None:
+        return self._dashboard_run_session_id
+
+    @dashboard_run_session_id.setter
+    def dashboard_run_session_id(self, value: int | None):
+        self._dashboard_run_session_id = value
 
     def __extract_img_properties(self, img: dai.ImgFrame):
         pass
@@ -84,12 +93,21 @@ class SensorBase(ABC):
 
     def get_video_frame(self) -> av.VideoFrame:
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
-        frames = video_queue.tryGet()
+        img_frame: dai.ImgFrame | None = video_queue.tryGet()
 
-        if frames:
-            self.last_frame = img_frame_to_video_frame(frames)
+        if img_frame:
+            self.last_frame = img_frame_to_video_frame(img_frame)
+            seq = img_frame.getSequenceNum()
+            with self._video_seq_cond:
+                self._video_seq = seq
+                self._video_seq_cond.notify_all()
         elif self.last_frame is None:
-            self.last_frame = img_frame_to_video_frame(video_queue.get())
+            img_frame = video_queue.get()
+            self.last_frame = img_frame_to_video_frame(img_frame)
+            seq = img_frame.getSequenceNum()
+            with self._video_seq_cond:
+                self._video_seq = seq
+                self._video_seq_cond.notify_all()
 
         return self.last_frame
 
@@ -125,5 +143,15 @@ class SensorBase(ABC):
             detections = nn_queue.get(timeout=datetime.timedelta(seconds=2))
             if detections is None:
                 raise TimeoutError("NN queue get() timed out")
+
+        # Wait until the video track has dispatched the frame that
+        # corresponds to this detection, so both leave the server
+        # at approximately the same time.
+        det_seq = detections.getSequenceNum()
+        with self._video_seq_cond:
+            self._video_seq_cond.wait_for(
+                lambda: self._video_seq >= det_seq,
+                timeout=0.5,
+            )
 
         return detections

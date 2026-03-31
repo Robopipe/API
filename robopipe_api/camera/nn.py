@@ -35,11 +35,3 @@ class CameraNNConfig:
         node.build(camera, self.model)
 
         return node
-
-
-class CameraNNDetectionConfig(CameraNNConfig):
-    pass
-
-
-class CameraNNSpatialDetectionConfig(CameraNNConfig):
-    pass
