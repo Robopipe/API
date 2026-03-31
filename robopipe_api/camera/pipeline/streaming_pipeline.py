@@ -1,6 +1,7 @@
 import depthai as dai
 
 from math import ceil
+from typing import Self
 
 from .pipeline import Pipeline
 from .pipeline_queue_type import PipelineQueueType
@@ -21,34 +22,39 @@ class StreamingPipeline(Pipeline):
 
     def __init__(
         self,
-        sensors: list[dai.CameraFeatures],
-        pipeline: dai.Pipeline | None = None,
-        device: dai.Device | None = None,
+        device: dai.Device,
+        pipeline: Self | None = None,
+        sensors: list[dai.CameraFeatures] = [],
     ):
-        self.scripts: dict[str, dai.node.Script] = {}
-        super().__init__(pipeline, device)
+        self.cameras: dict[str, dai.node.Camera] = {}
+        self._streaming_cameras: set[dai.CameraFeatures] = set()
+
+        super().__init__(device, pipeline)
 
         for sensor in sensors:
-            if sensor.socket.name == self.MAIN_SENSOR:
-                self.add_sensor(sensor)
+            self.add_sensor(sensor)
 
-    def extract_properties(self):
-        super().extract_properties()
+    def recreate(self, pipeline: Self):
+        super().recreate(pipeline)
 
-        # In v3, Script nodes are only used for depth pipeline duplication
-        # Regular cameras use requestOutput() for multiple outputs
-        for script in self.pipeline.getAllNodes():
-            if not isinstance(script, dai.node.Script):
-                continue
-            # Scripts are tracked by subclasses (e.g., DepthPipeline) if needed
+        for sensor in pipeline._streaming_cameras:
+            self.add_sensor(sensor)
+
+    def create_camera(self, sensor: dai.CameraFeatures):
+        cam = self.pipeline.create(dai.node.Camera)
+        self.cameras[sensor.socket.name] = cam
+        self._streaming_cameras.add(sensor)
+        return cam
+
+    def add_sensor_config(self, sensor: dai.CameraFeatures):
+        self._streaming_cameras.add(sensor)
 
     def add_sensor(self, sensor: dai.CameraFeatures):
         if not self.__check_sensor(sensor):
             return
 
         sensor_name = sensor.socket.name
-        cam = self.pipeline.create(dai.node.Camera)
-        self.cameras[sensor_name] = cam
+        cam = self.create_camera(sensor)
 
         still_config = self.__get_sensor_config(sensor, self.MAX_STILL_SIZE)
         video_config = self.__get_sensor_config(sensor, self.MAX_VIDEO_SIZE)
@@ -68,17 +74,16 @@ class StreamingPipeline(Pipeline):
         self.add_queue(control, PipelineQueueType.CONTROL, sensor_name, True)
 
     def remove_sensor(self, sensor_name: str):
-        if sensor_name not in self.cameras:
+        if sensor_name not in map(lambda s: s.socket.name, self._streaming_cameras):
             return
 
-        self.del_all_queues(sensor_name)
-        self.pipeline.remove(self.cameras[sensor_name])
+        self.del_queue(sensor_name, PipelineQueueType.STILL)
+        self.del_queue(sensor_name, PipelineQueueType.VIDEO)
+        self.del_queue(sensor_name, PipelineQueueType.CONTROL)
         del self.cameras[sensor_name]
-
-        # Clean up script if exists (used by subclasses)
-        if hasattr(self, "scripts") and sensor_name in self.scripts:
-            self.pipeline.remove(self.scripts[sensor_name])
-            del self.scripts[sensor_name]
+        self._streaming_cameras = set(
+            filter(lambda s: s.socket.name != sensor_name, self._streaming_cameras)
+        )
 
     def __check_sensor(self, sensor: dai.CameraFeatures) -> bool:
         if sensor.socket.name in self.cameras:
@@ -122,14 +127,19 @@ class StreamingPipeline(Pipeline):
         still_out = cam.requestOutput(
             config.resolution, self.IMG_TYPE, dai.ImgResizeMode.CROP, config.fps
         )
+        still_out = self.create_mjpeg_encoder(still_out, sensor_name, config.fps)
+
+    def create_mjpeg_encoder(
+        self, out: dai.Node.Output, sensor_name: str, fps: int = 30
+    ):
         still_enc = self.pipeline.create(dai.node.VideoEncoder)
-        still_enc.setDefaultProfilePreset(
-            config.fps, dai.VideoEncoderProperties.Profile.MJPEG
-        )
+        still_enc.setDefaultProfilePreset(fps, dai.VideoEncoderProperties.Profile.MJPEG)
         still_enc.setQuality(100)
-        still_out.link(still_enc.input)
-        still_enc_out = still_enc.out.createOutputQueue(1, False)
+        out.link(still_enc.input)
+        still_enc_out = still_enc.out.createOutputQueue(2, False)
         self.add_queue(still_enc_out, PipelineQueueType.STILL, sensor_name, False)
+
+        return still_enc
 
     def __build_video_output(
         self, cam: dai.node.Camera, sensor_name: str, config: SensorConfig

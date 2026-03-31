@@ -190,4 +190,7 @@ pip-selfcheck.json
 **/_version.pyi
 **/.version
 
+robopipe_api/static/dashboard
+*.oakapp
+
 # End of https://www.toptal.com/developers/gitignore/api/python,venv
