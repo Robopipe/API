@@ -4,8 +4,7 @@ from functools import lru_cache
 
 from ..error import CameraNotFoundException
 from .camera import Camera
-from .device_info import DeviceState
-from .pipeline.depth_pipeline import DepthPipeline
+from .pipeline.nn_pipeline import NNPipeline
 
 
 class CameraManager:
@@ -34,37 +33,27 @@ class CameraManager:
             if mxid not in self.cameras:
                 self.cameras[dev.deviceId] = Camera(mxid, dev.name)
 
-        for mxid in self.cameras.keys():
+        current_mxids = set(self.cameras.keys())
+        for mxid in current_mxids:
             if mxid not in mxids:
                 del self.cameras[mxid]
 
     def boot_cameras(self):
-        print("Booting all connected cameras...", self.cameras)
         for mxid in self.cameras.keys():
             self.boot_camera(mxid)
 
     def boot_camera(self, mxid: str):
         camera = self.cameras[mxid]
-        print(camera.info)
-        # if camera.info.state == DeviceState.X_LINK_BOOTED:
-        #     return
-        print(f"Booting camera {mxid}...")
-        print(camera.camera_handle)
-        # camera.load_camera()
-        camera.open(
-            # DepthPipeline(
-            #     None,
-            #     [sensor for sensor in camera.all_sensors.values()],
-            #     device=camera.camera_handle,
-            # )
-        )
-        camera.run_pipeline(
-            DepthPipeline(
-                None,
-                [sensor for sensor in camera.all_sensors.values()],
-                device=camera.camera_handle,
+        boot_sensors = list(
+            filter(
+                lambda s: dai.CameraSensorType.COLOR in s.supportedTypes,
+                camera.all_sensors.values(),
             )
         )
+        pipeline = NNPipeline(device=camera.camera_handle)
+        for sensor in boot_sensors:
+            pipeline.add_sensor_config(sensor)
+        camera.open(pipeline)
 
     def shutdown_camera(self, mxid: str):
         self.cameras[mxid].close()

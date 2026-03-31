@@ -1,4 +1,8 @@
+import datetime
+import threading
+
 import depthai as dai
+from depthai_nodes import Classifications, ImgDetectionsExtended
 import numpy as np
 from PIL import Image
 
@@ -6,6 +10,8 @@ from abc import ABC, abstractmethod
 from typing import Callable
 import av
 
+
+from ...models.dashboard.dashboard_config import DashboardConfig
 from ...models.nn_config import NNConfig
 from ...utils.image import img_frame_to_video_frame
 from ..pipeline.pipeline_queue_type import PipelineQueueType
@@ -24,7 +30,12 @@ class SensorBase(ABC):
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
         self._nn_config = None
+        self._dashboard_config = None
+        self._dashboard_run_session_id: int | None = None
+        self._active_config_id = None
         self.last_frame: av.VideoFrame | None = None
+        self._video_seq: int = -1
+        self._video_seq_cond = threading.Condition()
 
     @property
     @abstractmethod
@@ -51,6 +62,28 @@ class SensorBase(ABC):
         self._nn_config = value
         return self._nn_config
 
+    @property
+    def dashboard_config(self) -> DashboardConfig | None:
+        return self._dashboard_config
+
+    @dashboard_config.setter
+    def dashboard_config(self, value: DashboardConfig | None):
+        self._dashboard_config = value
+        self._dashboard_run_session_id = None
+        self._active_config_id = value.id if value else None
+
+    @property
+    def active_config_id(self) -> int | None:
+        return self._active_config_id
+
+    @property
+    def dashboard_run_session_id(self) -> int | None:
+        return self._dashboard_run_session_id
+
+    @dashboard_run_session_id.setter
+    def dashboard_run_session_id(self, value: int | None):
+        self._dashboard_run_session_id = value
+
     def __extract_img_properties(self, img: dai.ImgFrame):
         pass
 
@@ -60,12 +93,21 @@ class SensorBase(ABC):
 
     def get_video_frame(self) -> av.VideoFrame:
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
-        frames = video_queue.tryGetAll()
+        img_frame: dai.ImgFrame | None = video_queue.tryGet()
 
-        if frames:
-            self.last_frame = img_frame_to_video_frame(frames[-1])
+        if img_frame:
+            self.last_frame = img_frame_to_video_frame(img_frame)
+            seq = img_frame.getSequenceNum()
+            with self._video_seq_cond:
+                self._video_seq = seq
+                self._video_seq_cond.notify_all()
         elif self.last_frame is None:
-            self.last_frame = img_frame_to_video_frame(video_queue.get())
+            img_frame = video_queue.get()
+            self.last_frame = img_frame_to_video_frame(img_frame)
+            seq = img_frame.getSequenceNum()
+            with self._video_seq_cond:
+                self._video_seq = seq
+                self._video_seq_cond.notify_all()
 
         return self.last_frame
 
@@ -93,22 +135,23 @@ class SensorBase(ABC):
 
     def get_nn_detections(
         self,
-    ) -> dai.NNData | dai.ImgDetections | dai.SpatialImgDetections | None:
-        nn_queue = self.output_queues.get(PipelineQueueType.NN)
-        if nn_queue is None:
-            return None
+    ) -> dai.ImgDetections | Classifications | ImgDetectionsExtended:
+        nn_queue = self.output_queues[PipelineQueueType.NN]
+        detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
 
-        # Try to get the latest detection, draining any queued ones
-        detections = nn_queue.tryGet()
-        if detections is not None:
-            # Drain queue to get most recent and prevent buildup
-            while True:
-                next_det = nn_queue.tryGet()
-                if next_det is None:
-                    break
-                detections = next_det
-        else:
-            # Blocking get if no detection available yet
-            detections = nn_queue.get()
+        if detections is None:
+            detections = nn_queue.get(timeout=datetime.timedelta(seconds=2))
+            if detections is None:
+                raise TimeoutError("NN queue get() timed out")
+
+        # Wait until the video track has dispatched the frame that
+        # corresponds to this detection, so both leave the server
+        # at approximately the same time.
+        det_seq = detections.getSequenceNum()
+        with self._video_seq_cond:
+            self._video_seq_cond.wait_for(
+                lambda: self._video_seq >= det_seq,
+                timeout=0.5,
+            )
 
         return detections

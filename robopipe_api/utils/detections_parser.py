@@ -1,21 +1,100 @@
+import math
+
 import depthai as dai
+from depthai_nodes import Classifications, ImgDetectionsExtended, ImgDetectionExtended
+
+from ..models.detection.bbox_detection import BBoxDetection, BBoxDetections
+from ..models.detection.segmentation_detection import (
+    SegmentationDetection,
+    SegmentationDetections,
+)
 
 
-def parse_detections(detections: dai.ImgDetections | dai.SpatialImgDetections):
-    def parse_detection(detection: dai.ImgDetection | dai.SpatialImgDetection):
+def parse_img_detections(detections: dai.ImgDetections) -> BBoxDetections:
+    def parse_detection(detection: dai.ImgDetection) -> BBoxDetection:
         res = {
             "label": detection.label,
             "confidence": detection.confidence,
             "coords": [detection.xmin, detection.ymin, detection.xmax, detection.ymax],
         }
 
-        if isinstance(detection, dai.SpatialImgDetection):
-            res["spatial_coords"] = {
-                "x": detection.spatialCoordinates.x,
-                "y": detection.spatialCoordinates.y,
-                "z": detection.spatialCoordinates.z,
-            }
+        return BBoxDetection(**res)
 
-        return res
+    return BBoxDetections(detections=list(map(parse_detection, detections.detections)))
 
-    return list(map(parse_detection, detections.detections))
+
+def parse_img_detections_extended(
+    img_detections_extended: ImgDetectionsExtended,
+) -> SegmentationDetections:
+    def parse_rect(rect: dai.RotatedRect) -> list[float]:
+        cx, cy = rect.center.x, rect.center.y
+        w, h = rect.size.width, rect.size.height
+        angle_rad = math.radians(rect.angle)
+        cos_a = math.cos(angle_rad)
+        sin_a = math.sin(angle_rad)
+
+        # Half dimensions
+        hw, hh = w / 2, h / 2
+
+        # Four corners of the rotated rectangle
+        corners_x = [
+            cx + dx * cos_a - dy * sin_a
+            for dx, dy in [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+        ]
+        corners_y = [
+            cy + dx * sin_a + dy * cos_a
+            for dx, dy in [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+        ]
+
+        xmin = min(corners_x)
+        ymin = min(corners_y)
+        xmax = max(corners_x)
+        ymax = max(corners_y)
+
+        return [xmin, ymin, xmax, ymax]
+
+    def parse_detection(detection: ImgDetectionExtended):
+        rotated_rect = detection.rotated_rect
+        coords = parse_rect(rotated_rect)
+        res = {
+            "label": detection.label,
+            "confidence": detection.confidence,
+            "coords": coords,
+        }
+
+        return SegmentationDetection(**res)
+
+    res = {
+        "detections": list(map(parse_detection, img_detections_extended.detections)),
+        "masks": img_detections_extended.masks.tolist(),
+    }
+
+    return SegmentationDetections(**res)
+
+
+def parse_classifications(classifications: Classifications):
+    # For now, we will just return the top classification as a bbox detection with full frame coords
+    if len(classifications.classifications) == 0:
+        return BBoxDetections(detections=[])
+
+    classification = classifications.classifications[0]
+    res = {
+        "label": classification.label,
+        "confidence": classification.confidence,
+        "coords": [0, 0, 1, 1],
+    }
+
+    return BBoxDetections(detections=[BBoxDetection(**res)])
+
+
+def parse_detections(
+    detections: dai.ImgDetections | Classifications | ImgDetectionsExtended,
+):
+    if isinstance(detections, dai.ImgDetections):
+        return parse_img_detections(detections)
+    elif isinstance(detections, Classifications):
+        return parse_classifications(detections)
+    elif isinstance(detections, ImgDetectionsExtended):
+        return parse_img_detections_extended(detections)
+    else:
+        raise ValueError("Unsupported detections type")
