@@ -10,19 +10,15 @@ from typing import Annotated
 from ..camera.camera import Camera
 from ..camera.camera_manager import CameraManager, camera_manager_factory
 from ..camera.sensor.sensor_base import SensorBase
-from ..models.nn_config import (
-    NNType,
-    NNConfig,
-    NNGenericConfig,
-    NNDetectionConfig,
-    NNSpatialDetectionConfig,
-)
+from ..models.nn_config import NNType, NNConfig, NNGenericConfig
+from ..models.dashboard.dashboard_config import DashboardConfig
 from ..stream import StreamService, stream_service_factory
 from ..video_track import media_relay_factory, video_track_factory, VideoTrack
 from ..controller.devices import DeviceList, Devices, Device
 from ..controller.devices import *
 from ..webrtc_manager import WebRTCManager, webrtc_manager_factory
 from ..ws_relay import WebSocketRelay, ws_relay_factory
+from ..dashboard.events_store import EventsStore, events_store_factory
 from ..dashboard.sync_task import SyncTask, sync_task_factory
 
 CameraManagerDep = Annotated[CameraManager, Depends(camera_manager_factory)]
@@ -49,6 +45,7 @@ def get_sensor(camera: CameraDep, stream_name: StreamName):
             status.HTTP_404_NOT_FOUND,
             detail=f"Stream {stream_name} not found for camera {camera.mxid}",
         )
+    print(sensor)
     return sensor
 
 
@@ -112,8 +109,6 @@ DeviceDep = Annotated[Device, Depends(get_device)]
 def nn_config_checker(config: Annotated[str, Form()]):
     NN_CONFIG_MAP = {
         NNType.Generic: NNGenericConfig,
-        NNType.Detection: NNDetectionConfig,
-        NNType.SpatialDetection: NNSpatialDetectionConfig,
     }
 
     try:
@@ -138,3 +133,77 @@ def nn_config_checker(config: Annotated[str, Form()]):
 
 
 NNConfigDep = Annotated[NNConfig, Depends(nn_config_checker)]
+
+
+def optional_nn_config_checker(config: Annotated[str | None, Form()] = None):
+    if config is None:
+        return None
+    return nn_config_checker(config)
+
+
+OptionalNNConfigDep = Annotated[NNConfig | None, Depends(optional_nn_config_checker)]
+
+
+def dashboard_config_checker(dashboard_config: Annotated[str, Form()]):
+    try:
+        return DashboardConfig.model_validate_json(dashboard_config)
+    except ValidationError as e:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, jsonable_encoder(e.errors())
+        ) from e
+
+
+DashboardConfigDep = Annotated[DashboardConfig, Depends(dashboard_config_checker)]
+
+
+def dashboard_configs_list_checker(configs: Annotated[str, Form()]):
+    """Parse a JSON array of {dashboard_config, nn_config} pairs."""
+    import json as _json
+
+    NN_CONFIG_MAP = {
+        NNType.Generic: NNGenericConfig,
+    }
+
+    try:
+        raw_list = _json.loads(configs)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid JSON in configs field: {e}",
+        ) from e
+
+    if not isinstance(raw_list, list) or len(raw_list) == 0:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="configs must be a non-empty JSON array",
+        )
+
+    result: list[tuple[DashboardConfig, NNConfig]] = []
+    for i, item in enumerate(raw_list):
+        try:
+            dc = DashboardConfig.model_validate(item["dashboard_config"])
+            nc = NNConfig.model_validate(item["nn_config"])
+
+            nn_config_cls = NN_CONFIG_MAP.get(nc.type)
+            if nn_config_cls is None:
+                raise ValueError(f"Invalid NNType: {nc.type}")
+            if not isinstance(nc.nn_config, nn_config_cls):
+                raise ValueError(
+                    f"Invalid NNType: {nc.type} and NNConfig: {nc.nn_config}. Expected: {nn_config_cls}"
+                )
+
+            result.append((dc, nc))
+        except (ValidationError, KeyError, ValueError) as e:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid config at index {i}: {e}",
+            ) from e
+
+    return result
+
+
+DashboardConfigsListDep = Annotated[
+    list[tuple[DashboardConfig, NNConfig]], Depends(dashboard_configs_list_checker)
+]
+
+EventsStoreDep = Annotated[EventsStore, Depends(events_store_factory)]
