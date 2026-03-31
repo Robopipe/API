@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .events_store import events_store_factory
+
 from ..models.dashboard.dashboard_config import (
     DashboardConfig,
     DashboardLineDirection,
@@ -463,15 +465,15 @@ class LogicTreeEvaluator:
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
     ) -> tuple[bool, bool]:
         """Evaluate the logic tree. Returns (is_violated, fired) if the combined condition is met."""
-        if not self.test_case.logicNodes:
-            # Default: AND all limits
-            results = [
-                ev.evaluate(all_detections, crossed)
-                for ev in self.limit_evaluators.values()
-            ]
-            return all(result for result, _ in results), any(
-                fired for _, fired in results
-            )
+        # if not self.test_case.logicNodes:
+        #     # Default: AND all limits
+        #     results = [
+        #         ev.evaluate(all_detections, crossed)
+        #         for ev in self.limit_evaluators.values()
+        #     ]
+        #     return all(result for result, _ in results), any(
+        #         fired for _, fired in results
+        #     )
 
         return self._evaluate_nodes(self.test_case.logicNodes, all_detections, crossed)
 
@@ -577,7 +579,10 @@ class DashboardEvaluator:
         return
 
     def evaluate(
-        self, config: DashboardConfig, detections: list[BBoxDetection]
+        self,
+        config: DashboardConfig,
+        detections: list[BBoxDetection],
+        dashboard_run_session_id: int,
     ) -> list[dict]:
         """Evaluate test cases and return violations.
 
@@ -588,9 +593,14 @@ class DashboardEvaluator:
         - With targetParentLabel: fires when the parent label crosses.
         - Without targetParentLabel: fires when the target label crosses.
         """
+        events_store = events_store_factory()
         crossed, just_crossed_indices = self._tracker.find_crossed_detections(
             detections, config
         )
+        for i in just_crossed_indices:
+            events_store.inc_counter(
+                dashboard_run_session_id, config.labels[crossed[i].label].id
+            )
         just_crossed = [d for i, d in enumerate(crossed) if i in just_crossed_indices]
         tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
         for evaluator in tc_evaluators:
@@ -612,76 +622,3 @@ class DashboardEvaluator:
                 )
 
         return violations
-
-        # crossed, just_crossed_label_indices = self._tracker.find_crossed_detections(
-        #     detections, config
-        # )
-
-        # # No crossed detections visible → clear active display
-        # if not crossed:
-        #     # (
-        #     #     self._active_display_violations.pop(config_id, None)
-        #     #     if (config_id := config.id) or True
-        #     #     else None
-        #     # )
-        #     self._active_display_violations.pop(config.id, None)
-        #     return None, None
-
-        # # No new crossings → maintain current display without re-evaluating
-        # if not just_crossed_label_indices:
-        #     return None, self._active_display_violations.get(config.id)
-
-        # # New crossings — evaluate triggered test cases and record stats
-        # idx_to_label_id = {i: lbl.id for i, lbl in enumerate(config.labels)}
-        # test_case_evaluators = [
-        #     TestCaseEvaluator(tc, config) for tc in config.testCases
-        # ]
-
-        # any_fired = False
-        # violations: list[dict] = []
-
-        # for evaluator in test_case_evaluators:
-        #     trigger_label_ids = {
-        #         (limit.targetParentLabel or limit.targetLabel).id
-        #         for limit in evaluator.test_case.limits
-        #     }
-        #     fired = any(
-        #         idx_to_label_id.get(idx) in trigger_label_ids
-        #         for idx in just_crossed_label_indices
-        #     )
-        #     if not fired:
-        #         continue
-
-        #     any_fired = True
-        #     violated = evaluator.is_violated(detections, crossed)
-        #     self._threshold_tracker.record(
-        #         config.id, evaluator.test_case.id, passed=not violated
-        #     )
-        #     if violated:
-        #         violations.append(
-        #             {
-        #                 "test_case_id": evaluator.test_case.id,
-        #                 "type": evaluator.test_case.severity.value.lower(),
-        #             }
-        #         )
-
-        # # Update active display to highest severity from this crossing event
-        # if any_fired:
-        #     alert = next((v for v in violations if v["type"] == "alert"), None)
-        #     if alert:
-        #         self._active_display_violations[config.id] = {
-        #             "severity": "alert",
-        #             "test_case_id": alert["test_case_id"],
-        #         }
-        #     elif violations:
-        #         self._active_display_violations[config.id] = {
-        #             "severity": "warning",
-        #             "test_case_id": violations[0]["test_case_id"],
-        #         }
-        #     else:
-        #         # Test cases fired but none violated — evaluation passed, clear display
-        #         self._active_display_violations.pop(config.id, None)
-
-        # return violations if any_fired else None, self._active_display_violations.get(
-        #     config.id
-        # )

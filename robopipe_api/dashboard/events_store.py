@@ -11,39 +11,73 @@ class EventsStore:
             / "events.db"
         )
 
+    def __init_migrations_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS _migrations (
+                name TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+
+    def __run_pending_migrations(self, conn: sqlite3.Connection) -> None:
+        migrations_dir = Path(__file__).parent / "migrations"
+        applied = set(
+            row[0] for row in conn.execute("SELECT name FROM _migrations").fetchall()
+        )
+        for migration in sorted(migrations_dir.glob("*.sql")):
+            if migration.name in applied:
+                continue
+            with open(migration, "r") as f:
+                conn.executescript(f.read())
+            conn.execute("INSERT INTO _migrations (name) VALUES (?)", (migration.name,))
+        conn.commit()
+
     def init(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS detection_events (
-                    id TEXT PRIMARY KEY,
-                    test_case_id TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    mxid TEXT NOT NULL,
-                    stream_name TEXT NOT NULL,
-                    remote_url TEXT NOT NULL,
-                    sent INTEGER NOT NULL DEFAULT 0
-                )
-            """)
+            self.__init_migrations_table(conn)
+            self.__run_pending_migrations(conn)
 
-    def save_events(
-        self,
-        events: list[dict],
-        mxid: str,
-        stream_name: str,
-        remote_url: str,
-    ) -> None:
+    def start_session(self, dashboard_config_id: int) -> int:
         with sqlite3.connect(self.db_path) as conn:
-            conn.executemany(
-                "INSERT OR IGNORE INTO detection_events"
-                " (id, test_case_id, type, timestamp, mxid, stream_name, remote_url)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (e["id"], e["test_case_id"], e["type"], e["timestamp"], mxid, stream_name, remote_url)
-                    for e in events
-                ],
+            cursor = conn.execute(
+                "INSERT INTO dashboard_run_session (dashboard_config_id) VALUES (?)",
+                (dashboard_config_id,),
             )
+            return cursor.lastrowid
+
+    def end_session(self, session_id: int) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE dashboard_run_session SET end_time = CURRENT_TIMESTAMP WHERE id = ?",
+                (session_id,),
+            )
+
+    def inc_counter(self, session_id: int, label_id: int, value: int = 1) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO dashboard_counter (dashboard_run_session_id, label_id, value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(dashboard_run_session_id, label_id) DO UPDATE SET value = value + ?
+                """,
+                (session_id, label_id, value, value),
+            )
+
+    def get_counters(self, session_id: int) -> dict[int, int]:
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT label_id, value FROM dashboard_counter WHERE dashboard_run_session_id = ?",
+                (session_id,),
+            ).fetchall()
+            return {row[0]: row[1] for row in rows}
+
+    def save_event(
+        self, session_id: int, test_case_id: str, failed_limit_id: str | None
+    ) -> None:
+        pass
 
     def get_unsent_events(self) -> list[dict]:
         with sqlite3.connect(self.db_path) as conn:
