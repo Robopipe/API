@@ -18,7 +18,7 @@ class TestLineCrossingPositiveFlow:
         detections = [make_detection(coords=(0.4, 0.6, 0.6, 0.8))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert has_new is True
+        assert bool(has_new) is True
 
     def test_horizontal_detection_before_line(self):
         tracker = LineCrossingTracker()
@@ -28,7 +28,7 @@ class TestLineCrossingPositiveFlow:
         detections = [make_detection(coords=(0.4, 0.2, 0.6, 0.4))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 0
-        assert has_new is False
+        assert bool(has_new) is False
 
     def test_vertical_detection_past_line(self):
         tracker = LineCrossingTracker()
@@ -42,7 +42,7 @@ class TestLineCrossingPositiveFlow:
         detections = [make_detection(coords=(0.6, 0.4, 0.8, 0.6))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert has_new is True
+        assert bool(has_new) is True
 
 
 class TestLineCrossingNegativeFlow:
@@ -56,7 +56,7 @@ class TestLineCrossingNegativeFlow:
         detections = [make_detection(coords=(0.4, 0.2, 0.6, 0.4))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert has_new is True
+        assert bool(has_new) is True
 
     def test_horizontal_detection_below_line_is_not_past(self):
         tracker = LineCrossingTracker()
@@ -66,7 +66,7 @@ class TestLineCrossingNegativeFlow:
         detections = [make_detection(coords=(0.4, 0.6, 0.6, 0.8))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 0
-        assert has_new is False
+        assert bool(has_new) is False
 
     def test_vertical_negative_flow(self):
         tracker = LineCrossingTracker()
@@ -80,7 +80,7 @@ class TestLineCrossingNegativeFlow:
         detections = [make_detection(coords=(0.2, 0.4, 0.4, 0.6))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert has_new is True
+        assert bool(has_new) is True
 
 
 class TestLineCrossingTracking:
@@ -94,13 +94,13 @@ class TestLineCrossingTracking:
         det_before = [make_detection(label=0, coords=(0.4, 0.2, 0.6, 0.4))]  # cy=0.3
         crossed, has_new = tracker.find_crossed_detections(det_before, config)
         assert len(crossed) == 0
-        assert has_new is False
+        assert bool(has_new) is False
 
         # Frame 2: same detection moves past line
         det_after = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]  # cy=0.7
         crossed, has_new = tracker.find_crossed_detections(det_after, config)
         assert len(crossed) == 1
-        assert has_new is True
+        assert bool(has_new) is True
 
     def test_already_crossed_no_new(self):
         tracker = LineCrossingTracker()
@@ -109,12 +109,12 @@ class TestLineCrossingTracking:
         # Frame 1: appears past line → crossed + new
         det = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
         _, has_new = tracker.find_crossed_detections(det, config)
-        assert has_new is True
+        assert bool(has_new) is True
 
         # Frame 2: same detection still past → crossed but NOT new
         crossed, has_new = tracker.find_crossed_detections(det, config)
         assert len(crossed) == 1
-        assert has_new is False
+        assert bool(has_new) is False
 
     def test_multiple_configs_independent(self):
         tracker = LineCrossingTracker()
@@ -125,11 +125,11 @@ class TestLineCrossingTracking:
 
         # First crossing on config_a
         _, has_new_a = tracker.find_crossed_detections(det, config_a)
-        assert has_new_a is True
+        assert bool(has_new_a) is True
 
         # Independent first crossing on config_b
         _, has_new_b = tracker.find_crossed_detections(det, config_b)
-        assert has_new_b is True
+        assert bool(has_new_b) is True
 
     def test_detection_disappears_and_reappears(self):
         tracker = LineCrossingTracker()
@@ -138,14 +138,14 @@ class TestLineCrossingTracking:
         # Frame 1: detection past line
         det1 = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
         _, has_new = tracker.find_crossed_detections(det1, config)
-        assert has_new is True
+        assert bool(has_new) is True
 
         # Frame 2: detection disappears
         _, has_new = tracker.find_crossed_detections([], config)
-        assert has_new is False
+        assert bool(has_new) is False
 
         # Frame 3: new detection appears past line → counts as new
         det3 = [make_detection(label=0, coords=(0.3, 0.7, 0.5, 0.9))]
         crossed, has_new = tracker.find_crossed_detections(det3, config)
         assert len(crossed) == 1
-        assert has_new is True
+        assert bool(has_new) is True

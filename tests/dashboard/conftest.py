@@ -11,6 +11,8 @@ from robopipe_api.models.dashboard.eval_models import (
     EvalLimitItem,
     EvalLimitItemOperator,
     EvalLimitItemParameter,
+    EvalLimitItemQuantifierType,
+    EvalLimitItemQuantifierUnit,
     EvalLogicNode,
     EvalLogicNodeType,
     EvalLogicOperatorValue,
@@ -63,6 +65,9 @@ def make_limit_item(
     limit_to: float | None = None,
     operator: EvalLimitItemOperator = EvalLimitItemOperator.AND,
     item_id: str = "li-1",
+    quantifier_type: EvalLimitItemQuantifierType = EvalLimitItemQuantifierType.EXACT,
+    quantifier_unit: EvalLimitItemQuantifierUnit = EvalLimitItemQuantifierUnit.PERCENT,
+    quantifier_value: int = 100,
 ) -> EvalLimitItem:
     return EvalLimitItem(
         id=item_id,
@@ -70,6 +75,9 @@ def make_limit_item(
         limitTo=limit_to,
         parameter=parameter,
         operator=operator,
+        quantifierType=quantifier_type,
+        quantifierUnit=quantifier_unit,
+        quantifierValue=quantifier_value,
     )
 
 
