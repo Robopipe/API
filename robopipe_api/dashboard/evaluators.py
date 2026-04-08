@@ -14,6 +14,8 @@ from ..models.dashboard.eval_models import (
     EvalLimitItem,
     EvalLimitItemParameter,
     EvalLimitItemOperator,
+    EvalLimitItemQuantifierType,
+    EvalLimitItemQuantifierUnit,
     EvalLogicNode,
     EvalLogicNodeType,
     EvalLogicOperatorValue,
@@ -118,6 +120,16 @@ class TrackedDetection:
     missing_frames: int = 0
 
 
+@dataclass
+class EvaluationResult:
+    passed: bool
+    fired: bool
+    test_case_id: str
+    test_case_name: str
+    violated_limit_id: str | None
+    violated_limit_name: str | None
+
+
 class LineCrossingTracker:
     """Tracks per-config detection line crossings across frames."""
 
@@ -210,43 +222,6 @@ class LineCrossingTracker:
         self._state[config.id] = curr_not_past + curr_past
         return ret_past, curr_used
 
-        # crossed: list[BBoxDetection] = []
-        # used_prev: set[int] = set()
-        # just_crossed_label_indices: set[int] = set()
-
-        # for i, det in enumerate(detections):
-        #     cx, cy = bbox_center(det.coords)
-        #     past = self._is_past_line(det.coords, config)
-
-        #     best_match: int | None = None
-        #     best_dist = float("inf")
-        #     for j, prev_det in enumerate(prev_state):
-        #         if j in used_prev or prev_det.label != det.label:
-        #             continue
-        #         dist = (cx - prev_det.cx) ** 2 + (cy - prev_det.cy) ** 2
-        #         if dist < best_dist:
-        #             best_dist = dist
-        #             best_match = j
-
-        #     if best_match is not None:
-        #         used_prev.add(best_match)
-        #         match = prev_state[best_match]
-        #         just_crossed = not match.is_past_line and past
-        #         has_crossed = match.has_crossed or just_crossed
-        #         if just_crossed:
-        #             just_crossed_label_indices.add(det.label)
-        #     else:
-        #         has_crossed = past
-        #         if has_crossed:
-        #             just_crossed_label_indices.add(det.label)
-
-        #     new_state.append(TrackedDetection(det.label, cx, cy, past, has_crossed))
-        #     if has_crossed:
-        #         crossed.append(detections[i])
-
-        # self._state[config.id] = new_state
-        # return crossed, just_crossed_label_indices
-
     def reset(self, config_id: int) -> None:
         """Clear crossing state for a config (e.g. on dashboard start)."""
         self._state.pop(config_id, None)
@@ -289,6 +264,22 @@ class LimitItemEvaluator:
         else:
             return self._evaluate_positional(eval_targets, parent_detections)
 
+    def _check_quantifier(self, satisfied: int, total: int) -> bool:
+        """Return True if the number of satisfied detections meets the quantifier."""
+        v = self.item.quantifierValue
+        if self.item.quantifierUnit == EvalLimitItemQuantifierUnit.PERCENT:
+            threshold = round(total * v / 100)
+        else:  # PCS
+            threshold = v
+
+        qt = self.item.quantifierType
+        if qt == EvalLimitItemQuantifierType.MIN:
+            return satisfied >= threshold
+        elif qt == EvalLimitItemQuantifierType.MAX:
+            return satisfied <= threshold
+        else:  # EXACT
+            return satisfied == threshold
+
     def _evaluate_count(self, targets: list[BBoxDetection]) -> tuple[bool, bool]:
         return (
             value_within_limits(
@@ -302,32 +293,45 @@ class LimitItemEvaluator:
         targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
     ) -> tuple[bool, bool]:
-        """Area is always evaluated as percentage."""
-        target_area = sum(bbox_area(d.coords) for d in targets)
+        """Area: each detection is evaluated individually against the limit;
+        the quantifier specifies how many must satisfy it."""
+        if not targets:
+            return True, False
 
-        if parent_detections is not None:
-            parent_area = sum(bbox_area(d.coords) for d in parent_detections)
-            pct = (target_area / parent_area * 100) if parent_area > 0 else 0.0
-        else:
-            # Percentage of full frame (frame area = 1.0 in normalized coords)
-            pct = target_area * 100
+        satisfied = 0
+        for d in targets:
+            if parent_detections is not None:
+                containing = [
+                    p for p in parent_detections if is_within_bbox(d.coords, p.coords)
+                ]
+                ref_area = (
+                    sum(bbox_area(p.coords) for p in containing) if containing else 1.0
+                )
+            else:
+                ref_area = 1.0  # normalized frame area
+            pct = (bbox_area(d.coords) / ref_area * 100) if ref_area > 0 else 0.0
+            if value_within_limits(pct, self.item.limitFrom, self.item.limitTo):
+                satisfied += 1
 
-        return value_within_limits(pct, self.item.limitFrom, self.item.limitTo), True
+        return self._check_quantifier(satisfied, len(targets)), True
 
     def _evaluate_positional(
         self,
         targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
     ) -> tuple[bool, bool]:
-        """Positional: ALL targets must be within the range (implicit ALL quantifier)."""
+        """Positional: quantifier specifies how many targets must be within the range."""
+        if not targets:
+            return True, False
 
+        satisfied = 0
         for t in targets:
             ref = self._get_reference_coords(t, parent_detections)
             pct = compute_position_pct(t.coords, ref, self.item.parameter)
-            if not value_within_limits(pct, self.item.limitFrom, self.item.limitTo):
-                return False, True
+            if value_within_limits(pct, self.item.limitFrom, self.item.limitTo):
+                satisfied += 1
 
-        return True, bool(targets)
+        return self._check_quantifier(satisfied, len(targets)), True
 
     @staticmethod
     def _get_reference_coords(
@@ -429,21 +433,24 @@ class LimitEvaluator:
         )
 
         # Evaluate items and combine with left-to-right AND/OR
-        result = self.item_evaluators[0].evaluate(count_targets, eval_targets, parents)
+        value, fired = self.item_evaluators[0].evaluate(
+            count_targets, eval_targets, parents
+        )
 
         for i in range(1, len(self.item_evaluators)):
             # The operator on item[i-1] sits between item[i-1] and item[i]
             op = self.item_evaluators[i - 1].item.operator
-            item_result = self.item_evaluators[i].evaluate(
+            next_value, next_fired = self.item_evaluators[i].evaluate(
                 count_targets, eval_targets, parents
             )
+            fired = fired or next_fired
 
             if op == EvalLimitItemOperator.AND:
-                result = result and item_result
+                value = value and next_value
             else:  # OR
-                result = result or item_result
+                value = value or next_value
 
-        return result
+        return value, fired
 
 
 # ---------------------------------------------------------------------------
@@ -465,15 +472,17 @@ class LogicTreeEvaluator:
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
     ) -> tuple[bool, bool]:
         """Evaluate the logic tree. Returns (is_violated, fired) if the combined condition is met."""
-        # if not self.test_case.logicNodes:
-        #     # Default: AND all limits
-        #     results = [
-        #         ev.evaluate(all_detections, crossed)
-        #         for ev in self.limit_evaluators.values()
-        #     ]
-        #     return all(result for result, _ in results), any(
-        #         fired for _, fired in results
-        #     )
+        if not self.test_case.logicNodes:
+            # Default: AND all limits
+            results = [
+                ev.evaluate(all_detections, crossed)
+                for ev in self.limit_evaluators.values()
+            ]
+            if not results:
+                return True, False
+            return all(result for result, _ in results), any(
+                fired for _, fired in results
+            )
 
         return self._evaluate_nodes(self.test_case.logicNodes, all_detections, crossed)
 
@@ -499,8 +508,11 @@ class LogicTreeEvaluator:
 
             # Operand: LIMIT or GROUP
             if node.type == EvalLogicNodeType.LIMIT:
-                evaluator = self.limit_evaluators[node.id]
-                value, fired = evaluator.evaluate(all_detections, crossed)
+                if node.id not in self.limit_evaluators:
+                    value, fired = False, False
+                else:
+                    evaluator = self.limit_evaluators[node.id]
+                    value, fired = evaluator.evaluate(all_detections, crossed)
             else:  # GROUP
                 value, fired = self._evaluate_nodes(
                     node.children or [], all_detections, crossed

@@ -25,12 +25,26 @@ class EvalLimitItemOperator(str, Enum):
     OR = "OR"
 
 
+class EvalLimitItemQuantifierType(str, Enum):
+    MIN = "MIN"
+    MAX = "MAX"
+    EXACT = "EXACT"
+
+
+class EvalLimitItemQuantifierUnit(str, Enum):
+    PCS = "PCS"
+    PERCENT = "PERCENT"
+
+
 class EvalLimitItem(BaseModel):
     id: str
     limitFrom: float | None = None
     limitTo: float | None = None
     parameter: EvalLimitItemParameter
     operator: EvalLimitItemOperator = EvalLimitItemOperator.AND
+    quantifierType: EvalLimitItemQuantifierType = EvalLimitItemQuantifierType.EXACT
+    quantifierUnit: EvalLimitItemQuantifierUnit = EvalLimitItemQuantifierUnit.PERCENT
+    quantifierValue: int = 100
 
 
 # --- Limit ---
