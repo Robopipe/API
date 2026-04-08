@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { useAppState } from "../../provider";
 import { WakeLockIcon } from "../../ui";
 import { ModelSwitcher } from "./ModelSwitcher";
+import {
+  loadTimerLabelDisplay,
+  saveTimerLabelDisplay,
+  type TimerLabelDisplay,
+} from "./timerLabelStorage";
 
 const formatElapsed = (ms: number): string => {
   const totalSeconds = Math.floor(ms / 1000);
@@ -15,12 +20,23 @@ const formatElapsed = (ms: number): string => {
   return `${hours}:${minutes}:${seconds}`;
 };
 
+const TIMER_LABEL_OPTIONS: { value: TimerLabelDisplay; label: string }[] = [
+  { value: "project_name", label: "Project name" },
+  { value: "dashboard_name", label: "Dashboard name" },
+  { value: "nothing", label: "Timer only" },
+];
+
 export type HeaderProps = object;
 
 export const Header = () => {
   const { running, toggleRunning, runningSince } = useAppState();
   const wakeLock = useWakeLock();
   const [elapsed, setElapsed] = useState("00:00:00");
+  const [labelDisplay, setLabelDisplay] = useState<TimerLabelDisplay>(
+    loadTimerLabelDisplay,
+  );
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!runningSince) {
@@ -35,6 +51,30 @@ export const Header = () => {
     return () => clearInterval(id);
   }, [runningSince]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
+  const labelText =
+    labelDisplay === "project_name"
+      ? window.DASHBOARD_CONFIG.projectName
+      : labelDisplay === "dashboard_name"
+        ? window.DASHBOARD_CONFIG.name
+        : null;
+
+  const handleLabelChange = (value: TimerLabelDisplay) => {
+    setLabelDisplay(value);
+    saveTimerLabelDisplay(value);
+    setMenuOpen(false);
+  };
+
   return (
     <header className="flex justify-stretch items-center mb-4 gap-2">
       <button
@@ -46,9 +86,38 @@ export const Header = () => {
       >
         {running ? "Stop" : "Start"}
       </button>
-      <div className="py-3 px-6 bg-white/5 rounded-xl flex-1 flex gap-2 items-center justify-center">
-        <span className="block">Runtime:</span>
-        <span className="font-mono block pt-1">{elapsed}</span>
+      <div
+        className={`py-3 px-6 bg-white/5 rounded-xl flex-1 flex items-center relative select-none ${labelText ? "justify-between" : "justify-center"}`}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenuOpen((prev) => !prev);
+        }}
+      >
+        {labelText && (
+          <span className="shrink-0 text-base">{labelText}</span>
+        )}
+        <span className="font-mono shrink-0 text-base">{elapsed}</span>
+
+        {menuOpen && (
+          <div
+            ref={menuRef}
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-gray-800 border border-gray-700 rounded-xl p-2 z-50 min-w-40 shadow-lg"
+          >
+            {TIMER_LABEL_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  labelDisplay === option.value
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "text-gray-300 hover:bg-gray-700"
+                }`}
+                onClick={() => handleLabelChange(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <ModelSwitcher />
       <button

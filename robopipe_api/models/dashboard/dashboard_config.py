@@ -22,6 +22,8 @@ class DashboardConfig(BaseModel):
 
     id: int
     name: str
+    projectId: int
+    projectName: str
     lineDirection: DashboardLineDirection
     linePosition: float
     lineFlow: DashboardLineFlow = DashboardLineFlow.POSITIVE

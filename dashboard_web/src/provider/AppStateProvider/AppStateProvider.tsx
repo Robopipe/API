@@ -27,10 +27,14 @@ export const AppStateProvider = ({
     },
     {} as Record<string, TestCase>,
   );
-  const [state, setState] = useState<AppState>({
-    running: window.DASHBOARD_CONFIG.running,
-    runningSince: window.DASHBOARD_CONFIG.running ? new Date() : null,
-    testCaseMap,
+  const [state, setState] = useState<AppState>(() => {
+    const { running, runningSince } = window.DASHBOARD_CONFIG;
+    return {
+      running,
+      runningSince:
+        running && runningSince ? new Date(runningSince + "Z") : null,
+      testCaseMap,
+    };
   });
 
   const toggleRunning = async () => {

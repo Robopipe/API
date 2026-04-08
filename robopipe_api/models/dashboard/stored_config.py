@@ -6,6 +6,7 @@ from ..nn_config import NNConfig
 class StoredConfigSummary(BaseModel):
     config_id: int
     config_name: str
+    project_name: str = ""
 
 
 class StoredDashboardConfig(BaseModel):
