@@ -22,7 +22,11 @@ def img_frame_to_pil_image(img_frame: dai.ImgFrame) -> Image.Image:
     elif img_type == dai.ImgFrame.Type.BGR888i:
         return Image.fromarray(img_frame.getFrame()[..., ::-1])
     elif img_type == dai.ImgFrame.Type.BGR888p:
-        return Image.fromarray(img_frame.getFrame().transpose((1, 2, 0))[..., ::-1])
+        frame = img_frame.getFrame()
+        if frame.ndim == 2:
+            h = frame.shape[0] // 3
+            frame = frame.reshape((3, h, frame.shape[1]))
+        return Image.fromarray(frame.transpose((1, 2, 0))[..., ::-1])
     else:
         raise UnsupportedImageFormat(f"Given format: {img_type}")
 
@@ -38,7 +42,6 @@ def img_frame_to_video_frame(img_frame: dai.ImgFrame) -> av.VideoFrame:
     }
 
     img_type = img_frame.getType()
-
     if img_type not in FORMAT_MAP:
         raise UnsupportedImageFormat(f"Given format: {img_type}")
 
@@ -49,8 +52,12 @@ def img_frame_to_video_frame(img_frame: dai.ImgFrame) -> av.VideoFrame:
         img_frame = img_frame.getFrame()
         return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
     elif img_type == dai.ImgFrame.Type.BGR888p:
-        img_frame = img_frame.getFrame().transpose((1, 2, 0))
-        return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
+        frame = img_frame.getFrame()
+        if frame.ndim == 2:
+            h = frame.shape[0] // 3
+            frame = frame.reshape((3, h, frame.shape[1]))
+        frame = frame.transpose((1, 2, 0))
+        return av.VideoFrame.from_ndarray(frame, FORMAT_MAP[img_type])
 
     img_frame = av.VideoFrame.from_ndarray(img_frame.getFrame(), FORMAT_MAP[img_type])
     return img_frame
