@@ -43,7 +43,8 @@ class TestDefaultAndBehavior:
         ])
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
-        assert evaluator.evaluate(DETECTIONS) is True
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is True
 
     def test_empty_logic_nodes_one_false(self):
         tc = make_test_case(limits=[
@@ -52,13 +53,15 @@ class TestDefaultAndBehavior:
         ])
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
-        assert evaluator.evaluate(DETECTIONS) is False
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is False
 
     def test_no_limits_returns_true(self):
         tc = make_test_case(limits=[])
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
-        assert evaluator.evaluate(DETECTIONS) is True
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is True
 
 
 class TestExplicitLogicNodes:
@@ -70,7 +73,8 @@ class TestExplicitLogicNodes:
         )
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
-        assert evaluator.evaluate(DETECTIONS) is True
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is True
 
     def test_and_operator(self):
         tc = make_test_case(
@@ -84,7 +88,8 @@ class TestExplicitLogicNodes:
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
         # True AND False → False
-        assert evaluator.evaluate(DETECTIONS) is False
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is False
 
     def test_or_operator(self):
         tc = make_test_case(
@@ -98,7 +103,8 @@ class TestExplicitLogicNodes:
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
         # True OR False → True
-        assert evaluator.evaluate(DETECTIONS) is True
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is True
 
     def test_not_operator(self):
         tc = make_test_case(
@@ -111,7 +117,8 @@ class TestExplicitLogicNodes:
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
         # NOT True → False
-        assert evaluator.evaluate(DETECTIONS) is False
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is False
 
     def test_not_false_becomes_true(self):
         tc = make_test_case(
@@ -124,7 +131,8 @@ class TestExplicitLogicNodes:
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
         # NOT False → True
-        assert evaluator.evaluate(DETECTIONS) is True
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is True
 
 
 class TestGroupNodes:
@@ -143,7 +151,8 @@ class TestGroupNodes:
         )
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
-        assert evaluator.evaluate(DETECTIONS) is True
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is True
 
     def test_group_changes_evaluation_order(self):
         # Without group: True OR False AND False → (True OR False) AND False → False
@@ -164,7 +173,8 @@ class TestGroupNodes:
         )
         config = make_config()
         # Left-to-right: (True OR False) AND False → False
-        assert LogicTreeEvaluator(tc_no_group, config).evaluate(DETECTIONS) is False
+        result, _ = LogicTreeEvaluator(tc_no_group, config).evaluate(DETECTIONS, DETECTIONS)
+        assert result is False
 
         tc_with_group = make_test_case(
             limits=[
@@ -183,7 +193,8 @@ class TestGroupNodes:
             ],
         )
         # True OR (False AND False) → True OR False → True
-        assert LogicTreeEvaluator(tc_with_group, config).evaluate(DETECTIONS) is True
+        result, _ = LogicTreeEvaluator(tc_with_group, config).evaluate(DETECTIONS, DETECTIONS)
+        assert result is True
 
     def test_nested_groups(self):
         # NOT (True AND (NOT False))
@@ -203,7 +214,8 @@ class TestGroupNodes:
             ],
         )
         config = make_config()
-        assert LogicTreeEvaluator(tc, config).evaluate(DETECTIONS) is False
+        result, _ = LogicTreeEvaluator(tc, config).evaluate(DETECTIONS, DETECTIONS)
+        assert result is False
 
     def test_missing_limit_reference_evaluates_to_false(self):
         tc = make_test_case(
@@ -212,4 +224,5 @@ class TestGroupNodes:
         )
         config = make_config()
         evaluator = LogicTreeEvaluator(tc, config)
-        assert evaluator.evaluate(DETECTIONS) is False
+        result, _ = evaluator.evaluate(DETECTIONS, DETECTIONS)
+        assert result is False

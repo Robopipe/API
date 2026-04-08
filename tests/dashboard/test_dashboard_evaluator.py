@@ -1,4 +1,5 @@
 from robopipe_api.dashboard.evaluators import DashboardEvaluator, LineCrossingTracker
+from robopipe_api.dashboard.threshold_tracker import ThresholdTracker
 from robopipe_api.models.dashboard.eval_models import (
     EvalLimitItemParameter,
     EvalLogicOperatorValue,
@@ -17,11 +18,14 @@ from .conftest import (
     operator_node,
 )
 
+SESSION_ID = 1
+
 
 class TestDashboardEvaluator:
     def _make_evaluator(self):
         tracker = LineCrossingTracker()
-        return DashboardEvaluator(tracker)
+        threshold_tracker = ThresholdTracker()
+        return DashboardEvaluator(tracker, threshold_tracker)
 
     def test_no_new_crossings_returns_none(self):
         evaluator = self._make_evaluator()
@@ -37,7 +41,7 @@ class TestDashboardEvaluator:
 
         # Detection before line → no crossings
         detections = [make_detection(label=0, coords=(0.4, 0.2, 0.6, 0.4))]
-        result = evaluator.evaluate(config, detections)
+        result = evaluator.evaluate(config, detections, SESSION_ID)
         assert result is None
 
     def test_crossing_with_violation(self):
@@ -53,7 +57,7 @@ class TestDashboardEvaluator:
 
         # Detection past line
         detections = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
-        result = evaluator.evaluate(config, detections)
+        result = evaluator.evaluate(config, detections, SESSION_ID)
         assert result is not None
         assert len(result) == 1
         assert result[0]["test_case_id"] == "tc-1"
@@ -71,7 +75,7 @@ class TestDashboardEvaluator:
 
         # 1 detection past line, but count=1 outside 5-10 → DEFECT not triggered
         detections = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
-        result = evaluator.evaluate(config, detections)
+        result = evaluator.evaluate(config, detections, SESSION_ID)
         # No violations → None
         assert result is None
 
@@ -102,7 +106,7 @@ class TestDashboardEvaluator:
             make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8)),
             make_detection(label=0, coords=(0.3, 0.7, 0.5, 0.9)),
         ]
-        result = evaluator.evaluate(config, detections)
+        result = evaluator.evaluate(config, detections, SESSION_ID)
         assert result is not None
         ids = {r["test_case_id"] for r in result}
         types = {r["type"] for r in result}
@@ -118,7 +122,7 @@ class TestDashboardEvaluator:
         config = make_config(test_cases=[])
 
         detections = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
-        result = evaluator.evaluate(config, detections)
+        result = evaluator.evaluate(config, detections, SESSION_ID)
         # New crossing but no test cases → None
         assert result is None
 
@@ -152,7 +156,7 @@ class TestDashboardEvaluator:
         # pos=40% in 30-70 → True
         # False OR True → True → DEFECT violated
         detections = [make_detection(label=0, coords=(0.3, 0.6, 0.5, 0.8))]
-        result = evaluator.evaluate(config, detections)
+        result = evaluator.evaluate(config, detections, SESSION_ID)
         assert result is not None
         assert len(result) == 1
         assert result[0]["type"] == "alert"
