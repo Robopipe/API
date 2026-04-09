@@ -1,4 +1,5 @@
 from ..models.dashboard.dashboard_config import DashboardConfig
+from ..models.detection.bbox_detection import BBoxDetection
 from ..models.detection.detection import BaseNNDetections
 from .evaluators import DashboardEvaluator, EvaluationResult, LineCrossingTracker
 from .threshold_tracker import ThresholdTracker
@@ -9,32 +10,28 @@ _threshold_tracker = ThresholdTracker()
 _dashboard_evaluator = DashboardEvaluator(_line_crossing_tracker, _threshold_tracker)
 
 
-def _build_label_id_to_index(config: DashboardConfig) -> dict[int, int]:
-    """Map label.id → index in config.labels list."""
-    return {label.id: i for i, label in enumerate(config.labels)}
-
-
 def _annotate_detections(
     result: dict,
     evaluation_results: list[EvaluationResult],
-    label_id_to_index: dict[int, int],
+    source_detections: list[BBoxDetection],
 ) -> None:
-    """Embed violation info directly into each detection dict."""
+    """Embed violation info into the specific detections that violated each limit."""
+    id_to_index = {id(det): i for i, det in enumerate(source_detections)}
     for ev in evaluation_results:
-        if ev.violated_limit_target_label_id is None or ev.violated_limit_severity is None:
-            continue
-        label_index = label_id_to_index.get(ev.violated_limit_target_label_id)
-        if label_index is None:
+        if ev.violated_limit_severity is None:
             continue
         violation = {
             "limit_name": ev.violated_limit_name,
             "severity": ev.violated_limit_severity,
         }
-        for det in result["detections"]:
-            if det["label"] == label_index:
-                if "violations" not in det:
-                    det["violations"] = []
-                det["violations"].append(violation)
+        for det in ev.violating_detections:
+            idx = id_to_index.get(id(det))
+            if idx is None:
+                continue
+            target = result["detections"][idx]
+            if "violations" not in target:
+                target["violations"] = []
+            target["violations"].append(violation)
 
 
 def handle_detections(
@@ -75,8 +72,7 @@ def handle_detections(
     result["dashboard_detections"] = dashboard_detections
 
     # Embed violation info into individual detections
-    label_id_to_index = _build_label_id_to_index(dashboard_config)
-    _annotate_detections(result, evaluation_results, label_id_to_index)
+    _annotate_detections(result, evaluation_results, detections.detections)
 
     result["threshold_status"] = _threshold_tracker.get_status(
         dashboard_config.id, dashboard_config.testCases

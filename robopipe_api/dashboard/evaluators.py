@@ -130,6 +130,17 @@ class EvaluationResult:
     violated_limit_name: str | None
     violated_limit_severity: str | None
     violated_limit_target_label_id: int | None
+    violating_detections: list[BBoxDetection]
+
+
+@dataclass
+class LimitResult:
+    is_satisfied: bool
+    fired: bool
+    limit: EvalLimit
+    satisfying: list[BBoxDetection]
+    non_satisfying: list[BBoxDetection]
+    all_targets: list[BBoxDetection]
 
 
 class LineCrossingTracker:
@@ -253,11 +264,14 @@ class LimitItemEvaluator:
         count_targets: list[BBoxDetection],
         eval_targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
-    ) -> tuple[bool, bool]:
-        """Evaluate this limit item. Returns (is_violated, fired) if the condition is met.
+    ) -> tuple[bool, bool, list[BBoxDetection], list[BBoxDetection]]:
+        """Evaluate this limit item.
+
+        Returns (is_satisfied, fired, satisfying, non_satisfying).
 
         count_targets: targets used for COUNT (all visible, or within crossed parents).
         eval_targets: targets used for AREA/positional (crossed-based).
+        satisfying/non_satisfying: per-detection breakdown (empty for COUNT).
         """
         if self.item.parameter == EvalLimitItemParameter.COUNT:
             return self._evaluate_count(count_targets)
@@ -282,25 +296,30 @@ class LimitItemEvaluator:
         else:  # EXACT
             return satisfied == threshold
 
-    def _evaluate_count(self, targets: list[BBoxDetection]) -> tuple[bool, bool]:
+    def _evaluate_count(
+        self, targets: list[BBoxDetection]
+    ) -> tuple[bool, bool, list[BBoxDetection], list[BBoxDetection]]:
         return (
             value_within_limits(
                 float(len(targets)), self.item.limitFrom, self.item.limitTo
             ),
             True,
+            [],
+            [],
         )
 
     def _evaluate_area(
         self,
         targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
-    ) -> tuple[bool, bool]:
+    ) -> tuple[bool, bool, list[BBoxDetection], list[BBoxDetection]]:
         """Area: each detection is evaluated individually against the limit;
         the quantifier specifies how many must satisfy it."""
         if not targets:
-            return True, False
+            return True, False, [], []
 
-        satisfied = 0
+        satisfying: list[BBoxDetection] = []
+        non_satisfying: list[BBoxDetection] = []
         for d in targets:
             if parent_detections is not None:
                 containing = [
@@ -313,27 +332,42 @@ class LimitItemEvaluator:
                 ref_area = 1.0  # normalized frame area
             pct = (bbox_area(d.coords) / ref_area * 100) if ref_area > 0 else 0.0
             if value_within_limits(pct, self.item.limitFrom, self.item.limitTo):
-                satisfied += 1
+                satisfying.append(d)
+            else:
+                non_satisfying.append(d)
 
-        return self._check_quantifier(satisfied, len(targets)), True
+        return (
+            self._check_quantifier(len(satisfying), len(targets)),
+            True,
+            satisfying,
+            non_satisfying,
+        )
 
     def _evaluate_positional(
         self,
         targets: list[BBoxDetection],
         parent_detections: list[BBoxDetection] | None,
-    ) -> tuple[bool, bool]:
+    ) -> tuple[bool, bool, list[BBoxDetection], list[BBoxDetection]]:
         """Positional: quantifier specifies how many targets must be within the range."""
         if not targets:
-            return True, False
+            return True, False, [], []
 
-        satisfied = 0
+        satisfying: list[BBoxDetection] = []
+        non_satisfying: list[BBoxDetection] = []
         for t in targets:
             ref = self._get_reference_coords(t, parent_detections)
             pct = compute_position_pct(t.coords, ref, self.item.parameter)
             if value_within_limits(pct, self.item.limitFrom, self.item.limitTo):
-                satisfied += 1
+                satisfying.append(t)
+            else:
+                non_satisfying.append(t)
 
-        return self._check_quantifier(satisfied, len(targets)), True
+        return (
+            self._check_quantifier(len(satisfying), len(targets)),
+            True,
+            satisfying,
+            non_satisfying,
+        )
 
     @staticmethod
     def _get_reference_coords(
@@ -421,10 +455,13 @@ class LimitEvaluator:
 
     def evaluate(
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
-    ) -> tuple[bool, bool]:
-        """Evaluate the limit. Returns (is_violated, fired) if the combined condition is met."""
+    ) -> LimitResult:
+        """Evaluate the limit. Returns a LimitResult with per-detection breakdown."""
         if not self.item_evaluators:
-            return True, False
+            return LimitResult(
+                is_satisfied=True, fired=False, limit=self.limit,
+                satisfying=[], non_satisfying=[], all_targets=[],
+            )
 
         count_targets = self._get_count_targets(all_detections, crossed)
         eval_targets = self._get_eval_targets(all_detections, crossed)
@@ -434,17 +471,24 @@ class LimitEvaluator:
             else None
         )
 
+        all_satisfying: list[BBoxDetection] = []
+        all_non_satisfying: list[BBoxDetection] = []
+
         # Evaluate items and combine with left-to-right AND/OR
-        value, fired = self.item_evaluators[0].evaluate(
+        value, fired, sat, nsat = self.item_evaluators[0].evaluate(
             count_targets, eval_targets, parents
         )
+        all_satisfying.extend(sat)
+        all_non_satisfying.extend(nsat)
 
         for i in range(1, len(self.item_evaluators)):
             # The operator on item[i-1] sits between item[i-1] and item[i]
             op = self.item_evaluators[i - 1].item.operator
-            next_value, next_fired = self.item_evaluators[i].evaluate(
+            next_value, next_fired, sat, nsat = self.item_evaluators[i].evaluate(
                 count_targets, eval_targets, parents
             )
+            all_satisfying.extend(sat)
+            all_non_satisfying.extend(nsat)
             fired = fired or next_fired
 
             if op == EvalLimitItemOperator.AND:
@@ -452,7 +496,20 @@ class LimitEvaluator:
             else:  # OR
                 value = value or next_value
 
-        return value, fired
+        # Deduplicate by object identity
+        seen: set[int] = set()
+        unique_sat = [d for d in all_satisfying if not (id(d) in seen or seen.add(id(d)))]
+        seen.clear()
+        unique_nsat = [d for d in all_non_satisfying if not (id(d) in seen or seen.add(id(d)))]
+
+        return LimitResult(
+            is_satisfied=value,
+            fired=fired,
+            limit=self.limit,
+            satisfying=unique_sat,
+            non_satisfying=unique_nsat,
+            all_targets=count_targets if not eval_targets else eval_targets,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -472,18 +529,20 @@ class LogicTreeEvaluator:
 
     def evaluate(
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
-    ) -> tuple[bool, bool]:
-        """Evaluate the logic tree. Returns (is_violated, fired) if the combined condition is met."""
+    ) -> tuple[bool, bool, list[LimitResult]]:
+        """Evaluate the logic tree. Returns (is_satisfied, fired, limit_results)."""
         if not self.test_case.logicNodes:
             # Default: AND all limits
-            results = [
+            limit_results = [
                 ev.evaluate(all_detections, crossed)
                 for ev in self.limit_evaluators.values()
             ]
-            if not results:
-                return True, False
-            return all(result for result, _ in results), any(
-                fired for _, fired in results
+            if not limit_results:
+                return True, False, []
+            return (
+                all(lr.is_satisfied for lr in limit_results),
+                any(lr.fired for lr in limit_results),
+                limit_results,
             )
 
         return self._evaluate_nodes(self.test_case.logicNodes, all_detections, crossed)
@@ -493,12 +552,13 @@ class LogicTreeEvaluator:
         nodes: list[EvalLogicNode],
         all_detections: list[BBoxDetection],
         crossed: list[BBoxDetection],
-    ) -> tuple[bool, bool]:
+    ) -> tuple[bool, bool, list[LimitResult]]:
         """Evaluate a list of logic nodes (infix notation, left-to-right)."""
         result: bool | None = None
         fired = False
         pending_op: EvalLogicOperatorValue | None = None
         negate_next = False
+        collected: list[LimitResult] = []
 
         for node in nodes:
             if node.type == EvalLogicNodeType.OPERATOR:
@@ -511,14 +571,20 @@ class LogicTreeEvaluator:
             # Operand: LIMIT or GROUP
             if node.type == EvalLogicNodeType.LIMIT:
                 if node.id not in self.limit_evaluators:
-                    value, fired = False, False
+                    value, node_fired = False, False
                 else:
-                    evaluator = self.limit_evaluators[node.id]
-                    value, fired = evaluator.evaluate(all_detections, crossed)
+                    lr = self.limit_evaluators[node.id].evaluate(
+                        all_detections, crossed
+                    )
+                    collected.append(lr)
+                    value, node_fired = lr.is_satisfied, lr.fired
             else:  # GROUP
-                value, fired = self._evaluate_nodes(
+                value, node_fired, child_results = self._evaluate_nodes(
                     node.children or [], all_detections, crossed
                 )
+                collected.extend(child_results)
+
+            fired = fired or node_fired
 
             if negate_next:
                 value = not value
@@ -536,7 +602,7 @@ class LogicTreeEvaluator:
 
             pending_op = None
 
-        return (result, fired) if result is not None else (True, fired)
+        return (result, fired, collected) if result is not None else (True, fired, collected)
 
 
 # ---------------------------------------------------------------------------
@@ -566,7 +632,7 @@ class TestCaseEvaluator:
 
         returns (is_violated, fired)
         """
-        result, fired = self.logic_evaluator.evaluate(all_detections, crossed)
+        result, fired, _ = self.logic_evaluator.evaluate(all_detections, crossed)
 
         if self.test_case.type == EvalTestCaseType.CHECK:
             return (not result, fired)
@@ -576,26 +642,40 @@ class TestCaseEvaluator:
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
     ) -> list[EvaluationResult]:
         """Evaluate and return per-limit EvaluationResults if the test case is violated."""
-        violated, _ = self.is_violated(all_detections, crossed)
+        combined, _, limit_results = self.logic_evaluator.evaluate(
+            all_detections, crossed
+        )
+
+        violated = (
+            not combined
+            if self.test_case.type == EvalTestCaseType.CHECK
+            else combined
+        )
         if not violated:
             return []
 
         results: list[EvaluationResult] = []
-        for limit_ev in self.logic_evaluator.limit_evaluators.values():
-            limit_result, limit_fired = limit_ev.evaluate(all_detections, crossed)
-            if not limit_fired or not self._is_limit_violated(limit_result):
+        for lr in limit_results:
+            if not lr.fired or not self._is_limit_violated(lr.is_satisfied):
                 continue
-            limit = limit_ev.limit
+
+            # Determine violating detections based on CHECK/DEFECT semantics
+            if self.test_case.type == EvalTestCaseType.CHECK:
+                violating = lr.non_satisfying if lr.non_satisfying else lr.all_targets
+            else:
+                violating = lr.satisfying if lr.satisfying else lr.all_targets
+
             results.append(
                 EvaluationResult(
                     passed=False,
                     fired=True,
                     test_case_id=self.test_case.id,
                     test_case_name=self.test_case.name,
-                    violated_limit_id=limit.id,
-                    violated_limit_name=limit.name,
-                    violated_limit_severity=limit.severity.value if limit.severity else None,
-                    violated_limit_target_label_id=limit.targetLabel.id,
+                    violated_limit_id=lr.limit.id,
+                    violated_limit_name=lr.limit.name,
+                    violated_limit_severity=lr.limit.severity.value if lr.limit.severity else None,
+                    violated_limit_target_label_id=lr.limit.targetLabel.id,
+                    violating_detections=violating,
                 )
             )
 
@@ -611,6 +691,7 @@ class TestCaseEvaluator:
                     violated_limit_name=None,
                     violated_limit_severity=None,
                     violated_limit_target_label_id=None,
+                    violating_detections=[],
                 )
             )
 
