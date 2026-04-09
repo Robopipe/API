@@ -7,6 +7,7 @@ function storageKey(configId: number): string {
 }
 
 export type WidgetDisplayMode = "failures" | "pass_rate" | "failures_of_total";
+export type MasterDisplayMode = "zone" | "grade";
 
 export interface WidgetSlot {
   id: string;
@@ -17,6 +18,7 @@ export interface WidgetSlots {
   gridSize: number;
   slots: (WidgetSlot | null)[];
   masterVisible?: boolean;
+  masterDisplayMode?: MasterDisplayMode;
 }
 
 function slotCount(gridSize: number): number {
@@ -48,7 +50,12 @@ export function loadWidgetSlots(configId: number): WidgetSlots {
       if (Array.isArray(parsed.slots)) {
         const slots = parsed.slots.slice(0, count).map(normalizeSlot);
         while (slots.length < count) slots.push(null);
-        return { gridSize: gs, slots, masterVisible: parsed.masterVisible ?? true };
+        return {
+          gridSize: gs,
+          slots,
+          masterVisible: parsed.masterVisible ?? true,
+          masterDisplayMode: parsed.masterDisplayMode ?? "zone",
+        };
       }
     }
   } catch {
@@ -68,7 +75,12 @@ export function resizeSlots(
   const count = slotCount(gs);
   const slots = current.slots.slice(0, count);
   while (slots.length < count) slots.push(null);
-  return { gridSize: gs, slots, masterVisible: current.masterVisible };
+  return {
+    gridSize: gs,
+    slots,
+    masterVisible: current.masterVisible,
+    masterDisplayMode: current.masterDisplayMode,
+  };
 }
 
 export function saveWidgetSlots(configId: number, config: WidgetSlots) {

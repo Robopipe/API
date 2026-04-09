@@ -11,6 +11,8 @@ export interface DonutWidgetProps {
   size?: number;
   /** Ring stroke width in px (default 12) */
   strokeWidth?: number;
+  /** Override the center label (defaults to zone_name from status) */
+  primaryLabel?: string;
 }
 
 export const DonutWidget = ({
@@ -20,6 +22,7 @@ export const DonutWidget = ({
   defaultColor = "#20a963",
   size = 140,
   strokeWidth = 12,
+  primaryLabel,
 }: DonutWidgetProps) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -100,7 +103,7 @@ export const DonutWidget = ({
               className={`${isLarge ? "text-xl" : "text-base"} font-bold text-white px-1 rounded leading-snug text-center w-full`}
               style={{ backgroundColor: zoneColor + "33" }}
             >
-              {status?.zone_name ?? "—"}
+              {primaryLabel ?? status?.zone_name ?? "—"}
             </span>
             {secondaryMetric()}
             {showWarning && (
