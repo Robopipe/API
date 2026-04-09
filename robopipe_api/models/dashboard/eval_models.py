@@ -7,6 +7,11 @@ from .label import Label
 from .eval_threshold import EvalThreshold
 
 
+class EvalSeverity(str, Enum):
+    ALERT = "ALERT"
+    WARNING = "WARNING"
+
+
 # --- Limit Item ---
 
 
@@ -55,6 +60,7 @@ class EvalLimit(BaseModel):
     name: str
     targetLabel: Label
     targetParentLabel: Label | None = None
+    severity: EvalSeverity | None = None
     limitItems: list[EvalLimitItem] = []
 
 
@@ -88,16 +94,11 @@ class EvalTestCaseType(str, Enum):
     DEFECT = "DEFECT"
 
 
-class EvalTestCaseSeverity(str, Enum):
-    ALERT = "ALERT"
-    WARNING = "WARNING"
-
-
 class EvalTestCase(BaseModel):
     id: str
     name: str
     type: EvalTestCaseType
-    severity: EvalTestCaseSeverity
+    severity: EvalSeverity | None = None
     limits: list[EvalLimit]
     logicNodes: list[EvalLogicNode] = []
     thresholds: list[EvalThreshold] = []

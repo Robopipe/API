@@ -21,9 +21,13 @@ export interface EvalThreshold {
 export interface TestCase {
   id: string;
   name: string;
-  severity: "ALERT" | "WARNING";
+  severity: "ALERT" | "WARNING" | null;
   thresholds: EvalThreshold[];
 }
+
+export type DetectionDisplayMode = "all" | "alerts" | "alerts_and_warnings";
+
+export type MultiLimitDisplayMode = "highest" | "show_all";
 
 export interface DashboardConfig {
   configId: number;

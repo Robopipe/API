@@ -128,6 +128,8 @@ class EvaluationResult:
     test_case_name: str
     violated_limit_id: str | None
     violated_limit_name: str | None
+    violated_limit_severity: str | None
+    violated_limit_target_label_id: int | None
 
 
 class LineCrossingTracker:
@@ -549,22 +551,70 @@ class TestCaseEvaluator:
         self.test_case = test_case
         self.logic_evaluator = LogicTreeEvaluator(test_case, config)
 
+    def _is_limit_violated(self, limit_result: bool) -> bool:
+        """Apply CHECK/DEFECT inversion to an individual limit result."""
+        if self.test_case.type == EvalTestCaseType.CHECK:
+            return not limit_result
+        return limit_result
+
     def is_violated(
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
     ) -> tuple[bool, bool]:
         """Evaluate the test case and determine if it's violated.
-        CHECK: violated when condition NOT met (e.g. "no red in zone" violated if red detected in zone)
-        DEFECT: violated when condition IS met (e.g. "red in zone" violated if red detected in zone)
+        CHECK: violated when condition NOT met
+        DEFECT: violated when condition IS met
 
-        returns (is_violated, fired) where:
-        - is_violated: whether the test case condition is currently violated
-        - fired: whether the test case was triggered by this crossing event (used for tracking purposes)
+        returns (is_violated, fired)
         """
         result, fired = self.logic_evaluator.evaluate(all_detections, crossed)
 
         if self.test_case.type == EvalTestCaseType.CHECK:
-            return (not result, fired)  # CHECK: violated when condition NOT met
-        return result, fired  # DEFECT: violated when condition IS met
+            return (not result, fired)
+        return result, fired
+
+    def evaluate(
+        self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
+    ) -> list[EvaluationResult]:
+        """Evaluate and return per-limit EvaluationResults if the test case is violated."""
+        violated, _ = self.is_violated(all_detections, crossed)
+        if not violated:
+            return []
+
+        results: list[EvaluationResult] = []
+        for limit_ev in self.logic_evaluator.limit_evaluators.values():
+            limit_result, limit_fired = limit_ev.evaluate(all_detections, crossed)
+            if not limit_fired or not self._is_limit_violated(limit_result):
+                continue
+            limit = limit_ev.limit
+            results.append(
+                EvaluationResult(
+                    passed=False,
+                    fired=True,
+                    test_case_id=self.test_case.id,
+                    test_case_name=self.test_case.name,
+                    violated_limit_id=limit.id,
+                    violated_limit_name=limit.name,
+                    violated_limit_severity=limit.severity.value if limit.severity else None,
+                    violated_limit_target_label_id=limit.targetLabel.id,
+                )
+            )
+
+        # If no individual limit produced a result, still record the test case violation
+        if not results:
+            results.append(
+                EvaluationResult(
+                    passed=False,
+                    fired=True,
+                    test_case_id=self.test_case.id,
+                    test_case_name=self.test_case.name,
+                    violated_limit_id=None,
+                    violated_limit_name=None,
+                    violated_limit_severity=None,
+                    violated_limit_target_label_id=None,
+                )
+            )
+
+        return results
 
 
 # ---------------------------------------------------------------------------
@@ -582,12 +632,9 @@ class DashboardEvaluator:
     ) -> None:
         self._tracker = line_crossing_tracker
         self._threshold_tracker = threshold_tracker
-        # config_id → active display violation (persists until crossed detections leave)
-        # self._active_display_violations: dict[int, dict] = {}
 
     def reset(self, config_id: int) -> None:
         """Clear all state for a config (called on dashboard start)."""
-        # self._active_display_violations.pop(config_id, None)
         return
 
     def evaluate(
@@ -595,15 +642,11 @@ class DashboardEvaluator:
         config: DashboardConfig,
         detections: list[BBoxDetection],
         dashboard_run_session_id: int,
-    ) -> list[dict]:
-        """Evaluate test cases and return violations.
+    ) -> list[EvaluationResult]:
+        """Evaluate test cases and return evaluation results.
 
-        violations: list of {"test_case_id": int, "type": "alert" | "warning"} for test cases violated
-        by this frame's detections that are past the trigger boundary.
-
-        Trigger rules per test case:
-        - With targetParentLabel: fires when the parent label crosses.
-        - Without targetParentLabel: fires when the target label crosses.
+        Returns a list of EvaluationResult for each violated test case / limit pair.
+        A single test case may produce multiple results (one per individually violated limit).
         """
         events_store = events_store_factory()
         crossed, just_crossed_indices = self._tracker.find_crossed_detections(
@@ -615,6 +658,8 @@ class DashboardEvaluator:
             )
         just_crossed = [d for i, d in enumerate(crossed) if i in just_crossed_indices]
         tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
+
+        # Record threshold tracking for just-crossed detections
         for evaluator in tc_evaluators:
             violated, fired = evaluator.is_violated(detections, just_crossed)
             if fired:
@@ -622,15 +667,9 @@ class DashboardEvaluator:
                     config.id, evaluator.test_case.id, passed=not violated
                 )
 
-        violations = []
+        # Collect per-limit evaluation results from all violated test cases
+        results: list[EvaluationResult] = []
         for evaluator in tc_evaluators:
-            violated, _ = evaluator.is_violated(detections, crossed)
-            if violated:
-                violations.append(
-                    {
-                        "test_case_id": evaluator.test_case.id,
-                        "type": evaluator.test_case.severity.value,
-                    }
-                )
+            results.extend(evaluator.evaluate(detections, crossed))
 
-        return violations
+        return results
