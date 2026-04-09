@@ -231,8 +231,7 @@ class TestAnnotateDetections:
         from robopipe_api.dashboard.evaluators import EvaluationResult
 
         ev = EvaluationResult(
-            passed=False,
-            fired=True,
+
             test_case_id="tc-1",
             test_case_name="Test",
             violated_limit_id="lim-1",
@@ -264,8 +263,7 @@ class TestAnnotateDetections:
         from robopipe_api.dashboard.evaluators import EvaluationResult
 
         ev = EvaluationResult(
-            passed=False,
-            fired=True,
+
             test_case_id="tc-1",
             test_case_name="Test",
             violated_limit_id=None,
@@ -286,14 +284,14 @@ class TestAnnotateDetections:
         from robopipe_api.dashboard.evaluators import EvaluationResult
 
         ev1 = EvaluationResult(
-            passed=False, fired=True,
+
             test_case_id="tc-1", test_case_name="Test 1",
             violated_limit_id="lim-1", violated_limit_name="Limit A",
             violated_limit_severity="ALERT", violated_limit_target_label_id=1,
             violating_detections=[d],
         )
         ev2 = EvaluationResult(
-            passed=False, fired=True,
+
             test_case_id="tc-2", test_case_name="Test 2",
             violated_limit_id="lim-2", violated_limit_name="Limit B",
             violated_limit_severity="WARNING", violated_limit_target_label_id=1,

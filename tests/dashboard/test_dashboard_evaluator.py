@@ -1,4 +1,5 @@
-from robopipe_api.dashboard.evaluators import DashboardEvaluator, LineCrossingTracker
+from robopipe_api.dashboard.evaluators import DashboardEvaluator
+from robopipe_api.dashboard.line_crossing import LineCrossingTracker
 from robopipe_api.dashboard.threshold_tracker import ThresholdTracker
 from robopipe_api.models.dashboard.eval_models import (
     EvalLimitItemParameter,

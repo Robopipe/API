@@ -1,4 +1,4 @@
-from robopipe_api.dashboard.evaluators import LineCrossingTracker
+from robopipe_api.dashboard.line_crossing import LineCrossingTracker
 from robopipe_api.models.dashboard.dashboard_config import (
     DashboardLineDirection,
     DashboardLineFlow,

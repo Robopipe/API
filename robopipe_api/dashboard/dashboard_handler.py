@@ -1,7 +1,8 @@
 from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.detection.bbox_detection import BBoxDetection
 from ..models.detection.detection import BaseNNDetections
-from .evaluators import DashboardEvaluator, EvaluationResult, LineCrossingTracker
+from .evaluators import DashboardEvaluator, EvaluationResult
+from .line_crossing import LineCrossingTracker
 from .threshold_tracker import ThresholdTracker
 from .events_store import events_store_factory
 
@@ -39,10 +40,7 @@ def handle_detections(
     detections: BaseNNDetections,
     dashboard_run_session_id: int | None,
 ) -> dict:
-    """Evaluate dashboard test cases against detections and return enriched result.
-
-    When running is False, skips evaluation entirely (no dashboard_detections).
-    """
+    """Evaluate dashboard test cases against detections and return enriched result."""
     result = detections.model_dump()
 
     if dashboard_config is None or dashboard_run_session_id is None:
@@ -59,7 +57,6 @@ def handle_detections(
         if ev.test_case_id in seen_tc_ids:
             continue
         seen_tc_ids.add(ev.test_case_id)
-        # Look up test case severity from config
         tc = next(
             (tc for tc in dashboard_config.testCases if tc.id == ev.test_case_id),
             None,
@@ -71,7 +68,6 @@ def handle_detections(
         )
     result["dashboard_detections"] = dashboard_detections
 
-    # Embed violation info into individual detections
     _annotate_detections(result, evaluation_results, detections.detections)
 
     result["threshold_status"] = _threshold_tracker.get_status(
