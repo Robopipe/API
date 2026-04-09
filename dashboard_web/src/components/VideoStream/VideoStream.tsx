@@ -14,7 +14,7 @@ interface BorderInfo {
 
 export const VideoStream = () => {
   const { running, testCaseMap, displayMode, multiLimitMode } = useAppState();
-  const { videoRef } = useWebRTCStream();
+  const { videoRef, isStreaming, error } = useWebRTCStream();
   const { renderDetections, canvasRef } = useDetectionsRenderer({
     videoRef,
     displayMode,
@@ -68,7 +68,7 @@ export const VideoStream = () => {
           : "")
       }
     >
-      <div className="relative">
+      <div className="relative aspect-video bg-gray-950 rounded-md overflow-hidden">
         <video
           ref={videoRef}
           autoPlay
@@ -80,6 +80,18 @@ export const VideoStream = () => {
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full"
         />
+        {!isStreaming && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+            {error ? (
+              <span className="text-red-400 text-sm">{error}</span>
+            ) : (
+              <>
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
+                <span className="text-gray-400 text-sm">Connecting...</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {running && (
         <p className="text-center text-4xl mt-9 mb-12">
