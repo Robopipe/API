@@ -261,8 +261,16 @@ def serve_dashboard(
     if head:
         store = config_store_factory()
         has_multiple = len(store.list_configs(mxid, stream_name)) > 1
+        running_since = None
+        if sensor.dashboard_run_session_id is not None:
+            events_store = events_store_factory()
+            running_since = events_store.get_session_start_time(
+                sensor.dashboard_run_session_id
+            )
         dashboard_config = {
             "configId": sensor.dashboard_config.id,
+            "name": sensor.dashboard_config.name,
+            "projectName": sensor.dashboard_config.projectName,
             "apiBase": str(request.url).rstrip("/dashboard"),
             "mxid": mxid,
             "streamName": stream_name,
@@ -279,8 +287,10 @@ def serve_dashboard(
             "lineDirection": sensor.dashboard_config.lineDirection,
             "linePosition": sensor.dashboard_config.linePosition,
             "lineFlow": sensor.dashboard_config.lineFlow,
+            "thresholds": [t.model_dump() for t in sensor.dashboard_config.thresholds],
             "remoteBackendUrl": sensor.dashboard_config.remoteBackendUrl,
             "running": sensor.dashboard_run_session_id is not None,
+            "runningSince": running_since,
             "hasMultipleConfigs": has_multiple,
         }
         script_tag = soup.new_tag("script")
@@ -351,7 +361,7 @@ def list_dashboard_configs(
     return {
         "active_config_id": sensor.active_config_id,
         "configs": [
-            {"config_id": c.config_id, "config_name": c.config_name} for c in configs
+            {"config_id": c.config_id, "config_name": c.config_name, "project_name": c.project_name} for c in configs
         ],
     }
 
@@ -427,6 +437,11 @@ def get_dashboard_metrics(sensor: SensorDep, events_store: EventsStoreDep):
     data = {}
     data["threshold_status"] = _threshold_tracker.get_status(
         sensor.dashboard_config.id, sensor.dashboard_config.testCases
+    )
+    data["master_threshold_status"] = _threshold_tracker.get_master_status(
+        sensor.dashboard_config.id,
+        sensor.dashboard_config.testCases,
+        sensor.dashboard_config.thresholds,
     )
     data["counters"] = events_store.get_counters(sensor.dashboard_run_session_id)
 
