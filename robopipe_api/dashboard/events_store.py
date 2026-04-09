@@ -8,7 +8,7 @@ class EventsStore:
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or (
             Path(os.getenv("ROBOPIPE_DATA_DIR", str(Path.home() / ".robopipe")))
-            / "events.db"
+            / "robopipe.db"
         )
 
     def __init_migrations_table(self, conn: sqlite3.Connection) -> None:
@@ -63,15 +63,17 @@ class EventsStore:
                 (session_id,),
             )
 
-    def inc_counter(self, session_id: int, label_id: int, value: int = 1) -> None:
+    def inc_counter(
+        self, session_id: int, label_id: int, label_name: str, value: int = 1
+    ) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
-                INSERT INTO dashboard_counter (dashboard_run_session_id, label_id, value)
-                VALUES (?, ?, ?)
+                INSERT INTO dashboard_counter (dashboard_run_session_id, label_id, label_name, value)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(dashboard_run_session_id, label_id) DO UPDATE SET value = value + ?
                 """,
-                (session_id, label_id, value, value),
+                (session_id, label_id, label_name, value, value),
             )
 
     def get_counters(self, session_id: int) -> dict[int, int]:
@@ -83,9 +85,48 @@ class EventsStore:
             return {row[0]: row[1] for row in rows}
 
     def save_event(
-        self, session_id: int, test_case_id: str, failed_limit_id: str | None
-    ) -> None:
-        pass
+        self,
+        session_id: int,
+        test_case_id: str,
+        test_case_name: str,
+        failed_limit_id: str | None,
+        failed_limit_name: str | None,
+    ) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO dashboard_evaluation_event
+                    (dashboard_run_session_id, test_case_id, test_case_name,
+                     failed_limit_id, failed_limit_name)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    test_case_id,
+                    test_case_name,
+                    failed_limit_id,
+                    failed_limit_name,
+                ),
+            )
+            return cursor.lastrowid
+
+    def update_event_picture(self, event_ids: list[int], picture_url: str) -> None:
+        if not event_ids:
+            return
+        with sqlite3.connect(self.db_path) as conn:
+            placeholders = ",".join("?" for _ in event_ids)
+            conn.execute(
+                f"UPDATE dashboard_evaluation_event SET picture_url = ? WHERE id IN ({placeholders})",
+                [picture_url, *event_ids],
+            )
+
+    def get_event_picture_url(self, event_id: int) -> str | None:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT picture_url FROM dashboard_evaluation_event WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+            return row[0] if row else None
 
     def get_unsent_events(self) -> list[dict]:
         with sqlite3.connect(self.db_path) as conn:

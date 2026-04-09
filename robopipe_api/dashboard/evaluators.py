@@ -56,6 +56,7 @@ class EvaluationResult:
     violated_limit_severity: str | None
     violated_limit_target_label_id: int | None
     violating_detections: list[BBoxDetection]
+    db_event_id: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -499,34 +500,58 @@ class DashboardEvaluator:
         config: DashboardConfig,
         detections: list[BBoxDetection],
         dashboard_run_session_id: int,
-    ) -> list[EvaluationResult]:
+    ) -> tuple[list[EvaluationResult], list[int]]:
         """Evaluate test cases and return evaluation results.
 
-        Returns a list of EvaluationResult for each violated test case / limit pair.
-        A single test case may produce multiple results (one per individually violated limit).
+        Returns a tuple of:
+        - list of EvaluationResult for each violated test case / limit pair
+        - list of violation event IDs (for picture capture by the frontend)
         """
         events_store = events_store_factory()
         crossed, just_crossed_indices = self._tracker.find_crossed_detections(
             detections, config
         )
         for i in just_crossed_indices:
+            label = config.labels[crossed[i].label]
             events_store.inc_counter(
-                dashboard_run_session_id, config.labels[crossed[i].label].id
+                dashboard_run_session_id, label.id, label.name
             )
         just_crossed = [d for i, d in enumerate(crossed) if i in just_crossed_indices]
         tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
 
-        # Record threshold tracking for just-crossed detections
+        # Record threshold tracking and save events for just-crossed detections
+        violation_event_ids: list[int] = []
         for evaluator in tc_evaluators:
             violated, fired = evaluator.is_violated(detections, just_crossed)
             if fired:
                 self._threshold_tracker.record(
                     config.id, evaluator.test_case.id, passed=not violated
                 )
+                tc = evaluator.test_case
+                if violated:
+                    eval_results = evaluator.evaluate(detections, just_crossed)
+                    for r in eval_results:
+                        event_id = events_store.save_event(
+                            dashboard_run_session_id,
+                            tc.id, tc.name,
+                            r.violated_limit_id, r.violated_limit_name,
+                        )
+                        violation_event_ids.append(event_id)
+                    if not eval_results:
+                        event_id = events_store.save_event(
+                            dashboard_run_session_id,
+                            tc.id, tc.name, None, None,
+                        )
+                        violation_event_ids.append(event_id)
+                else:
+                    events_store.save_event(
+                        dashboard_run_session_id,
+                        tc.id, tc.name, None, None,
+                    )
 
         # Collect per-limit evaluation results from all violated test cases
         results: list[EvaluationResult] = []
         for evaluator in tc_evaluators:
             results.extend(evaluator.evaluate(detections, crossed))
 
-        return results
+        return results, violation_event_ids
