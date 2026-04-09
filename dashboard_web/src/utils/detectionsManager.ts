@@ -106,13 +106,13 @@ class DetectionsManager {
           if (parsed.dashboard_detections?.length) {
             void this.reportDashboardDetections(parsed.dashboard_detections);
           }
+          this.setSnapshot({ detections: parsed });
+          for (const cb of this.callbacks) cb(parsed);
           if (parsed.violation_event_ids?.length) {
             void this.captureAndUploadViolationPicture(
               parsed.violation_event_ids,
             );
           }
-          this.setSnapshot({ detections: parsed });
-          for (const cb of this.callbacks) cb(parsed);
         } catch {
           // noop
         }
