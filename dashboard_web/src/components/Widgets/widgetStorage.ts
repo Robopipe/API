@@ -16,6 +16,7 @@ export interface WidgetSlot {
 export interface WidgetSlots {
   gridSize: number;
   slots: (WidgetSlot | null)[];
+  masterVisible?: boolean;
 }
 
 function slotCount(gridSize: number): number {
@@ -47,7 +48,7 @@ export function loadWidgetSlots(configId: number): WidgetSlots {
       if (Array.isArray(parsed.slots)) {
         const slots = parsed.slots.slice(0, count).map(normalizeSlot);
         while (slots.length < count) slots.push(null);
-        return { gridSize: gs, slots };
+        return { gridSize: gs, slots, masterVisible: parsed.masterVisible ?? true };
       }
     }
   } catch {
@@ -67,7 +68,7 @@ export function resizeSlots(
   const count = slotCount(gs);
   const slots = current.slots.slice(0, count);
   while (slots.length < count) slots.push(null);
-  return { gridSize: gs, slots };
+  return { gridSize: gs, slots, masterVisible: current.masterVisible };
 }
 
 export function saveWidgetSlots(configId: number, config: WidgetSlots) {

@@ -73,6 +73,9 @@ def handle_detections(
     result["threshold_status"] = _threshold_tracker.get_status(
         dashboard_config.id, dashboard_config.testCases
     )
+    result["master_threshold_status"] = _threshold_tracker.get_master_status(
+        dashboard_config.id, dashboard_config.testCases, dashboard_config.thresholds
+    )
     events_store = events_store_factory()
     result["counters"] = events_store.get_counters(dashboard_run_session_id)
 

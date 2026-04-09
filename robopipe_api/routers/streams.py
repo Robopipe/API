@@ -287,6 +287,7 @@ def serve_dashboard(
             "lineDirection": sensor.dashboard_config.lineDirection,
             "linePosition": sensor.dashboard_config.linePosition,
             "lineFlow": sensor.dashboard_config.lineFlow,
+            "thresholds": [t.model_dump() for t in sensor.dashboard_config.thresholds],
             "remoteBackendUrl": sensor.dashboard_config.remoteBackendUrl,
             "running": sensor.dashboard_run_session_id is not None,
             "runningSince": running_since,
@@ -436,6 +437,11 @@ def get_dashboard_metrics(sensor: SensorDep, events_store: EventsStoreDep):
     data = {}
     data["threshold_status"] = _threshold_tracker.get_status(
         sensor.dashboard_config.id, sensor.dashboard_config.testCases
+    )
+    data["master_threshold_status"] = _threshold_tracker.get_master_status(
+        sensor.dashboard_config.id,
+        sensor.dashboard_config.testCases,
+        sensor.dashboard_config.thresholds,
     )
     data["counters"] = events_store.get_counters(sensor.dashboard_run_session_id)
 

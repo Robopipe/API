@@ -15,7 +15,7 @@ export interface EvalThreshold {
   name: string;
   value: number;
   color: string;
-  testCaseId: string;
+  testCaseId?: string;
 }
 
 export interface TestCase {
@@ -38,6 +38,7 @@ export interface DashboardConfig {
   streamName: string;
   labels: Label[];
   testCases: TestCase[];
+  thresholds: EvalThreshold[];
   lineDirection: DashboardLineDirection;
   linePosition: number;
   lineFlow: DashboardLineFlow;

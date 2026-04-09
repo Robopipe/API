@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Container, type ContainerProps, GearIcon } from "../../ui";
 import { useDetections } from "../../hooks/useDetections";
 import { useAppState } from "../../provider";
-import type { ThresholdStatus } from "../../types/detections";
+import type {
+  ThresholdStatus,
+  ThresholdTestCaseStatus,
+} from "../../types/detections";
 import { DonutWidget } from "./DonutWidget";
 import { GridSizeSelector } from "./GridSizeSelector";
 import { WidgetSidebar } from "./WidgetSidebar";
@@ -28,6 +31,8 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const { running } = useAppState();
   const [thresholdStatus, setThresholdStatus] =
     useState<ThresholdStatus | null>(null);
+  const [masterStatus, setMasterStatus] =
+    useState<ThresholdTestCaseStatus | null>(null);
   const [widgetSlots, setWidgetSlots] = useState<WidgetSlots>(() =>
     loadWidgetSlots(configId),
   );
@@ -38,9 +43,15 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
   );
 
   const onDetections = useCallback(
-    (detections: { threshold_status?: ThresholdStatus }) => {
+    (detections: {
+      threshold_status?: ThresholdStatus;
+      master_threshold_status?: ThresholdTestCaseStatus;
+    }) => {
       if (detections.threshold_status) {
         setThresholdStatus(detections.threshold_status);
+      }
+      if (detections.master_threshold_status) {
+        setMasterStatus(detections.master_threshold_status);
       }
     },
     [],
@@ -59,6 +70,9 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
           Object.keys(data.threshold_status).length > 0
         ) {
           setThresholdStatus(data.threshold_status);
+        }
+        if (data && data.master_threshold_status) {
+          setMasterStatus(data.master_threshold_status);
         }
       })
       .catch(() => {});
@@ -80,6 +94,26 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editMode, sidebarOpen]);
+
+  const hasMasterThresholds =
+    (window.DASHBOARD_CONFIG.thresholds?.length ?? 0) > 0;
+  const showMaster = hasMasterThresholds && widgetSlots.masterVisible !== false;
+
+  const toggleMasterVisible = () => {
+    const updated: WidgetSlots = {
+      ...widgetSlots,
+      masterVisible: !showMaster,
+    };
+    setWidgetSlots(updated);
+    saveWidgetSlots(configId, updated);
+  };
+
+  const masterDefaultColor = (() => {
+    const t = window.DASHBOARD_CONFIG.thresholds;
+    if (!t?.length) return "#20a963";
+    const sorted = [...t].sort((a, b) => a.value - b.value);
+    return sorted[sorted.length - 1].color;
+  })();
 
   const testCaseMap = window.DASHBOARD_CONFIG.testCases.reduce(
     (acc, tc) => {
@@ -195,6 +229,36 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
           <GearIcon />
         </button>
       </div>
+
+      {/* Master evaluation widget */}
+      {hasMasterThresholds && editMode && !showMaster && (
+        <button
+          onClick={toggleMasterVisible}
+          className="mb-3 px-3 py-1.5 rounded-lg border border-dashed border-gray-600 text-gray-500 hover:border-gray-400 hover:text-gray-300 text-sm transition-colors shrink-0"
+        >
+          + Show Master Evaluation
+        </button>
+      )}
+      {showMaster && (
+        <div className="relative flex flex-col items-center mb-4 shrink-0">
+          {editMode && (
+            <button
+              onClick={toggleMasterVisible}
+              className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white text-xs leading-none flex items-center justify-center transition-colors z-10"
+            >
+              &times;
+            </button>
+          )}
+          <DonutWidget
+            name="Master Evaluation"
+            status={masterStatus}
+            displayMode="pass_rate"
+            defaultColor={masterDefaultColor}
+            size={200}
+            strokeWidth={16}
+          />
+        </div>
+      )}
 
       {/* Widget grid */}
       <div
