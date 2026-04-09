@@ -147,7 +147,14 @@ export const ModelSwitcher = () => {
                   disabled={isActive}
                 >
                   <BoltIcon />
-                  <span>{config.config_name}</span>
+                  <div className="flex flex-col">
+                    <span>{config.project_name || config.config_name}</span>
+                    {config.project_name && (
+                      <span className="text-xs text-gray-400">
+                        {config.config_name}
+                      </span>
+                    )}
+                  </div>
                 </button>
               );
             })}

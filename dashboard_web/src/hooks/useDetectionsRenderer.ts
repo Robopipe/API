@@ -1,6 +1,15 @@
 import { type RefObject, useCallback, useEffect, useRef } from "react";
-import type { NNDetections } from "../types/detections";
+import type {
+  DetectionDisplayMode,
+  MultiLimitDisplayMode,
+} from "../types/dashboard";
+import type {
+  DetectionViolation,
+  NNDetection,
+  NNDetections,
+} from "../types/detections";
 import {
+  isBBDetection,
   renderBBoxDetection,
   renderClassificationDetection,
   renderLine,
@@ -10,6 +19,8 @@ import {
 export interface UseDetectionsRendererOptions {
   videoRef: RefObject<HTMLVideoElement | null>;
   enabled?: boolean;
+  displayMode?: DetectionDisplayMode;
+  multiLimitMode?: MultiLimitDisplayMode;
 }
 
 export interface UseDetectionsRendererReturn {
@@ -17,9 +28,40 @@ export interface UseDetectionsRendererReturn {
   renderDetections: (detections: NNDetections) => void;
 }
 
+function prepareDetectionForRender(
+  detection: NNDetection,
+  displayMode: DetectionDisplayMode,
+  multiLimitMode: MultiLimitDisplayMode,
+): NNDetection | null {
+  if (displayMode === "all") return detection;
+
+  // Filtered modes: only show detections with matching violations
+  if (!isBBDetection(detection) || !detection.violations?.length) return null;
+
+  let violations: DetectionViolation[];
+  if (displayMode === "alerts") {
+    violations = detection.violations.filter((v) => v.severity === "ALERT");
+    if (violations.length === 0) return null;
+  } else {
+    violations = detection.violations;
+  }
+
+  // Apply multi-limit mode
+  if (multiLimitMode === "highest") {
+    const highest =
+      violations.find((v) => v.severity === "ALERT") ?? violations[0];
+    violations = [highest];
+  }
+
+  // Return detection copy with filtered violations
+  return { ...detection, violations };
+}
+
 export const useDetectionsRenderer = ({
   videoRef,
   enabled = true,
+  displayMode = "all",
+  multiLimitMode = "highest",
 }: UseDetectionsRendererOptions): UseDetectionsRendererReturn => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -52,24 +94,23 @@ export const useDetectionsRenderer = ({
       const offCtx = offscreen.getContext("2d");
       if (!offCtx) return;
 
+      const labels = window.DASHBOARD_CONFIG.labels || [];
       offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
-      renderSegmentationMask(
-        offCtx,
-        window.DASHBOARD_CONFIG.labels || [],
-        detections,
-      );
+
+      if (displayMode === "all") {
+        renderSegmentationMask(offCtx, labels, detections);
+      }
+
       for (const detection of detections.detections) {
         if (detection.confidence < 0.5) continue;
-        renderBBoxDetection(
-          offCtx,
-          window.DASHBOARD_CONFIG.labels || [],
+        const prepared = prepareDetectionForRender(
           detection,
+          displayMode,
+          multiLimitMode,
         );
-        renderClassificationDetection(
-          offCtx,
-          window.DASHBOARD_CONFIG.labels || [],
-          detection,
-        );
+        if (!prepared) continue;
+        renderBBoxDetection(offCtx, labels, prepared);
+        renderClassificationDetection(offCtx, labels, prepared);
       }
 
       // Single
@@ -81,7 +122,7 @@ export const useDetectionsRenderer = ({
       );
       ctx.drawImage(offscreen, 0, 0);
     },
-    [videoRef, enabled, getOffscreenCanvas],
+    [videoRef, enabled, getOffscreenCanvas, displayMode, multiLimitMode],
   );
 
   useEffect(() => {

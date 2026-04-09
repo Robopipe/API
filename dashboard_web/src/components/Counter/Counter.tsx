@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useDetections } from "../../hooks/useDetections";
 import { useAppState } from "../../provider";
 import { GearIcon } from "../../ui";
+import {
+  collectViolations,
+  countBySeverity,
+} from "../../utils/collectViolations";
 import { loadSelectedLabel, saveSelectedLabel } from "./counterStorage";
 import { CounterSidebar } from "./CounterSidebar";
 
@@ -15,7 +19,14 @@ function getInitialLabelId(): number | null {
 }
 
 export const Counter = () => {
-  const { running, testCaseMap } = useAppState();
+  const {
+    running,
+    testCaseMap,
+    displayMode,
+    setDisplayMode,
+    multiLimitMode,
+    setMultiLimitMode,
+  } = useAppState();
   const [count, setCount] = useState(0);
   const [warnings, setWarnings] = useState(0);
   const [alerts, setAlerts] = useState(0);
@@ -32,16 +43,10 @@ export const Counter = () => {
       } else {
         setCount(0);
       }
-      const { warnings, alerts } = detections.dashboard_detections?.reduce(
-        (acc, d) => {
-          if (testCaseMap[d.test_case_id]?.severity === "WARNING")
-            acc.warnings += 1;
-          if (testCaseMap[d.test_case_id]?.severity === "ALERT")
-            acc.alerts += 1;
-          return acc;
-        },
-        { warnings: 0, alerts: 0 },
-      ) || { warnings: 0, alerts: 0 };
+
+      const { alerts, warnings } = countBySeverity(
+        collectViolations(detections, testCaseMap),
+      );
       setWarnings(warnings);
       setAlerts(alerts);
     },
@@ -88,6 +93,10 @@ export const Counter = () => {
         labels={labels}
         selectedLabelId={selectedLabelId}
         onSelectLabel={handleSelectLabel}
+        displayMode={displayMode}
+        onDisplayModeChange={setDisplayMode}
+        multiLimitMode={multiLimitMode}
+        onMultiLimitModeChange={setMultiLimitMode}
       />
     </>
   );

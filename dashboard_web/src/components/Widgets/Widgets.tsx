@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Container, type ContainerProps, GearIcon } from "../../ui";
-import { useDetections } from "../../hooks/useDetections";
 import { useAppState } from "../../provider";
-import type { ThresholdStatus } from "../../types/detections";
+import { DisplayModeSelector } from "./DisplayModeSelector";
 import { DonutWidget } from "./DonutWidget";
 import { GridSizeSelector } from "./GridSizeSelector";
+import { MasterWidget } from "./MasterWidget";
+import { useThresholdStatus } from "./useThresholdStatus";
 import { WidgetSidebar } from "./WidgetSidebar";
 import {
   loadWidgetSlots,
   resizeSlots,
   saveWidgetSlots,
+  type MasterDisplayMode,
   type WidgetDisplayMode,
   type WidgetSlots,
 } from "./widgetStorage";
@@ -26,8 +28,7 @@ export type WidgetsProps = ContainerProps;
 
 export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const { running } = useAppState();
-  const [thresholdStatus, setThresholdStatus] =
-    useState<ThresholdStatus | null>(null);
+  const { thresholdStatus, masterStatus } = useThresholdStatus(running);
   const [widgetSlots, setWidgetSlots] = useState<WidgetSlots>(() =>
     loadWidgetSlots(configId),
   );
@@ -36,33 +37,6 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(
     null,
   );
-
-  const onDetections = useCallback(
-    (detections: { threshold_status?: ThresholdStatus }) => {
-      if (detections.threshold_status) {
-        setThresholdStatus(detections.threshold_status);
-      }
-    },
-    [],
-  );
-
-  useDetections({ onDetections, enabled: running });
-
-  useEffect(() => {
-    if (!running) return;
-    fetch(`${window.DASHBOARD_CONFIG.apiBase}/dashboard/metrics`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (
-          data &&
-          data.threshold_status &&
-          Object.keys(data.threshold_status).length > 0
-        ) {
-          setThresholdStatus(data.threshold_status);
-        }
-      })
-      .catch(() => {});
-  }, [running]);
 
   // Escape key: close sidebar first, then exit edit mode
   useEffect(() => {
@@ -80,6 +54,24 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editMode, sidebarOpen]);
+
+  // --- Slot helpers ---
+
+  const updateSlots = (updated: WidgetSlots) => {
+    setWidgetSlots(updated);
+    saveWidgetSlots(configId, updated);
+  };
+
+  const showMaster = widgetSlots.masterVisible !== false;
+
+  const toggleMasterVisible = () => {
+    updateSlots({ ...widgetSlots, masterVisible: !showMaster });
+  };
+
+  const masterDisplayMode = widgetSlots.masterDisplayMode ?? "zone";
+  const setMasterDisplayMode = (mode: MasterDisplayMode) => {
+    updateSlots({ ...widgetSlots, masterDisplayMode: mode });
+  };
 
   const testCaseMap = window.DASHBOARD_CONFIG.testCases.reduce(
     (acc, tc) => {
@@ -99,7 +91,6 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
 
   const toggleEditMode = () => {
     if (editMode) {
-      // Exiting edit mode: close sidebar too
       setSidebarOpen(false);
       setSelectedSlotIndex(null);
     }
@@ -120,12 +111,7 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
 
     const newSlots = [...widgetSlots.slots];
     newSlots[targetIndex] = { id: testCaseId, mode: "failures" };
-    const updated: WidgetSlots = {
-      gridSize: widgetSlots.gridSize,
-      slots: newSlots,
-    };
-    setWidgetSlots(updated);
-    saveWidgetSlots(configId, updated);
+    updateSlots({ ...widgetSlots, slots: newSlots });
     setSidebarOpen(false);
     setSelectedSlotIndex(null);
   };
@@ -133,12 +119,7 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const removeFromSlot = (index: number) => {
     const newSlots = [...widgetSlots.slots];
     newSlots[index] = null;
-    const updated: WidgetSlots = {
-      gridSize: widgetSlots.gridSize,
-      slots: newSlots,
-    };
-    setWidgetSlots(updated);
-    saveWidgetSlots(configId, updated);
+    updateSlots({ ...widgetSlots, slots: newSlots });
   };
 
   const setSlotMode = (index: number, mode: WidgetDisplayMode) => {
@@ -146,19 +127,12 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
     if (!slot) return;
     const newSlots = [...widgetSlots.slots];
     newSlots[index] = { ...slot, mode };
-    const updated: WidgetSlots = {
-      gridSize: widgetSlots.gridSize,
-      slots: newSlots,
-    };
-    setWidgetSlots(updated);
-    saveWidgetSlots(configId, updated);
+    updateSlots({ ...widgetSlots, slots: newSlots });
   };
 
   const changeGridSize = (size: number) => {
     const updated = resizeSlots(widgetSlots, size);
-    setWidgetSlots(updated);
-    saveWidgetSlots(configId, updated);
-    // Reset selected slot if it's out of bounds
+    updateSlots(updated);
     if (
       selectedSlotIndex !== null &&
       selectedSlotIndex >= updated.slots.length
@@ -196,6 +170,16 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
         </button>
       </div>
 
+      {/* Master evaluation widget */}
+      <MasterWidget
+        status={masterStatus}
+        visible={showMaster}
+        editMode={editMode}
+        displayMode={masterDisplayMode}
+        onToggleVisible={toggleMasterVisible}
+        onSetDisplayMode={setMasterDisplayMode}
+      />
+
       {/* Widget grid */}
       <div
         className="flex-1 grid gap-4 place-items-center"
@@ -226,22 +210,11 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
                   defaultColor={getThresholdDefaultColor(tc)}
                 />
                 {editMode && (
-                  <div className="flex gap-1 mt-2">
-                    {DISPLAY_MODES.map(({ value, label }) => (
-                      <button
-                        key={value}
-                        onClick={() => setSlotMode(index, value)}
-                        title={label}
-                        className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                          slot.mode === value
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-700 text-gray-400 hover:text-white"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  <DisplayModeSelector
+                    modes={DISPLAY_MODES}
+                    selected={slot.mode}
+                    onChange={(mode) => setSlotMode(index, mode)}
+                  />
                 )}
               </div>
             );

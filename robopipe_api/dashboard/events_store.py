@@ -48,6 +48,14 @@ class EventsStore:
             )
             return cursor.lastrowid
 
+    def get_session_start_time(self, session_id: int) -> str | None:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT start_time FROM dashboard_run_session WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            return row[0] if row else None
+
     def end_session(self, session_id: int) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(

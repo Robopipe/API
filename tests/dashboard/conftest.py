@@ -18,7 +18,7 @@ from robopipe_api.models.dashboard.eval_models import (
     EvalLogicOperatorValue,
     EvalTestCase,
     EvalTestCaseType,
-    EvalTestCaseSeverity,
+    EvalSeverity,
 )
 from robopipe_api.models.detection.bbox_detection import BBoxDetection
 
@@ -99,7 +99,7 @@ def make_limit(
 def make_test_case(
     tc_id: str = "tc-1",
     tc_type: EvalTestCaseType = EvalTestCaseType.DEFECT,
-    severity: EvalTestCaseSeverity = EvalTestCaseSeverity.ALERT,
+    severity: EvalSeverity = EvalSeverity.ALERT,
     limits: list[EvalLimit] | None = None,
     logic_nodes: list[EvalLogicNode] | None = None,
 ) -> EvalTestCase:
@@ -124,6 +124,8 @@ def make_config(
     return DashboardConfig(
         id=config_id,
         name="Test config",
+        projectId=1,
+        projectName="Test project",
         lineDirection=line_direction,
         linePosition=line_position,
         lineFlow=line_flow,

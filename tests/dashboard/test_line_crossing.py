@@ -1,4 +1,4 @@
-from robopipe_api.dashboard.evaluators import LineCrossingTracker
+from robopipe_api.dashboard.line_crossing import LineCrossingTracker
 from robopipe_api.models.dashboard.dashboard_config import (
     DashboardLineDirection,
     DashboardLineFlow,
@@ -14,11 +14,11 @@ class TestLineCrossingPositiveFlow:
         tracker = LineCrossingTracker()
         config = make_config(line_position=0.5, line_flow=DashboardLineFlow.POSITIVE)
 
-        # center y=0.7 >= 0.5 → past
+        # center y=0.7 >= 0.5 → past, but first frame so not a "new crossing"
         detections = [make_detection(coords=(0.4, 0.6, 0.6, 0.8))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert bool(has_new) is True
+        assert bool(has_new) is False
 
     def test_horizontal_detection_before_line(self):
         tracker = LineCrossingTracker()
@@ -38,11 +38,11 @@ class TestLineCrossingPositiveFlow:
             line_flow=DashboardLineFlow.POSITIVE,
         )
 
-        # center x=0.7 >= 0.5 → past
+        # center x=0.7 >= 0.5 → past, but first frame so not a "new crossing"
         detections = [make_detection(coords=(0.6, 0.4, 0.8, 0.6))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert bool(has_new) is True
+        assert bool(has_new) is False
 
 
 class TestLineCrossingNegativeFlow:
@@ -52,11 +52,11 @@ class TestLineCrossingNegativeFlow:
         tracker = LineCrossingTracker()
         config = make_config(line_position=0.5, line_flow=DashboardLineFlow.NEGATIVE)
 
-        # center y=0.3 <= 0.5 → past in negative flow
+        # center y=0.3 <= 0.5 → past in negative flow, first frame so not new
         detections = [make_detection(coords=(0.4, 0.2, 0.6, 0.4))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert bool(has_new) is True
+        assert bool(has_new) is False
 
     def test_horizontal_detection_below_line_is_not_past(self):
         tracker = LineCrossingTracker()
@@ -76,11 +76,11 @@ class TestLineCrossingNegativeFlow:
             line_flow=DashboardLineFlow.NEGATIVE,
         )
 
-        # center x=0.3 <= 0.5 → past
+        # center x=0.3 <= 0.5 → past, first frame so not new
         detections = [make_detection(coords=(0.2, 0.4, 0.4, 0.6))]
         crossed, has_new = tracker.find_crossed_detections(detections, config)
         assert len(crossed) == 1
-        assert bool(has_new) is True
+        assert bool(has_new) is False
 
 
 class TestLineCrossingTracking:
@@ -102,16 +102,16 @@ class TestLineCrossingTracking:
         assert len(crossed) == 1
         assert bool(has_new) is True
 
-    def test_already_crossed_no_new(self):
+    def test_already_past_no_new_crossing(self):
         tracker = LineCrossingTracker()
         config = make_config(line_position=0.5, line_flow=DashboardLineFlow.POSITIVE)
 
-        # Frame 1: appears past line → crossed + new
+        # Frame 1: appears past line — no prior not-past state, so not a new crossing
         det = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
         _, has_new = tracker.find_crossed_detections(det, config)
-        assert bool(has_new) is True
+        assert bool(has_new) is False
 
-        # Frame 2: same detection still past → crossed but NOT new
+        # Frame 2: still past → still not new
         crossed, has_new = tracker.find_crossed_detections(det, config)
         assert len(crossed) == 1
         assert bool(has_new) is False
@@ -121,31 +121,45 @@ class TestLineCrossingTracking:
         config_a = make_config(config_id=1, line_position=0.5)
         config_b = make_config(config_id=2, line_position=0.5)
 
-        det = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
+        # Detection starts before line, then crosses
+        det_before = [make_detection(label=0, coords=(0.4, 0.2, 0.6, 0.4))]
+        det_after = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
 
-        # First crossing on config_a
-        _, has_new_a = tracker.find_crossed_detections(det, config_a)
+        # Seed config_a with before-line detection
+        tracker.find_crossed_detections(det_before, config_a)
+        # Cross on config_a
+        _, has_new_a = tracker.find_crossed_detections(det_after, config_a)
         assert bool(has_new_a) is True
 
-        # Independent first crossing on config_b
-        _, has_new_b = tracker.find_crossed_detections(det, config_b)
+        # Seed config_b with before-line detection (independent state)
+        tracker.find_crossed_detections(det_before, config_b)
+        # Cross on config_b
+        _, has_new_b = tracker.find_crossed_detections(det_after, config_b)
         assert bool(has_new_b) is True
 
     def test_detection_disappears_and_reappears(self):
         tracker = LineCrossingTracker()
         config = make_config(line_position=0.5, line_flow=DashboardLineFlow.POSITIVE)
 
-        # Frame 1: detection past line
-        det1 = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
-        _, has_new = tracker.find_crossed_detections(det1, config)
+        # Frame 1: detection before line
+        det1 = [make_detection(label=0, coords=(0.4, 0.2, 0.6, 0.4))]
+        tracker.find_crossed_detections(det1, config)
+
+        # Frame 2: same detection crosses line
+        det2 = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
+        _, has_new = tracker.find_crossed_detections(det2, config)
         assert bool(has_new) is True
 
-        # Frame 2: detection disappears
+        # Frame 3: detection disappears
         _, has_new = tracker.find_crossed_detections([], config)
         assert bool(has_new) is False
 
-        # Frame 3: new detection appears past line → counts as new
-        det3 = [make_detection(label=0, coords=(0.3, 0.7, 0.5, 0.9))]
-        crossed, has_new = tracker.find_crossed_detections(det3, config)
+        # Frame 4: new detection appears before line
+        det4 = [make_detection(label=0, coords=(0.2, 0.2, 0.4, 0.4))]
+        tracker.find_crossed_detections(det4, config)
+
+        # Frame 5: crosses the line → new crossing
+        det5 = [make_detection(label=0, coords=(0.3, 0.7, 0.5, 0.9))]
+        crossed, has_new = tracker.find_crossed_detections(det5, config)
         assert len(crossed) == 1
         assert bool(has_new) is True

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..models.dashboard.eval_models import EvalTestCase
+from ..models.dashboard.eval_threshold import EvalThreshold
 
 
 class ThresholdTracker:
@@ -47,7 +48,9 @@ class ThresholdTracker:
             else:
                 pass_rate = (total - failures) / total
 
-            zone_name, zone_color, is_best_zone = self._determine_zone(tc, pass_rate)
+            zone_name, zone_color, is_best_zone = self._determine_zone(
+                tc.thresholds, pass_rate
+            )
 
             result[tc.id] = {
                 "total": total,
@@ -60,9 +63,42 @@ class ThresholdTracker:
 
         return result if result else None
 
+    def get_master_status(
+        self,
+        config_id: int,
+        test_cases: list[EvalTestCase],
+        master_thresholds: list[EvalThreshold],
+    ) -> dict | None:
+        """Return aggregate threshold status across all test cases.
+
+        Computes the average pass rate of all individual test cases and
+        determines the zone using config-level master thresholds.
+        Returns None if there are no master thresholds or no test case statuses.
+        """
+        if not master_thresholds:
+            return None
+
+        tc_status = self.get_status(config_id, test_cases)
+        if not tc_status:
+            return None
+
+        pass_rates = [s["pass_rate"] for s in tc_status.values()]
+        master_pass_rate = sum(pass_rates) / len(pass_rates)
+
+        zone_name, zone_color, is_best_zone = self._determine_zone(
+            master_thresholds, master_pass_rate
+        )
+
+        return {
+            "pass_rate": round(master_pass_rate, 4),
+            "zone_name": zone_name,
+            "zone_color": zone_color,
+            "is_best_zone": is_best_zone,
+        }
+
     @staticmethod
     def _determine_zone(
-        test_case: EvalTestCase, pass_rate: float
+        thresholds: list[EvalThreshold], pass_rate: float
     ) -> tuple[str, str, bool]:
         """Find which threshold zone the pass_rate falls into.
 
@@ -70,7 +106,7 @@ class ThresholdTracker:
         threshold where pass_rate < threshold.value. If pass_rate >= all
         threshold values, the last threshold is used.
         """
-        sorted_thresholds = sorted(test_case.thresholds, key=lambda t: t.value)
+        sorted_thresholds = sorted(thresholds, key=lambda t: t.value)
 
         for threshold in sorted_thresholds[:-1]:
             if pass_rate < threshold.value:

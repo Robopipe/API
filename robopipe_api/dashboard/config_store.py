@@ -70,7 +70,11 @@ class DashboardConfigStore:
             metadata = json.loads(meta_file.read_text())
             dc = metadata["dashboard_config"]
             configs.append(
-                StoredConfigSummary(config_id=dc["id"], config_name=dc["name"])
+                StoredConfigSummary(
+                    config_id=dc["id"],
+                    config_name=dc["name"],
+                    project_name=dc.get("projectName", ""),
+                )
             )
         return configs
 

@@ -3,40 +3,60 @@ import { useWebRTCStream } from "../../hooks";
 import { useDetections } from "../../hooks/useDetections";
 import { useDetectionsRenderer } from "../../hooks/useDetectionsRenderer";
 import { useAppState } from "../../provider";
-import type { NNDetections, TestCase } from "../../types";
+import type { NNDetections } from "../../types";
+import { collectViolations } from "../../utils/collectViolations";
+
+interface BorderInfo {
+  severity: "ALERT" | "WARNING";
+  name: string;
+  extraCount: number;
+}
 
 export const VideoStream = () => {
-  const { running } = useAppState();
-  const { videoRef } = useWebRTCStream();
-  const { renderDetections, canvasRef } = useDetectionsRenderer({ videoRef });
-  const [dashboardDetection, setDashboardDetection] = useState<TestCase | null>(
-    null,
-  );
+  const { running, testCaseMap, displayMode, multiLimitMode } = useAppState();
+  const { videoRef, isStreaming, error } = useWebRTCStream();
+  const { renderDetections, canvasRef } = useDetectionsRenderer({
+    videoRef,
+    displayMode,
+    multiLimitMode,
+  });
+  const [borderInfo, setBorderInfo] = useState<BorderInfo | null>(null);
+
   const onDetections = useCallback(
     (detections: NNDetections) => {
       renderDetections(detections);
-      setDashboardDetection(
-        detections.dashboard_detections?.[0]
-          ? window.DASHBOARD_CONFIG.testCases.find(
-              (tc) =>
-                tc.id === detections.dashboard_detections?.[0]?.test_case_id,
-            ) || null
-          : null,
+
+      const allViolations = collectViolations(detections, testCaseMap);
+
+      if (allViolations.length === 0) {
+        setBorderInfo(null);
+        return;
+      }
+
+      // Sort: ALERT first
+      allViolations.sort((a, b) =>
+        a.severity === b.severity ? 0 : a.severity === "ALERT" ? -1 : 1,
       );
+
+      setBorderInfo({
+        severity: allViolations[0].severity,
+        name: allViolations[0].name,
+        extraCount: allViolations.length - 1,
+      });
     },
-    [renderDetections],
+    [renderDetections, testCaseMap],
   );
   useDetections({ onDetections });
-  const getDetectionClassName = (d: TestCase | null): string => {
-    if (!d) return "bg-emerald-500/80";
-    switch (d.severity) {
-      case "ALERT":
-        return "bg-red-500/80";
-      case "WARNING":
-        return "bg-pear-500/80";
-      default:
-        return "bg-emerald-500/80";
-    }
+
+  const getBorderClassName = (info: BorderInfo | null): string => {
+    if (!info) return "bg-emerald-500/80";
+    return info.severity === "ALERT" ? "bg-red-500/80" : "bg-pear-500/80";
+  };
+
+  const getBorderText = (info: BorderInfo | null): string => {
+    if (!info) return "OK";
+    const extra = info.extraCount > 0 ? ` (+${info.extraCount})` : "";
+    return `${info.severity}: ${info.name}${extra}`;
   };
 
   return (
@@ -44,11 +64,11 @@ export const VideoStream = () => {
       className={
         "w-full" +
         (running
-          ? " rounded-xl p-1.5 " + getDetectionClassName(dashboardDetection)
+          ? " rounded-xl p-1.5 " + getBorderClassName(borderInfo)
           : "")
       }
     >
-      <div className="relative">
+      <div className="relative aspect-video bg-gray-950 rounded-md overflow-hidden">
         <video
           ref={videoRef}
           autoPlay
@@ -60,12 +80,22 @@ export const VideoStream = () => {
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full"
         />
+        {!isStreaming && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+            {error ? (
+              <span className="text-red-400 text-sm">{error}</span>
+            ) : (
+              <>
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
+                <span className="text-gray-400 text-sm">Connecting...</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {running && (
         <p className="text-center text-4xl mt-9 mb-12">
-          {dashboardDetection
-            ? `${dashboardDetection.severity}: ${dashboardDetection.name}`
-            : "OK"}
+          {getBorderText(borderInfo)}
         </p>
       )}
     </div>

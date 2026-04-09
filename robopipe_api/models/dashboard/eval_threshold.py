@@ -6,4 +6,4 @@ class EvalThreshold(BaseModel):
     name: str
     value: float
     color: str
-    testCaseId: str
+    testCaseId: str | None = None

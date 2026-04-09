@@ -1,4 +1,4 @@
-from robopipe_api.dashboard.evaluators import (
+from robopipe_api.dashboard.geometry import (
     bbox_area,
     bbox_center,
     is_within_bbox,

@@ -12,7 +12,9 @@ export type DetectionRenderer = (
   detection: NNDetection,
 ) => void;
 
-const isBBDetection = (detection: NNDetection): detection is BBDetection => {
+export const isBBDetection = (
+  detection: NNDetection,
+): detection is BBDetection => {
   return (detection as BBDetection).coords !== undefined;
 };
 
@@ -20,6 +22,51 @@ const isClassificationDetection = (
   detection: NNDetection,
 ): detection is ClassificationDetection => {
   return !("coords" in detection) && !("points" in detection);
+};
+
+// Violation rendering colors (from Figma design)
+const ALERT_BORDER = "#98193b";
+const ALERT_FILL = "rgba(244,120,137,0.15)";
+const ALERT_LABEL_BG = "#98193b";
+
+const WARNING_BORDER = "#d6da18";
+const WARNING_FILL = "rgba(244,120,137,0.15)";
+const WARNING_LABEL_BG = "#dce91d";
+
+const drawAlertTriangle = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+) => {
+  ctx.save();
+
+  // Circular semi-transparent background
+  ctx.fillStyle = "rgba(215,39,77,0.32)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Triangle
+  const triSize = radius * 0.9;
+  const triHeight = triSize * 0.866;
+  const triCy = cy + triSize * 0.08;
+  ctx.fillStyle = "#d7274d";
+  ctx.beginPath();
+  ctx.moveTo(cx, triCy - triHeight * 0.6);
+  ctx.lineTo(cx + triSize * 0.5, triCy + triHeight * 0.4);
+  ctx.lineTo(cx - triSize * 0.5, triCy + triHeight * 0.4);
+  ctx.closePath();
+  ctx.fill();
+
+  // Exclamation mark
+  ctx.fillStyle = "#fff";
+  ctx.font = `bold ${triSize * 0.55}px Inter`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("!", cx, triCy + triHeight * 0.02);
+
+  ctx.restore();
 };
 
 export const renderBBoxDetection: DetectionRenderer = (
@@ -38,20 +85,61 @@ export const renderBBoxDetection: DetectionRenderer = (
     (ymax - ymin) * height,
   ];
 
-  // render rectangle with semi-transparent fill
-  ctx.strokeStyle = label.color;
-  ctx.fillStyle = `${label.color}33`; // add alpha for transparency
+  const violations = detection.violations;
+  const isAlert = violations?.some((v) => v.severity === "ALERT");
+  const isWarning =
+    !isAlert && violations?.some((v) => v.severity === "WARNING");
+
+  const borderColor = isAlert
+    ? ALERT_BORDER
+    : isWarning
+      ? WARNING_BORDER
+      : label.color;
+  const fillColor = isAlert
+    ? ALERT_FILL
+    : isWarning
+      ? WARNING_FILL
+      : `${label.color}33`;
+  const labelBg = isAlert
+    ? ALERT_LABEL_BG
+    : isWarning
+      ? WARNING_LABEL_BG
+      : label.color;
+  const labelTextColor = isWarning ? "rgba(0,0,0,0.9)" : "#fff";
+  const text = violations?.length
+    ? violations.map((v) => v.limit_name).join(", ")
+    : `${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
+  const font = violations?.length
+    ? "500 12px 'Space Grotesk', Inter, sans-serif"
+    : "14px Inter";
+
+  // Rectangle
+  ctx.strokeStyle = borderColor;
+  ctx.fillStyle = fillColor;
   ctx.lineWidth = 1;
   ctx.strokeRect(x, y, w, h);
   ctx.fillRect(x, y, w, h);
-  ctx.font = "14px Inter";
-  ctx.fillStyle = label.color;
-  const text = `${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
+
+  // Text label above the bounding box
+  ctx.font = font;
   const textWidth = ctx.measureText(text).width;
-  const textHeight = 16; // approximate height
-  ctx.fillRect(x, y - textHeight, textWidth + 4, textHeight);
-  ctx.fillStyle = "#fff";
-  ctx.fillText(text, x + 2, y - 4);
+  const textHeight = 16;
+  const padding = violations?.length ? 8 : 2;
+  ctx.fillStyle = labelBg;
+  ctx.fillRect(
+    x - 1,
+    y - textHeight - (violations?.length ? 5 : 0),
+    textWidth + padding * 2,
+    textHeight + (violations?.length ? 4 : 0),
+  );
+  ctx.fillStyle = labelTextColor;
+  ctx.fillText(text, x - 1 + padding, y - (violations?.length ? 7 : 4));
+
+  // Alert triangle
+  if (isAlert) {
+    const triangleRadius = Math.min(24, h * 0.25);
+    drawAlertTriangle(ctx, x - triangleRadius - 8, y + h / 2, triangleRadius);
+  }
 };
 
 export const renderClassificationDetection: DetectionRenderer = (

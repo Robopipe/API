@@ -5,9 +5,15 @@ export interface Detection {
 
 export type ClassificationDetection = Detection;
 
+export interface DetectionViolation {
+  limit_name: string;
+  severity: "ALERT" | "WARNING";
+}
+
 export interface BBDetection extends Detection {
   /* Bounding box coordinates: [xmin, ymin, xmax, ymax] */
   coords: [number, number, number, number];
+  violations?: DetectionViolation[];
 }
 
 export type SegmentationDetection = BBDetection;
@@ -38,6 +44,7 @@ export type NNDetections = {
   masks?: number[][];
   dashboard_detections?: DashboardDetection[];
   threshold_status?: ThresholdStatus;
+  master_threshold_status?: ThresholdTestCaseStatus;
   counters?: Record<string, number>;
   seq?: number;
 };
