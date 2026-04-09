@@ -43,6 +43,7 @@ export type NNDetections = {
   detections: NNDetection[];
   masks?: number[][];
   dashboard_detections?: DashboardDetection[];
+  violation_event_ids?: number[];
   threshold_status?: ThresholdStatus;
   master_threshold_status?: ThresholdTestCaseStatus;
   counters?: Record<string, number>;

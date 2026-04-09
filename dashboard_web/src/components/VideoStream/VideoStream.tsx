@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWebRTCStream } from "../../hooks";
 import { useDetections } from "../../hooks/useDetections";
 import { useDetectionsRenderer } from "../../hooks/useDetectionsRenderer";
 import { useAppState } from "../../provider";
 import type { NNDetections } from "../../types";
 import { collectViolations } from "../../utils/collectViolations";
+import { detectionsManager } from "../../utils/detectionsManager";
 
 interface BorderInfo {
   severity: "ALERT" | "WARNING";
@@ -48,6 +49,16 @@ export const VideoStream = () => {
   );
   useDetections({ onDetections });
 
+  useEffect(() => {
+    detectionsManager.setVideoRef(videoRef.current);
+    return () => detectionsManager.setVideoRef(null);
+  }, [videoRef]);
+
+  useEffect(() => {
+    detectionsManager.setCanvasRef(canvasRef.current);
+    return () => detectionsManager.setCanvasRef(null);
+  }, [canvasRef]);
+
   const getBorderClassName = (info: BorderInfo | null): string => {
     if (!info) return "bg-emerald-500/80";
     return info.severity === "ALERT" ? "bg-red-500/80" : "bg-pear-500/80";
@@ -63,12 +74,10 @@ export const VideoStream = () => {
     <div
       className={
         "w-full" +
-        (running
-          ? " rounded-xl p-1.5 " + getBorderClassName(borderInfo)
-          : "")
+        (running ? " rounded-xl p-1.5 " + getBorderClassName(borderInfo) : "")
       }
     >
-      <div className="relative aspect-video bg-gray-950 rounded-md overflow-hidden">
+      <div className="relative bg-gray-950 rounded-md overflow-hidden">
         <video
           ref={videoRef}
           autoPlay

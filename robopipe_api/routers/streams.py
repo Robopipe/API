@@ -1,9 +1,11 @@
 import os
 import tempfile
+import uuid
 
 import depthai as dai
 from fastapi import (
     APIRouter,
+    Form,
     HTTPException,
     WebSocket,
     UploadFile,
@@ -480,6 +482,67 @@ async def cache_detection_events(
         )
     )
     sync_task.notify_new_events()
+
+
+@stream_router.post(
+    "/dashboard/events/picture", status_code=status.HTTP_201_CREATED
+)
+async def upload_event_picture(
+    picture: UploadFile,
+    event_ids: str = Form(...),
+    sensor: SensorDep = None,
+    events_store: EventsStoreDep = None,
+):
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+
+    parsed_ids: list[int] = json.loads(event_ids)
+    picture_bytes = await picture.read()
+
+    pictures_dir = (
+        Path(os.getenv("ROBOPIPE_DATA_DIR", str(Path.home() / ".robopipe")))
+        / "event_pictures"
+    )
+    pictures_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{uuid.uuid4().hex}.jpg"
+    file_path = pictures_dir / filename
+    file_path.write_bytes(picture_bytes)
+
+    picture_url = f"event_pictures/{filename}"
+    events_store.update_event_picture(parsed_ids, picture_url)
+
+    return {"picture_url": picture_url}
+
+
+@stream_router.get(
+    "/dashboard/events/{event_id}/picture",
+    response_class=JpegResponse,
+    responses={
+        200: {
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}}
+            },
+            "description": "Violation picture in JPEG format",
+        }
+    },
+)
+def get_event_picture(event_id: int, events_store: EventsStoreDep):
+    picture_url = events_store.get_event_picture_url(event_id)
+    if picture_url is None:
+        raise HTTPException(status_code=404, detail="Picture not found")
+
+    file_path = (
+        Path(os.getenv("ROBOPIPE_DATA_DIR", str(Path.home() / ".robopipe")))
+        / picture_url
+    )
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Picture file not found")
+
+    return JpegResponse(file_path.read_bytes())
 
 
 router.include_router(stream_router)

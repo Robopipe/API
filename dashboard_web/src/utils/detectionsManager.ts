@@ -30,6 +30,12 @@ class DetectionsManager {
   private reconnectAttempts = 0;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // --- frame capture for violation pictures ---
+  private videoElement: HTMLVideoElement | null = null;
+  private canvasElement: HTMLCanvasElement | null = null;
+  private lastCaptureTime = 0;
+  private static CAPTURE_COOLDOWN_MS = 5000;
+
   // ---- external-store contract ----
 
   subscribe = (listener: Listener): (() => void) => {
@@ -52,6 +58,16 @@ class DetectionsManager {
 
   removeCallback(cb: (d: NNDetections) => void) {
     this.callbacks.delete(cb);
+  }
+
+  // ---- frame capture refs ----
+
+  setVideoRef(el: HTMLVideoElement | null) {
+    this.videoElement = el;
+  }
+
+  setCanvasRef(el: HTMLCanvasElement | null) {
+    this.canvasElement = el;
   }
 
   // ---- private ----
@@ -92,6 +108,11 @@ class DetectionsManager {
           }
           this.setSnapshot({ detections: parsed });
           for (const cb of this.callbacks) cb(parsed);
+          if (parsed.violation_event_ids?.length) {
+            void this.captureAndUploadViolationPicture(
+              parsed.violation_event_ids,
+            );
+          }
         } catch {
           // noop
         }
@@ -158,6 +179,57 @@ class DetectionsManager {
       });
     } catch {
       // nothing we can do
+    }
+  }
+
+  private captureCompositeFrame(): Blob | null {
+    const video = this.videoElement;
+    const overlay = this.canvasElement;
+    if (!video || !overlay || !overlay.width || !overlay.height) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = overlay.width;
+    canvas.height = overlay.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(overlay, 0, 0);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const byteString = atob(dataUrl.split(",")[1]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: "image/jpeg" });
+  }
+
+  private async captureAndUploadViolationPicture(eventIds: number[]) {
+    const now = Date.now();
+    if (now - this.lastCaptureTime < DetectionsManager.CAPTURE_COOLDOWN_MS) return;
+
+    const blob = this.captureCompositeFrame();
+    if (!blob) return;
+
+    this.lastCaptureTime = now;
+
+    const formData = new FormData();
+    formData.append("picture", blob, "violation.jpg");
+    formData.append("event_ids", JSON.stringify(eventIds));
+
+    try {
+      await fetch(
+        `${window.DASHBOARD_CONFIG.apiBase}/dashboard/events/picture`,
+        {
+          method: "POST",
+          body: formData,
+          signal: AbortSignal.timeout(10000),
+        },
+      );
+    } catch {
+      // Best effort — don't block the detection pipeline
     }
   }
 

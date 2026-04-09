@@ -46,7 +46,7 @@ def handle_detections(
     if dashboard_config is None or dashboard_run_session_id is None:
         return result
 
-    evaluation_results = _dashboard_evaluator.evaluate(
+    evaluation_results, violation_event_ids = _dashboard_evaluator.evaluate(
         dashboard_config, detections.detections, dashboard_run_session_id
     )
 
@@ -78,6 +78,9 @@ def handle_detections(
     )
     events_store = events_store_factory()
     result["counters"] = events_store.get_counters(dashboard_run_session_id)
+
+    if violation_event_ids:
+        result["violation_event_ids"] = violation_event_ids
 
     return result
 

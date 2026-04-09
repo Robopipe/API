@@ -7,6 +7,7 @@ CREATE TABLE dashboard_run_session (
 CREATE TABLE dashboard_counter (
     dashboard_run_session_id INTEGER NOT NULL REFERENCES dashboard_run_session(id),
     label_id INTEGER NOT NULL,
+    label_name TEXT NOT NULL,
     value INTEGER NOT NULL,
     PRIMARY KEY (dashboard_run_session_id, label_id)
 );
