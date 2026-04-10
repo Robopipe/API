@@ -48,3 +48,4 @@ uvloop==0.21.0
 watchfiles==1.0.5
 websockets==14.1
 beautifulsoup4==4.14.3
+zeroconf==0.148.0
