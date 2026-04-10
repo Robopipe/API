@@ -22,6 +22,7 @@ from .error import (
     SensorNotFoundException,
 )
 from .routers import cameras, controller, streams
+from .discovery import DEFAULT_API_PORT, discovery_manager_factory
 from .stream import stream_service_factory
 from .webrtc_manager import webrtc_manager_factory
 from . import __version__
@@ -46,8 +47,12 @@ async def lifespan(app: FastAPI):
     events_store.init()
     sync_task = sync_task_factory()
 
+    discovery_manager = discovery_manager_factory()
+    await discovery_manager.start()
+
     async with anyio.create_task_group() as tg:
         tg.start_soon(sync_task.run)
+        tg.start_soon(discovery_manager.run_udp)
 
         if controller_config_path is not None and os.path.exists(controller_config_path):
             hw_dict = HWDict([f"{controller_config_path}/hw_definitions/"])
@@ -73,6 +78,7 @@ async def lifespan(app: FastAPI):
 
         tg.cancel_scope.cancel()
 
+    await discovery_manager.stop()
     stream_service.stop()
     await webrtc_manager.remove_all_pcs()
 
@@ -84,7 +90,7 @@ app = FastAPI(
     description="API for the Robopipe application",
     servers=[
         {
-            "url": f"http://localhost:{os.getenv('PORT') or '8080'}",
+            "url": f"http://localhost:{os.getenv('PORT') or str(DEFAULT_API_PORT)}",
             "description": "Locally running server",
         },
     ],
@@ -155,5 +161,5 @@ def main():
     uvicorn.run(
         app,
         host=os.getenv("HOST") or "0.0.0.0",
-        port=int(os.getenv("PORT") or "8080"),
+        port=int(os.getenv("PORT") or str(DEFAULT_API_PORT)),
     )
