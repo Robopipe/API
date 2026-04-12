@@ -209,8 +209,11 @@ class Camera:
 
         # Filter no-ops
         to_activate = [s for s in activate if s not in self.sensors]
-        to_deactivate = [s for s in deactivate if s in self.pipeline.cameras
-                         or s == self.pipeline.get_depth_name()]
+        to_deactivate = [
+            s
+            for s in deactivate
+            if s in self.pipeline.cameras or s == self.pipeline.get_depth_name()
+        ]
 
         if not to_activate and not to_deactivate:
             return
@@ -278,14 +281,11 @@ class Camera:
         if not isinstance(self.pipeline, NNPipeline):
             return
 
+        pipeline = self.pipeline
         self.close()
-        self.open()
-        pipeline = DepthPipeline(
-            None,
-            [sensor for sensor in self.all_sensors.values()],
-            device=self.camera_handle,
-        )
-        self.run_pipeline(pipeline)
+        pipeline.remove_nn(sensor_name)
+        pipeline.add_sensor_config(self.all_sensors[sensor_name])
+        self.open(pipeline)
 
     def __check_device_active(self):
         if self.camera_handle is None:

@@ -372,6 +372,7 @@ async def set_dashboard_config(
 
 @stream_router.delete("/dashboard")
 def delete_dashboard_config(sensor: SensorDep, mxid: Mxid, stream_name: StreamName):
+    # TODO: If the deleted config is currently active, we should probably stop the dashboard and undeploy the model
     sensor.dashboard_config = None
     config_store_factory().clear_configs(mxid, stream_name)
 
@@ -387,7 +388,12 @@ def list_dashboard_configs(
     return {
         "active_config_id": sensor.active_config_id,
         "configs": [
-            {"config_id": c.config_id, "config_name": c.config_name, "project_name": c.project_name} for c in configs
+            {
+                "config_id": c.config_id,
+                "config_name": c.config_name,
+                "project_name": c.project_name,
+            }
+            for c in configs
         ],
     }
 
@@ -508,9 +514,7 @@ async def cache_detection_events(
     sync_task.notify_new_events()
 
 
-@stream_router.post(
-    "/dashboard/events/picture", status_code=status.HTTP_201_CREATED
-)
+@stream_router.post("/dashboard/events/picture", status_code=status.HTTP_201_CREATED)
 async def upload_event_picture(
     picture: UploadFile,
     event_ids: str = Form(...),
