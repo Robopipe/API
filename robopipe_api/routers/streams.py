@@ -31,6 +31,7 @@ from robopipe_api.dashboard.config_store import config_store_factory
 from ..camera.sensor.sensor_config import SensorConfigProperties
 from ..camera.sensor.sensor_control import SensorControl
 from ..models.sensor_control import SensorControlUpdate
+from ..models.batch_stream_update import BatchStreamUpdate
 from ..models.stream_info import StreamInfo
 from ..models.dashboard.detection_event import DetectionEvent
 from ..utils.detections_parser import parse_detections
@@ -64,6 +65,29 @@ def list_all_streams(camera: CameraDep) -> list[StreamInfo]:
     sensors = list(map(get_sensor_info, camera.all_sensors.keys()))
 
     return sensors
+
+
+@router.patch("/")
+def batch_update_streams(
+    camera: CameraDep, update: BatchStreamUpdate
+) -> list[StreamInfo]:
+    try:
+        camera.batch_update_sensors(update.activate, update.deactivate)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    get_sensor_info = lambda sensor: StreamInfo(
+        name=sensor, active=(sensor in camera.sensors)
+    )
+    return list(map(get_sensor_info, camera.all_sensors.keys()))
 
 
 stream_router = APIRouter(

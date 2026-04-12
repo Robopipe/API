@@ -184,6 +184,55 @@ class Camera:
         pipeline.remove_sensor(sensor_name)
         self.open(pipeline)
 
+    def batch_update_sensors(
+        self,
+        activate: list[str],
+        deactivate: list[str],
+    ) -> None:
+        self.__check_device_active()
+
+        if not isinstance(self.pipeline, DepthPipeline):
+            raise RuntimeError("Server is in invalid state")
+
+        # Validate before any mutation
+        overlap = set(activate) & set(deactivate)
+        if overlap:
+            raise ValueError(
+                f"Sensors cannot be both activated and deactivated: {overlap}"
+            )
+
+        for sensor_name in activate + deactivate:
+            if sensor_name not in self.all_sensors:
+                raise ValueError(
+                    f"Sensor {sensor_name} not found on camera {self.mxid}"
+                )
+
+        # Filter no-ops
+        to_activate = [s for s in activate if s not in self.sensors]
+        to_deactivate = [s for s in deactivate if s in self.pipeline.cameras
+                         or s == self.pipeline.get_depth_name()]
+
+        if not to_activate and not to_deactivate:
+            return
+
+        # Single close/open cycle
+        pipeline = self.pipeline
+        self.close()
+
+        for sensor_name in to_deactivate:
+            pipeline.remove_sensor(sensor_name)
+
+        for sensor_name in to_activate:
+            if sensor_name.startswith(DEPTH_NAME):
+                pipeline.add_stereo_pair_config(
+                    self.all_sensors[f"CAM_{sensor_name.split('_')[1]}"],
+                    self.all_sensors[f"CAM_{sensor_name.split('_')[2]}"],
+                )
+            else:
+                pipeline.add_sensor_config(self.all_sensors[sensor_name])
+
+        self.open(pipeline)
+
     def _check_device_connected(self, context: str) -> bool:
         """Check if device is still connected and log the status."""
         try:
