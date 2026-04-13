@@ -82,7 +82,8 @@ export const useDetectionsRenderer = ({
   );
 
   const renderDetections = useCallback(
-    (detections: NNDetections) => {
+    async (detections: NNDetections) => {
+      await new Promise((resolve) => setTimeout(resolve, 150)); // Yield to ensure latest video frame is rendered
       if (!canvasRef.current || !videoRef.current || !enabled) return;
       const canvas = canvasRef.current;
       if (canvas.width === 0 || canvas.height === 0) return;

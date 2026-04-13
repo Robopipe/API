@@ -224,9 +224,7 @@ class LimitEvaluator:
         self.config = config
         self.item_evaluators = [LimitItemEvaluator(item) for item in limit.limitItems]
 
-    def _filter_by_label(
-        self, detections: list[BBoxDetection]
-    ) -> list[BBoxDetection]:
+    def _filter_by_label(self, detections: list[BBoxDetection]) -> list[BBoxDetection]:
         """Filter detections to those matching the limit's target label."""
         return [
             d
@@ -255,8 +253,12 @@ class LimitEvaluator:
         """Evaluate the limit. Returns a LimitResult with per-detection breakdown."""
         if not self.item_evaluators:
             return LimitResult(
-                is_satisfied=True, fired=False, limit=self.limit,
-                satisfying=[], non_satisfying=[], all_targets=[],
+                is_satisfied=True,
+                fired=False,
+                limit=self.limit,
+                satisfying=[],
+                non_satisfying=[],
+                all_targets=[],
             )
 
         # Resolve target detections
@@ -277,8 +279,12 @@ class LimitEvaluator:
             # No parents crossed → this limit is not applicable this frame
             if not parents:
                 return LimitResult(
-                    is_satisfied=True, fired=False, limit=self.limit,
-                    satisfying=[], non_satisfying=[], all_targets=[],
+                    is_satisfied=True,
+                    fired=False,
+                    limit=self.limit,
+                    satisfying=[],
+                    non_satisfying=[],
+                    all_targets=[],
                 )
 
         # Evaluate items and combine with left-to-right AND/OR
@@ -409,7 +415,11 @@ class LogicTreeEvaluator:
 
             pending_op = None
 
-        return (result, fired, collected) if result is not None else (True, fired, collected)
+        return (
+            (result, fired, collected)
+            if result is not None
+            else (True, fired, collected)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +477,9 @@ class TestCaseEvaluator:
                     test_case_name=tc.name,
                     violated_limit_id=lr.limit.id,
                     violated_limit_name=lr.limit.name,
-                    violated_limit_severity=lr.limit.severity.value if lr.limit.severity else None,
+                    violated_limit_severity=(
+                        lr.limit.severity.value if lr.limit.severity else None
+                    ),
                     violated_limit_target_label_id=lr.limit.targetLabel.id,
                     violating_detections=violating,
                 )
@@ -524,9 +536,7 @@ class DashboardEvaluator:
         )
         for i in just_crossed_indices:
             label = config.labels[crossed[i].label]
-            events_store.inc_counter(
-                dashboard_run_session_id, label.id, label.name
-            )
+            events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
         just_crossed = [d for i, d in enumerate(crossed) if i in just_crossed_indices]
         tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
 
@@ -544,25 +554,33 @@ class DashboardEvaluator:
                     for r in eval_results:
                         event_id = events_store.save_event(
                             dashboard_run_session_id,
-                            tc.id, tc.name,
-                            r.violated_limit_id, r.violated_limit_name,
+                            tc.id,
+                            tc.name,
+                            r.violated_limit_id,
+                            r.violated_limit_name,
                         )
                         violation_event_ids.append(event_id)
                     if not eval_results:
                         event_id = events_store.save_event(
                             dashboard_run_session_id,
-                            tc.id, tc.name, None, None,
+                            tc.id,
+                            tc.name,
+                            None,
+                            None,
                         )
                         violation_event_ids.append(event_id)
                 else:
                     events_store.save_event(
                         dashboard_run_session_id,
-                        tc.id, tc.name, None, None,
+                        tc.id,
+                        tc.name,
+                        None,
+                        None,
                     )
 
         # Collect per-limit evaluation results from all violated test cases
         results: list[EvaluationResult] = []
         for evaluator in tc_evaluators:
-            results.extend(evaluator.evaluate(detections, crossed))
+            results.extend(evaluator.evaluate(detections, detections))
 
         return results, violation_event_ids

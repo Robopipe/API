@@ -97,17 +97,17 @@ class SensorBase(ABC):
 
         if img_frame:
             self.last_frame = img_frame_to_video_frame(img_frame)
-            seq = img_frame.getSequenceNum()
-            with self._video_seq_cond:
-                self._video_seq = seq
-                self._video_seq_cond.notify_all()
+            # seq = img_frame.getSequenceNum()
+            # with self._video_seq_cond:
+            #     self._video_seq = seq
+            #     self._video_seq_cond.notify_all()
         elif self.last_frame is None:
             img_frame = video_queue.get()
             self.last_frame = img_frame_to_video_frame(img_frame)
-            seq = img_frame.getSequenceNum()
-            with self._video_seq_cond:
-                self._video_seq = seq
-                self._video_seq_cond.notify_all()
+            # seq = img_frame.getSequenceNum()
+            # with self._video_seq_cond:
+            #     self._video_seq = seq
+            #     self._video_seq_cond.notify_all()
 
         return self.last_frame
 
@@ -147,11 +147,11 @@ class SensorBase(ABC):
         # Wait until the video track has dispatched the frame that
         # corresponds to this detection, so both leave the server
         # at approximately the same time.
-        det_seq = detections.getSequenceNum()
-        with self._video_seq_cond:
-            self._video_seq_cond.wait_for(
-                lambda: self._video_seq >= det_seq,
-                timeout=0.5,
-            )
+        # det_seq = detections.getSequenceNum()
+        # with self._video_seq_cond:
+        #     self._video_seq_cond.wait_for(
+        #         lambda: self._video_seq >= det_seq,
+        #         timeout=0.5,
+        #     )
 
         return detections
