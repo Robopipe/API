@@ -305,13 +305,18 @@ class LimitEvaluator:
             else:  # OR
                 value = value or next_value
 
+        all_targets = count_targets if not eval_targets else eval_targets
+        # Always include parent detections so violations are drawn around them
+        if parents:
+            all_targets = all_targets + parents
+
         return LimitResult(
             is_satisfied=value,
             fired=fired,
             limit=self.limit,
             satisfying=_dedupe(all_satisfying),
             non_satisfying=_dedupe(all_non_satisfying),
-            all_targets=count_targets if not eval_targets else eval_targets,
+            all_targets=all_targets,
         )
 
 
