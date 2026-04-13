@@ -34,6 +34,7 @@ from ..models.sensor_control import SensorControlUpdate
 from ..models.batch_stream_update import BatchStreamUpdate
 from ..models.stream_info import StreamInfo
 from ..models.dashboard.detection_event import DetectionEvent
+from ..paths import get_data_dir
 from ..utils.detections_parser import parse_detections
 from .common import (
     CameraDep,
@@ -530,10 +531,7 @@ async def upload_event_picture(
     parsed_ids: list[int] = json.loads(event_ids)
     picture_bytes = await picture.read()
 
-    pictures_dir = (
-        Path(os.getenv("ROBOPIPE_DATA_DIR", str(Path.home() / ".robopipe")))
-        / "event_pictures"
-    )
+    pictures_dir = get_data_dir() / "event_pictures"
     pictures_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"{uuid.uuid4().hex}.jpg"
@@ -563,10 +561,7 @@ def get_event_picture(event_id: int, events_store: EventsStoreDep):
     if picture_url is None:
         raise HTTPException(status_code=404, detail="Picture not found")
 
-    file_path = (
-        Path(os.getenv("ROBOPIPE_DATA_DIR", str(Path.home() / ".robopipe")))
-        / picture_url
-    )
+    file_path = get_data_dir() / picture_url
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Picture file not found")
 

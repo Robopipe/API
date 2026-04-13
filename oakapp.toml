@@ -1,6 +1,6 @@
 # (Required) App Identifier
 identifier = "io.robopipe.camera_api"
-app_version = "0.5.1"
+app_version = "0.5.2"
 # (Required) App Entrypoint
 entrypoint = ["bash", "-c", "cd /app && python3 -m robopipe_api"]
 
@@ -27,6 +27,9 @@ build_steps = [
     "bash -c 'cd app/dashboard_web && source $HOME/.nvm/nvm.sh && npm install && npm run build'",
 ]
 
+required_mounts = ["/data/robopipe:/app/data:rw,rbind"]
+
 [env]
 CORS_ORIGIN = "*"
 PORT = "8080"
+ROBOPIPE_DATA_DIR = "/app/data"
