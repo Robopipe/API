@@ -232,20 +232,40 @@ class LimitEvaluator:
             if self.config.labels[d.label].id == self.limit.targetLabel.id
         ]
 
-    def _filter_by_parent(
-        self, targets: list[BBoxDetection], crossed: list[BBoxDetection]
-    ) -> list[BBoxDetection]:
-        """Filter targets to those contained within crossed parent detections."""
-        parents = [
-            d
-            for d in crossed
-            if self.config.labels[d.label].id == self.limit.targetParentLabel.id
-        ]
-        return [
-            t
-            for t in targets
-            if any(is_within_bbox(t.coords, p.coords) for p in parents)
-        ]
+    def _evaluate_items(
+        self,
+        count_targets: list[BBoxDetection],
+        eval_targets: list[BBoxDetection],
+        parents: list[BBoxDetection] | None,
+    ) -> tuple[bool, bool, list[BBoxDetection], list[BBoxDetection]]:
+        """Evaluate all limit items and combine with left-to-right AND/OR.
+
+        Returns (value, fired, satisfying, non_satisfying).
+        """
+        satisfying: list[BBoxDetection] = []
+        non_satisfying: list[BBoxDetection] = []
+
+        value, fired, sat, nsat = self.item_evaluators[0].evaluate(
+            count_targets, eval_targets, parents
+        )
+        satisfying.extend(sat)
+        non_satisfying.extend(nsat)
+
+        for i in range(1, len(self.item_evaluators)):
+            op = self.item_evaluators[i - 1].item.operator
+            next_value, next_fired, sat, nsat = self.item_evaluators[i].evaluate(
+                count_targets, eval_targets, parents
+            )
+            satisfying.extend(sat)
+            non_satisfying.extend(nsat)
+            fired = fired or next_fired
+
+            if op == EvalLimitItemOperator.AND:
+                value = value and next_value
+            else:  # OR
+                value = value or next_value
+
+        return value, fired, satisfying, non_satisfying
 
     def evaluate(
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
@@ -261,68 +281,70 @@ class LimitEvaluator:
                 all_targets=[],
             )
 
-        # Resolve target detections
+        # No parent label: evaluate globally
         if self.limit.targetParentLabel is None:
             count_targets = self._filter_by_label(all_detections)
             eval_targets = self._filter_by_label(crossed)
-            parents = None
-        else:
-            targets_within_parents = self._filter_by_parent(
-                self._filter_by_label(all_detections), crossed
-            )
-            count_targets = eval_targets = targets_within_parents
-            parents = [
-                d
-                for d in crossed
-                if self.config.labels[d.label].id == self.limit.targetParentLabel.id
-            ]
-            # No parents crossed → this limit is not applicable this frame
-            if not parents:
-                return LimitResult(
-                    is_satisfied=True,
-                    fired=False,
-                    limit=self.limit,
-                    satisfying=[],
-                    non_satisfying=[],
-                    all_targets=[],
-                )
 
-        # Evaluate items and combine with left-to-right AND/OR
+            value, fired, sat, nsat = self._evaluate_items(
+                count_targets, eval_targets, None
+            )
+            all_targets = count_targets if not eval_targets else eval_targets
+
+            return LimitResult(
+                is_satisfied=value,
+                fired=fired,
+                limit=self.limit,
+                satisfying=_dedupe(sat),
+                non_satisfying=_dedupe(nsat),
+                all_targets=all_targets,
+            )
+
+        # Parent label set: evaluate each parent independently
+        all_labeled = self._filter_by_label(all_detections)
+        parents = [
+            d
+            for d in crossed
+            if self.config.labels[d.label].id == self.limit.targetParentLabel.id
+        ]
+        # No parents crossed → this limit is not applicable this frame
+        if not parents:
+            return LimitResult(
+                is_satisfied=True,
+                fired=False,
+                limit=self.limit,
+                satisfying=[],
+                non_satisfying=[],
+                all_targets=[],
+            )
+
+        overall_satisfied = True
+        overall_fired = False
         all_satisfying: list[BBoxDetection] = []
         all_non_satisfying: list[BBoxDetection] = []
+        violating_parents: list[BBoxDetection] = []
+        all_children: list[BBoxDetection] = []
 
-        value, fired, sat, nsat = self.item_evaluators[0].evaluate(
-            count_targets, eval_targets, parents
-        )
-        all_satisfying.extend(sat)
-        all_non_satisfying.extend(nsat)
+        for p in parents:
+            children = [t for t in all_labeled if is_within_bbox(t.coords, p.coords)]
+            all_children.extend(children)
 
-        for i in range(1, len(self.item_evaluators)):
-            op = self.item_evaluators[i - 1].item.operator
-            next_value, next_fired, sat, nsat = self.item_evaluators[i].evaluate(
-                count_targets, eval_targets, parents
-            )
+            value, fired, sat, nsat = self._evaluate_items(children, children, [p])
+            overall_fired = overall_fired or fired
             all_satisfying.extend(sat)
             all_non_satisfying.extend(nsat)
-            fired = fired or next_fired
 
-            if op == EvalLimitItemOperator.AND:
-                value = value and next_value
-            else:  # OR
-                value = value or next_value
-
-        all_targets = count_targets if not eval_targets else eval_targets
-        # Always include parent detections so violations are drawn around them
-        if parents:
-            all_targets = all_targets + parents
+            if not value:
+                overall_satisfied = False
+                violating_parents.append(p)
 
         return LimitResult(
-            is_satisfied=value,
-            fired=fired,
+            is_satisfied=overall_satisfied,
+            fired=overall_fired,
             limit=self.limit,
             satisfying=_dedupe(all_satisfying),
             non_satisfying=_dedupe(all_non_satisfying),
-            all_targets=all_targets,
+            all_targets=all_children + violating_parents,
         )
 
 
