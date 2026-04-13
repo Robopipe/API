@@ -274,6 +274,12 @@ class LimitEvaluator:
                 for d in crossed
                 if self.config.labels[d.label].id == self.limit.targetParentLabel.id
             ]
+            # No parents crossed → this limit is not applicable this frame
+            if not parents:
+                return LimitResult(
+                    is_satisfied=True, fired=False, limit=self.limit,
+                    satisfying=[], non_satisfying=[], all_targets=[],
+                )
 
         # Evaluate items and combine with left-to-right AND/OR
         all_satisfying: list[BBoxDetection] = []
