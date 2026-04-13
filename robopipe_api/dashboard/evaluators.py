@@ -323,11 +323,10 @@ class LimitEvaluator:
         all_satisfying: list[BBoxDetection] = []
         all_non_satisfying: list[BBoxDetection] = []
         violating_parents: list[BBoxDetection] = []
-        all_children: list[BBoxDetection] = []
+        violating_children: list[BBoxDetection] = []
 
         for p in parents:
             children = [t for t in all_labeled if is_within_bbox(t.coords, p.coords)]
-            all_children.extend(children)
 
             value, fired, sat, nsat = self._evaluate_items(children, children, [p])
             overall_fired = overall_fired or fired
@@ -337,6 +336,7 @@ class LimitEvaluator:
             if not value:
                 overall_satisfied = False
                 violating_parents.append(p)
+                violating_children.extend(children)
 
         return LimitResult(
             is_satisfied=overall_satisfied,
@@ -344,7 +344,7 @@ class LimitEvaluator:
             limit=self.limit,
             satisfying=_dedupe(all_satisfying),
             non_satisfying=_dedupe(all_non_satisfying),
-            all_targets=all_children + violating_parents,
+            all_targets=violating_children + violating_parents,
         )
 
 
