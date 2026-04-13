@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
@@ -7,14 +6,12 @@ from pathlib import Path
 from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.dashboard.stored_config import StoredConfigSummary, StoredDashboardConfig
 from ..models.nn_config import NNConfig
+from ..paths import get_data_dir
 
 
 class DashboardConfigStore:
     def __init__(self, base_dir: Path | None = None) -> None:
-        self._base_dir = base_dir or (
-            Path(os.getenv("ROBOPIPE_DATA_DIR", str(Path.home() / ".robopipe")))
-            / "models"
-        )
+        self._base_dir = base_dir or (get_data_dir() / "models")
 
     def _stream_dir(self, mxid: str, stream_name: str) -> Path:
         return self._base_dir / mxid / stream_name

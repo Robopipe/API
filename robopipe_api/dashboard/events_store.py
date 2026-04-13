@@ -1,15 +1,13 @@
-import os
 import sqlite3
 from functools import lru_cache
 from pathlib import Path
 
+from ..paths import get_data_dir
+
 
 class EventsStore:
     def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = db_path or (
-            Path(os.getenv("ROBOPIPE_DATA_DIR", str(Path.home() / ".robopipe")))
-            / "robopipe.db"
-        )
+        self.db_path = db_path or (get_data_dir() / "robopipe.db")
 
     def __init_migrations_table(self, conn: sqlite3.Connection) -> None:
         conn.execute(
