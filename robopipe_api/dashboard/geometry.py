@@ -13,6 +13,11 @@ def bbox_center(coords: tuple[float, float, float, float]) -> tuple[float, float
     return ((x1 + x2) / 2, (y1 + y2) / 2)
 
 
+def bbox_dimensions(coords: tuple[float, float, float, float]) -> tuple[float, float]:
+    x1, y1, x2, y2 = coords
+    return (x2 - x1, y2 - y1)
+
+
 def euclidean_distance(c1: tuple[float, float], c2: tuple[float, float]) -> float:
     return ((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2) ** 0.5
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import numpy as np
 
-from .geometry import bbox_center, euclidean_distance
+from .geometry import bbox_center, bbox_dimensions
+from .kalman_tracker import KalmanBoxTracker, associate_detections_to_tracks
 from ..models.dashboard.dashboard_config import (
     DashboardConfig,
     DashboardLineDirection,
@@ -11,27 +12,18 @@ from ..models.dashboard.dashboard_config import (
 from ..models.detection.bbox_detection import BBoxDetection
 
 
-@dataclass
-class TrackedDetection:
-    label: int
-    cx: float
-    cy: float
-    is_past_line: bool
-    has_crossed: bool
-    tracking_id: int | None = None
-    missing_frames: int = 0
-
-
 class LineCrossingTracker:
     """Tracks per-config detection line crossings across frames."""
 
     def __init__(
         self, max_missing_frames: int = 5, max_match_distance: float = 0.2
     ) -> None:
-        self._state: dict[int, list[TrackedDetection]] = {}
+        self._tracks: dict[int, list[KalmanBoxTracker]] = {}
         self._max_missing_frames = max_missing_frames
         self._max_match_distance = max_match_distance
         self._next_id: dict[int, int] = {}
+        # Previous frame's is_past_line per (config_id, tracking_id)
+        self._prev_past_line: dict[int, dict[int, bool]] = {}
 
     def _allocate_id(self, config_id: int) -> int:
         tid = self._next_id.get(config_id, 1)
@@ -63,81 +55,92 @@ class LineCrossingTracker:
         tracking_ids: list parallel to *detections* with a persistent ID per
             tracked object.
         """
-        prev_state = self._state.get(config.id, [])
+        existing_tracks = self._tracks.get(config.id, [])
+        prev_past = self._prev_past_line.get(config.id, {})
 
-        # Build current TrackedDetections and classify past/not-past
-        curr: list[TrackedDetection] = []
-        ret_past: list[BBoxDetection] = []
-        ret_past_curr_indices: list[int] = []  # which curr[] indices are past
+        # Build measurements from current detections
+        measurements: list[np.ndarray] = []
+        labels: list[int] = []
+        past_line_flags: list[bool] = []
 
         for det in detections:
             cx, cy = bbox_center(det.coords)
-            past = self._is_past_line(det.coords, config)
-            curr.append(TrackedDetection(det.label, cx, cy, past, False))
-            if past:
-                ret_past_curr_indices.append(len(curr) - 1)
+            w, h = bbox_dimensions(det.coords)
+            measurements.append(np.array([cx, cy, w, h], dtype=np.float64))
+            labels.append(det.label)
+            past_line_flags.append(self._is_past_line(det.coords, config))
+
+        # Associate detections to existing tracks
+        matches, unmatched_tracks, unmatched_dets = associate_detections_to_tracks(
+            existing_tracks, measurements, labels
+        )
+
+        # Process results
+        tracking_ids: list[int | None] = [None] * len(detections)
+        has_crossed: list[bool] = [False] * len(detections)
+
+        # Matched: update track, inherit ID, check crossing
+        for ti, di in matches:
+            track = existing_tracks[ti]
+            track.update(measurements[di])
+            tracking_ids[di] = track.tracking_id
+
+            was_past = prev_past.get(track.tracking_id, False)
+            if not was_past and past_line_flags[di]:
+                has_crossed[di] = True
+
+        # Unmatched detections: create new tracks
+        new_tracks: list[KalmanBoxTracker] = []
+        for di in unmatched_dets:
+            tid = self._allocate_id(config.id)
+            new_track = KalmanBoxTracker(measurements[di], tid, labels[di])
+            new_tracks.append(new_track)
+            tracking_ids[di] = tid
+
+        # Unmatched tracks: age them (ghost expiry)
+        surviving_ghosts: list[KalmanBoxTracker] = []
+        for ti in unmatched_tracks:
+            track = existing_tracks[ti]
+            track.time_since_update += 1
+            track.hit_streak = 0
+            if track.time_since_update <= self._max_missing_frames:
+                surviving_ghosts.append(track)
+
+        # Update state: matched tracks + new tracks + ghosts
+        matched_tracks = [existing_tracks[ti] for ti, _ in matches]
+        self._tracks[config.id] = matched_tracks + new_tracks + surviving_ghosts
+
+        # Update prev_past_line for next frame
+        curr_past: dict[int, bool] = {}
+        for di in range(len(detections)):
+            tid = tracking_ids[di]
+            if tid is not None:
+                curr_past[tid] = past_line_flags[di]
+        # Carry over ghost classifications unchanged
+        for track in surviving_ghosts:
+            if track.tracking_id not in curr_past:
+                curr_past[track.tracking_id] = prev_past.get(
+                    track.tracking_id, False
+                )
+        self._prev_past_line[config.id] = curr_past
+
+        # Build return values
+        ret_past: list[BBoxDetection] = []
+        ret_past_det_indices: list[int] = []
+        for di, det in enumerate(detections):
+            if past_line_flags[di]:
+                ret_past_det_indices.append(di)
                 ret_past.append(det)
 
-        # --- Global matching: all prev → all curr by label + proximity ---
-        # Build candidate pairs sorted by distance (greedy nearest-first)
-        pairs: list[tuple[float, int, int]] = []
-        for pi, prev in enumerate(prev_state):
-            for ci, cur in enumerate(curr):
-                if prev.label != cur.label:
-                    continue
-                dist = euclidean_distance((prev.cx, prev.cy), (cur.cx, cur.cy))
-                pairs.append((dist, pi, ci))
-        pairs.sort()
-
-        matched_prev: set[int] = set()
-        matched_curr: set[int] = set()
-        for _dist, pi, ci in pairs:
-            if pi in matched_prev or ci in matched_curr:
-                continue
-            # Enforce distance limit for ghost detections only — prevents
-            # a ghost of a departing object from stealing a new arrival's ID.
-            if prev_state[pi].missing_frames > 0 and _dist > self._max_match_distance:
-                continue
-            matched_prev.add(pi)
-            matched_curr.add(ci)
-
-            prev = prev_state[pi]
-            cur = curr[ci]
-            cur.tracking_id = prev.tracking_id
-
-            # Crossing: was not-past, now is past
-            if not prev.is_past_line and cur.is_past_line:
-                cur.has_crossed = True
-
-        # --- Assign new IDs to unmatched current detections ---
-        for td in curr:
-            if td.tracking_id is None:
-                td.tracking_id = self._allocate_id(config.id)
-
-        # --- Grace period: keep unmatched prev alive ---
-        carryover: list[TrackedDetection] = []
-        for pi, prev in enumerate(prev_state):
-            if pi in matched_prev:
-                continue
-            prev.missing_frames += 1
-            prev.has_crossed = False
-            if prev.missing_frames <= self._max_missing_frames:
-                carryover.append(prev)
-
-        self._state[config.id] = curr + carryover
-
-        # Build tracking_ids parallel to input detections
-        tracking_ids = [curr[i].tracking_id for i in range(len(detections))]  # type: ignore[misc]
-
-        # Build just-crossed set (indices into ret_past)
         just_crossed: set[int] = set()
-        for rpi, ci in enumerate(ret_past_curr_indices):
-            if curr[ci].has_crossed:
+        for rpi, di in enumerate(ret_past_det_indices):
+            if has_crossed[di]:
                 just_crossed.add(rpi)
 
-        return ret_past, just_crossed, tracking_ids
+        return ret_past, just_crossed, tracking_ids  # type: ignore[return-value]
 
     def reset(self, config_id: int) -> None:
         """Clear crossing state for a config (e.g. on dashboard start)."""
-        self._state.pop(config_id, None)
+        self._tracks.pop(config_id, None)
         self._next_id.pop(config_id, None)
+        self._prev_past_line.pop(config_id, None)
