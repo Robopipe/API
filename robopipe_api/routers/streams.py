@@ -61,7 +61,9 @@ router = APIRouter(
 @router.get("/")
 def list_all_streams(camera: CameraDep) -> list[StreamInfo]:
     get_sensor_info = lambda sensor: StreamInfo(
-        name=sensor, active=(sensor in camera.sensors)
+        name=sensor,
+        active=(sensor in camera.sensors),
+        replay=(sensor in camera._replay_video_paths),
     )
     sensors = list(map(get_sensor_info, camera.all_sensors.keys()))
 
@@ -86,7 +88,9 @@ def batch_update_streams(
         )
 
     get_sensor_info = lambda sensor: StreamInfo(
-        name=sensor, active=(sensor in camera.sensors)
+        name=sensor,
+        active=(sensor in camera.sensors),
+        replay=(sensor in camera._replay_video_paths),
     )
     return list(map(get_sensor_info, camera.all_sensors.keys()))
 
