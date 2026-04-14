@@ -14,6 +14,7 @@ export interface BBDetection extends Detection {
   /* Bounding box coordinates: [xmin, ymin, xmax, ymax] */
   coords: [number, number, number, number];
   violations?: DetectionViolation[];
+  tracking_id?: number;
 }
 
 export type SegmentationDetection = BBDetection;

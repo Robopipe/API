@@ -43,7 +43,7 @@ class TestDashboardEvaluator:
         # Detection before line → no crossings, but COUNT uses all_detections
         # count=1 in 1-5 → DEFECT condition met → violated
         detections = [make_detection(label=0, coords=(0.4, 0.2, 0.6, 0.4))]
-        result = evaluator.evaluate(config, detections, SESSION_ID)
+        result, _, _ = evaluator.evaluate(config, detections, SESSION_ID)
         assert len(result) == 1
         assert result[0].test_case_id == "tc-1"
 
@@ -60,7 +60,7 @@ class TestDashboardEvaluator:
 
         # Detection past line
         detections = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
-        result = evaluator.evaluate(config, detections, SESSION_ID)
+        result, _, _ = evaluator.evaluate(config, detections, SESSION_ID)
         assert len(result) == 1
         assert result[0].test_case_id == "tc-1"
 
@@ -76,7 +76,7 @@ class TestDashboardEvaluator:
 
         # 1 detection past line, but count=1 outside 5-10 → DEFECT not triggered
         detections = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
-        result = evaluator.evaluate(config, detections, SESSION_ID)
+        result, _, _ = evaluator.evaluate(config, detections, SESSION_ID)
         assert len(result) == 0
 
     def test_multiple_test_cases(self):
@@ -106,7 +106,7 @@ class TestDashboardEvaluator:
             make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8)),
             make_detection(label=0, coords=(0.3, 0.7, 0.5, 0.9)),
         ]
-        result = evaluator.evaluate(config, detections, SESSION_ID)
+        result, _, _ = evaluator.evaluate(config, detections, SESSION_ID)
         ids = {r.test_case_id for r in result}
 
         # tc_defect: count=2 in 1-5 → True → violated
@@ -119,7 +119,7 @@ class TestDashboardEvaluator:
         config = make_config(test_cases=[])
 
         detections = [make_detection(label=0, coords=(0.4, 0.6, 0.6, 0.8))]
-        result = evaluator.evaluate(config, detections, SESSION_ID)
+        result, _, _ = evaluator.evaluate(config, detections, SESSION_ID)
         assert len(result) == 0
 
     def test_complex_logic_tree_end_to_end(self):
@@ -152,5 +152,5 @@ class TestDashboardEvaluator:
         # pos=40% in 30-70 → True
         # False OR True → True → DEFECT violated
         detections = [make_detection(label=0, coords=(0.3, 0.6, 0.5, 0.8))]
-        result = evaluator.evaluate(config, detections, SESSION_ID)
+        result, _, _ = evaluator.evaluate(config, detections, SESSION_ID)
         assert len(result) >= 1

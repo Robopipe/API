@@ -545,7 +545,7 @@ class DashboardEvaluator:
         config: DashboardConfig,
         detections: list[BBoxDetection],
         dashboard_run_session_id: int,
-    ) -> tuple[list[EvaluationResult], list[int]]:
+    ) -> tuple[list[EvaluationResult], list[int], list[int]]:
         """Evaluate test cases and return evaluation results.
 
         Returns a tuple of:
@@ -553,8 +553,8 @@ class DashboardEvaluator:
         - list of violation event IDs (for picture capture by the frontend)
         """
         events_store = events_store_factory()
-        crossed, just_crossed_indices = self._tracker.find_crossed_detections(
-            detections, config
+        crossed, just_crossed_indices, tracking_ids = (
+            self._tracker.find_crossed_detections(detections, config)
         )
         for i in just_crossed_indices:
             label = config.labels[crossed[i].label]
@@ -605,4 +605,4 @@ class DashboardEvaluator:
         for evaluator in tc_evaluators:
             results.extend(evaluator.evaluate(detections, detections))
 
-        return results, violation_event_ids
+        return results, violation_event_ids, tracking_ids

@@ -106,9 +106,13 @@ export const renderBBoxDetection: DetectionRenderer = (
       ? WARNING_LABEL_BG
       : label.color;
   const labelTextColor = isWarning ? "rgba(0,0,0,0.9)" : "#fff";
+  const idPrefix =
+    isBBDetection(detection) && detection.tracking_id != null
+      ? `#${detection.tracking_id} `
+      : "";
   const text = violations?.length
-    ? violations.map((v) => v.limit_name).join(", ")
-    : `${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
+    ? `${idPrefix}${violations.map((v) => v.limit_name).join(", ")}`
+    : `${idPrefix}${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
   const font = violations?.length
     ? "500 12px 'Space Grotesk', Inter, sans-serif"
     : "14px Inter";

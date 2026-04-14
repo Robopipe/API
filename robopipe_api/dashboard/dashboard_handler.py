@@ -46,8 +46,10 @@ def handle_detections(
     if dashboard_config is None or dashboard_run_session_id is None:
         return result
 
-    evaluation_results, violation_event_ids = _dashboard_evaluator.evaluate(
-        dashboard_config, detections.detections, dashboard_run_session_id
+    evaluation_results, violation_event_ids, tracking_ids = (
+        _dashboard_evaluator.evaluate(
+            dashboard_config, detections.detections, dashboard_run_session_id
+        )
     )
 
     # Build dashboard_detections from evaluation results (one per unique test case)
@@ -69,6 +71,9 @@ def handle_detections(
     result["dashboard_detections"] = dashboard_detections
 
     _annotate_detections(result, evaluation_results, detections.detections)
+
+    for i, tid in enumerate(tracking_ids):
+        result["detections"][i]["tracking_id"] = tid
 
     result["threshold_status"] = _threshold_tracker.get_status(
         dashboard_config.id, dashboard_config.testCases
