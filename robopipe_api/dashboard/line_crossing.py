@@ -24,7 +24,7 @@ class TrackedDetection:
 class LineCrossingTracker:
     """Tracks per-config detection line crossings across frames."""
 
-    def __init__(self, max_missing_frames: int = 5) -> None:
+    def __init__(self, max_missing_frames: int = 0) -> None:
         self._state: dict[int, list[TrackedDetection]] = {}
         self._max_missing_frames = max_missing_frames
 
