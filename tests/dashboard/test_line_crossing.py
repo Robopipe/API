@@ -154,12 +154,12 @@ class TestLineCrossingTracking:
         _, has_new, _tids = tracker.find_crossed_detections([], config)
         assert bool(has_new) is False
 
-        # Frame 4: new detection appears before line
-        det4 = [make_detection(label=0, coords=(0.2, 0.2, 0.4, 0.4))]
+        # Frame 4: new detection appears before line (far from ghost at cx=0.5)
+        det4 = [make_detection(label=0, coords=(0.0, 0.2, 0.2, 0.4))]
         tracker.find_crossed_detections(det4, config)  # noqa: return unused
 
         # Frame 5: crosses the line → new crossing
-        det5 = [make_detection(label=0, coords=(0.3, 0.7, 0.5, 0.9))]
+        det5 = [make_detection(label=0, coords=(0.0, 0.6, 0.2, 0.8))]
         crossed, has_new, _tids = tracker.find_crossed_detections(det5, config)
         assert len(crossed) == 1
         assert bool(has_new) is True

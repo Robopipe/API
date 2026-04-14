@@ -25,9 +25,12 @@ class TrackedDetection:
 class LineCrossingTracker:
     """Tracks per-config detection line crossings across frames."""
 
-    def __init__(self, max_missing_frames: int = 5) -> None:
+    def __init__(
+        self, max_missing_frames: int = 5, max_match_distance: float = 0.2
+    ) -> None:
         self._state: dict[int, list[TrackedDetection]] = {}
         self._max_missing_frames = max_missing_frames
+        self._max_match_distance = max_match_distance
         self._next_id: dict[int, int] = {}
 
     def _allocate_id(self, config_id: int) -> int:
@@ -90,6 +93,10 @@ class LineCrossingTracker:
         matched_curr: set[int] = set()
         for _dist, pi, ci in pairs:
             if pi in matched_prev or ci in matched_curr:
+                continue
+            # Enforce distance limit for ghost detections only — prevents
+            # a ghost of a departing object from stealing a new arrival's ID.
+            if prev_state[pi].missing_frames > 0 and _dist > self._max_match_distance:
                 continue
             matched_prev.add(pi)
             matched_curr.add(ci)
