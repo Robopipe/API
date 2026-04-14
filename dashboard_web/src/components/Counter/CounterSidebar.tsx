@@ -19,6 +19,7 @@ interface CounterSidebarProps {
 
 const displayModeOptions: { value: DetectionDisplayMode; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "detections_only", label: "Detections only" },
   { value: "alerts", label: "Alerts" },
   { value: "alerts_and_warnings", label: "Alerts & Warnings" },
 ];

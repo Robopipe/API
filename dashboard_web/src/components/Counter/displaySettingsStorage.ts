@@ -10,6 +10,7 @@ function multiLimitKey(configId: number): string {
 
 const VALID_DISPLAY_MODES: DetectionDisplayMode[] = [
   "all",
+  "detections_only",
   "alerts",
   "alerts_and_warnings",
 ];

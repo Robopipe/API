@@ -25,7 +25,7 @@ export interface TestCase {
   thresholds: EvalThreshold[];
 }
 
-export type DetectionDisplayMode = "all" | "alerts" | "alerts_and_warnings";
+export type DetectionDisplayMode = "all" | "alerts" | "alerts_and_warnings" | "detections_only";
 
 export type MultiLimitDisplayMode = "highest" | "show_all";
 

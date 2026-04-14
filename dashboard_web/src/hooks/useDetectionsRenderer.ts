@@ -35,6 +35,12 @@ function prepareDetectionForRender(
 ): NNDetection | null {
   if (displayMode === "all") return detection;
 
+  if (displayMode === "detections_only") {
+    if (isBBDetection(detection) && detection.violations?.length)
+      return { ...detection, violations: [] };
+    return detection;
+  }
+
   // Filtered modes: only show detections with matching violations
   if (!isBBDetection(detection) || !detection.violations?.length) return null;
 
