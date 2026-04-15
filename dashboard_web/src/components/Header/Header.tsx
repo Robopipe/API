@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { useAppState } from "../../provider";
-import { WakeLockIcon } from "../../ui";
+import { GearIcon, WakeLockIcon } from "../../ui";
 import { ModelSwitcher } from "./ModelSwitcher";
+import { SettingsModal } from "./SettingsModal";
 import {
   loadTimerLabelDisplay,
   saveTimerLabelDisplay,
@@ -36,6 +37,7 @@ export const Header = () => {
     loadTimerLabelDisplay,
   );
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -120,6 +122,17 @@ export const Header = () => {
         )}
       </div>
       <ModelSwitcher />
+      <button
+        className="p-3 rounded-xl transition-colors bg-white/5 text-gray-400 hover:text-white"
+        onClick={() => setSettingsOpen(true)}
+        title="Dashboard Settings"
+      >
+        <GearIcon size={20} />
+      </button>
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
       <button
         className={
           "p-3 rounded-xl transition-colors bg-white/5" +

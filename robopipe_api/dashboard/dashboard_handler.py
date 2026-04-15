@@ -41,20 +41,21 @@ def handle_detections(
     dashboard_run_session_id: int | None,
 ) -> dict:
     """Evaluate dashboard test cases against detections and return enriched result."""
-    detections = list(
-        filter(
-            lambda d: d.confidence >= dashboard_config.confidenceThreshold,
-            detections.detections,
-        )
-    )
     result = detections.model_dump()
 
     if dashboard_config is None or dashboard_run_session_id is None:
         return result
 
+    filtered = [
+        d
+        for d in detections.detections
+        if d.confidence >= dashboard_config.confidenceThreshold
+    ]
+    result["detections"] = [d.model_dump() for d in filtered]
+
     evaluation_results, violation_event_ids, tracking_ids = (
         _dashboard_evaluator.evaluate(
-            dashboard_config, detections.detections, dashboard_run_session_id
+            dashboard_config, filtered, dashboard_run_session_id
         )
     )
 
@@ -76,7 +77,7 @@ def handle_detections(
         )
     result["dashboard_detections"] = dashboard_detections
 
-    _annotate_detections(result, evaluation_results, detections.detections)
+    _annotate_detections(result, evaluation_results, filtered)
 
     for i, tid in enumerate(tracking_ids):
         result["detections"][i]["tracking_id"] = tid

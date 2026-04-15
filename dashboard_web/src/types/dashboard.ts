@@ -43,6 +43,10 @@ export interface DashboardConfig {
   linePosition: number;
   lineFlow: DashboardLineFlow;
   remoteBackendUrl?: string;
+  confidenceThreshold: number;
+  debounceFrames: number;
+  maxMissingFrames: number;
+  maxMatchDistance: number;
   running: boolean;
   runningSince: string | null;
   hasMultipleConfigs: boolean;

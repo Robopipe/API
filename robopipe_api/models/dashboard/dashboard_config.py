@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from .eval_threshold import EvalThreshold
 
@@ -37,3 +37,10 @@ class DashboardConfig(BaseModel):
     thresholds: list[EvalThreshold] = []
     labels: list[Label] = []
     remoteBackendUrl: str | None = None
+
+
+class DashboardConfigUpdate(BaseModel):
+    confidenceThreshold: float | None = Field(None, ge=0.0, le=1.0)
+    debounceFrames: int | None = Field(None, ge=1, le=100)
+    maxMissingFrames: int | None = Field(None, ge=0, le=100)
+    maxMatchDistance: float | None = Field(None, ge=0.0, le=1.0)
