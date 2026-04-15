@@ -29,6 +29,10 @@ class DashboardConfig(BaseModel):
     lineDirection: DashboardLineDirection
     linePosition: float
     lineFlow: DashboardLineFlow = DashboardLineFlow.POSITIVE
+    confidenceThreshold: float = 0.5
+    debounceFrames: int = 5
+    maxMissingFrames: int = 5
+    maxMatchDistance: float = 0.2
     testCases: list[EvalTestCase] = []
     thresholds: list[EvalThreshold] = []
     labels: list[Label] = []

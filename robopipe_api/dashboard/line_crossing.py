@@ -12,15 +12,18 @@ from ..models.dashboard.dashboard_config import (
 from ..models.detection.bbox_detection import BBoxDetection
 
 
+def _is_confirmed(track: KalmanBoxTracker, debounce_frames: int) -> bool:
+    """A track is confirmed once it has been seen for at least *debounce_frames* frames."""
+    return track.hit_streak + 1 >= debounce_frames
+
+
 class LineCrossingTracker:
     """Tracks per-config detection line crossings across frames."""
 
-    def __init__(
-        self, max_missing_frames: int = 5, max_match_distance: float = 0.2
-    ) -> None:
+    def __init__(self) -> None:
         self._tracks: dict[int, list[KalmanBoxTracker]] = {}
-        self._max_missing_frames = max_missing_frames
-        self._max_match_distance = max_match_distance
+        # self._max_missing_frames = max_missing_frames
+        # self._max_match_distance = max_match_distance
         self._next_id: dict[int, int] = {}
         # Previous frame's is_past_line per (config_id, tracking_id)
         self._prev_past_line: dict[int, dict[int, bool]] = {}
@@ -75,19 +78,22 @@ class LineCrossingTracker:
             existing_tracks, measurements, labels
         )
 
+        debounce_frames = config.debounceFrames
+
         # Process results
         tracking_ids: list[int | None] = [None] * len(detections)
         has_crossed: list[bool] = [False] * len(detections)
 
-        # Matched: update track, inherit ID, check crossing
+        # Matched: update track, inherit ID and check crossing only if confirmed
         for ti, di in matches:
             track = existing_tracks[ti]
             track.update(measurements[di])
-            tracking_ids[di] = track.tracking_id
 
-            was_past = prev_past.get(track.tracking_id, False)
-            if not was_past and past_line_flags[di]:
-                has_crossed[di] = True
+            if _is_confirmed(track, debounce_frames):
+                tracking_ids[di] = track.tracking_id
+                was_past = prev_past.get(track.tracking_id, False)
+                if not was_past and past_line_flags[di]:
+                    has_crossed[di] = True
 
         # Unmatched detections: create new tracks
         new_tracks: list[KalmanBoxTracker] = []
@@ -95,7 +101,8 @@ class LineCrossingTracker:
             tid = self._allocate_id(config.id)
             new_track = KalmanBoxTracker(measurements[di], tid, labels[di])
             new_tracks.append(new_track)
-            tracking_ids[di] = tid
+            if _is_confirmed(new_track, debounce_frames):
+                tracking_ids[di] = tid
 
         # Unmatched tracks: age them (ghost expiry)
         surviving_ghosts: list[KalmanBoxTracker] = []
@@ -103,32 +110,40 @@ class LineCrossingTracker:
             track = existing_tracks[ti]
             track.time_since_update += 1
             track.hit_streak = 0
-            if track.time_since_update <= self._max_missing_frames:
+            if track.time_since_update <= config.maxMissingFrames:
                 surviving_ghosts.append(track)
 
         # Update state: matched tracks + new tracks + ghosts
         matched_tracks = [existing_tracks[ti] for ti, _ in matches]
         self._tracks[config.id] = matched_tracks + new_tracks + surviving_ghosts
 
-        # Update prev_past_line for next frame
+        # Update prev_past_line for ALL tracks (including unconfirmed) so that
+        # position history is available when a track becomes confirmed.
         curr_past: dict[int, bool] = {}
-        for di in range(len(detections)):
-            tid = tracking_ids[di]
-            if tid is not None:
-                curr_past[tid] = past_line_flags[di]
+        for ti, di in matches:
+            curr_past[existing_tracks[ti].tracking_id] = past_line_flags[di]
+        for idx, di in enumerate(unmatched_dets):
+            curr_past[new_tracks[idx].tracking_id] = past_line_flags[di]
         # Carry over ghost classifications unchanged
         for track in surviving_ghosts:
             if track.tracking_id not in curr_past:
-                curr_past[track.tracking_id] = prev_past.get(
-                    track.tracking_id, False
-                )
+                curr_past[track.tracking_id] = prev_past.get(track.tracking_id, False)
         self._prev_past_line[config.id] = curr_past
 
-        # Build return values
+        # Build set of confirmed detection indices
+        confirmed: set[int] = set()
+        for ti, di in matches:
+            if _is_confirmed(existing_tracks[ti], debounce_frames):
+                confirmed.add(di)
+        for idx, di in enumerate(unmatched_dets):
+            if _is_confirmed(new_tracks[idx], debounce_frames):
+                confirmed.add(di)
+
+        # Build return values — only confirmed detections appear in crossed
         ret_past: list[BBoxDetection] = []
         ret_past_det_indices: list[int] = []
         for di, det in enumerate(detections):
-            if past_line_flags[di]:
+            if past_line_flags[di] and di in confirmed:
                 ret_past_det_indices.append(di)
                 ret_past.append(det)
 

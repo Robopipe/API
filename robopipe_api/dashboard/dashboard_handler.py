@@ -41,6 +41,12 @@ def handle_detections(
     dashboard_run_session_id: int | None,
 ) -> dict:
     """Evaluate dashboard test cases against detections and return enriched result."""
+    detections = list(
+        filter(
+            lambda d: d.confidence >= dashboard_config.confidenceThreshold,
+            detections.detections,
+        )
+    )
     result = detections.model_dump()
 
     if dashboard_config is None or dashboard_run_session_id is None:

@@ -51,7 +51,8 @@ class NNPipeline(DepthPipeline):
         self.nn_configs[sensor_name] = nn
 
         if sensor_name not in self.cameras:
-            cam = self.pipeline.create(dai.node.Camera).build()
+            cam = self.pipeline.create(dai.node.Camera)
+            self.build_camera(cam, nn.sensor.socket)
             self.cameras[sensor_name] = cam
 
         cam = self.cameras[sensor_name]

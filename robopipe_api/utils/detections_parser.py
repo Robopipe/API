@@ -20,14 +20,7 @@ def parse_img_detections(detections: dai.ImgDetections) -> BBoxDetections:
 
         return BBoxDetection(**res)
 
-    return BBoxDetections(
-        detections=list(
-            filter(
-                lambda x: x is not None and x.confidence > 0.5,
-                map(parse_detection, detections.detections),
-            )
-        )
-    )
+    return BBoxDetections(detections=list(map(parse_detection, detections.detections)))
 
 
 def parse_img_detections_extended(
