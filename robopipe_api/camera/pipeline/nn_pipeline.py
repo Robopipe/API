@@ -52,7 +52,9 @@ class NNPipeline(DepthPipeline):
 
         if sensor_name not in self.cameras:
             cam = self.pipeline.create(dai.node.Camera)
-            self.build_camera(cam, nn.sensor.socket)
+            self.build_camera(
+                cam, nn.sensor.socket, replay_size=nn.model.getInputSize()
+            )
             self.cameras[sensor_name] = cam
 
         cam = self.cameras[sensor_name]

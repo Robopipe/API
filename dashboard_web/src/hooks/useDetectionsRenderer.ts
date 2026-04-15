@@ -109,7 +109,8 @@ export const useDetectionsRenderer = ({
       }
 
       for (const detection of detections.detections) {
-        if (detection.confidence < 0.5) continue;
+        if (detection.confidence < window.DASHBOARD_CONFIG.confidenceThreshold)
+          continue;
         const prepared = prepareDetectionForRender(
           detection,
           displayMode,
