@@ -49,16 +49,22 @@ class StreamingPipeline(Pipeline):
         return cam
 
     def build_camera(
-        self, camera: dai.node.Camera, socket: dai.CameraBoardSocket, *args
+        self, camera: dai.node.Camera, socket: dai.CameraBoardSocket, **kwargs
     ):
         replay_video_path = self._replay_videos.get(socket.name)
         if replay_video_path is not None:
             replay_video = self.pipeline.create(dai.node.ReplayVideo)
             replay_video.setReplayVideoFile(replay_video_path)
             replay_video.setLoop(True)
+            if kwargs.get("replay_size") is not None:
+                replay_video.setSize(kwargs["replay_size"])
             camera.build(socket, replay_video)
         else:
-            camera.build(socket, *args)
+            camera.build(
+                socket,
+                sensorResolution=kwargs.get("resolution"),
+                sensorFps=kwargs.get("fps"),
+            )
 
     def add_replay_video(self, socket_name: str, video_path: str):
         self._replay_videos[socket_name] = video_path
@@ -86,7 +92,7 @@ class StreamingPipeline(Pipeline):
         still_config.fps = video_config.fps = cam_fps
         pool_size = ceil(cam_size[0] * cam_size[1] * self.BYTES_PER_PIXEL * 2)
         cam.setOutputsMaxSizePool(pool_size)
-        self.build_camera(cam, sensor.socket, cam_size, cam_fps)
+        self.build_camera(cam, sensor.socket, resolution=cam_size, fps=cam_fps)
 
         self.__build_still_output(cam, sensor_name, still_config)
         self.__build_video_output(cam, sensor_name, video_config)
