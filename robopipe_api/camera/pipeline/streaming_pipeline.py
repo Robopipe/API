@@ -28,6 +28,7 @@ class StreamingPipeline(Pipeline):
     ):
         self.cameras: dict[str, dai.node.Camera] = {}
         self._streaming_cameras: set[dai.CameraFeatures] = set()
+        self._replay_videos: dict[str, str] = {}
 
         super().__init__(device, pipeline)
 
@@ -36,6 +37,7 @@ class StreamingPipeline(Pipeline):
 
     def recreate(self, pipeline: Self):
         super().recreate(pipeline)
+        self._replay_videos = dict(pipeline._replay_videos)
 
         for sensor in pipeline._streaming_cameras:
             self.add_sensor(sensor)
@@ -45,6 +47,25 @@ class StreamingPipeline(Pipeline):
         self.cameras[sensor.socket.name] = cam
         self._streaming_cameras.add(sensor)
         return cam
+
+    def build_camera(
+        self, camera: dai.node.Camera, socket: dai.CameraBoardSocket, *args
+    ):
+        replay_video_path = self._replay_videos.get(socket.name)
+        if replay_video_path is not None:
+            replay_video = self.pipeline.create(dai.node.ReplayVideo)
+            replay_video.setReplayVideoFile(replay_video_path)
+            replay_video.setLoop(True)
+            camera.build(socket, replay_video)
+        else:
+            camera.build(socket, *args)
+
+    def add_replay_video(self, socket_name: str, video_path: str):
+        self._replay_videos[socket_name] = video_path
+
+    def remove_replay_video(self, socket_name: str):
+        if socket_name in self._replay_videos:
+            del self._replay_videos[socket_name]
 
     def add_sensor_config(self, sensor: dai.CameraFeatures):
         self._streaming_cameras.add(sensor)
@@ -65,7 +86,7 @@ class StreamingPipeline(Pipeline):
         still_config.fps = video_config.fps = cam_fps
         pool_size = ceil(cam_size[0] * cam_size[1] * self.BYTES_PER_PIXEL * 2)
         cam.setOutputsMaxSizePool(pool_size)
-        cam.build(sensor.socket, cam_size, cam_fps)
+        self.build_camera(cam, sensor.socket, cam_size, cam_fps)
 
         self.__build_still_output(cam, sensor_name, still_config)
         self.__build_video_output(cam, sensor_name, video_config)

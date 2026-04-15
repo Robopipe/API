@@ -1,6 +1,7 @@
 import depthai as dai
 
 import time
+from pathlib import Path
 
 from ..error import CameraShutDownException, CameraException
 from ..log import logger
@@ -39,6 +40,7 @@ class Camera:
             for sensor in self.camera_handle.getConnectedCameraFeatures()
         }
         self._ir_config = IRConfig() if self.camera_name.endswith("PRO") else None
+        self._replay_video_paths: dict[str, str] = {}
 
         for stereo in self.camera_handle.getAvailableStereoPairs():
             sensor_name = lambda s: s.split("_")[-1]
@@ -235,6 +237,49 @@ class Camera:
                 pipeline.add_sensor_config(self.all_sensors[sensor_name])
 
         self.open(pipeline)
+
+    def add_replay_video(self, sensor_name: str, video_path: str):
+        self.__check_device_active()
+        if not isinstance(self.pipeline, StreamingPipeline):
+            raise RuntimeError("Server is in invalid state")
+        elif sensor_name not in self.all_sensors:
+            raise ValueError(f"Sensor {sensor_name} not found on camera {self.mxid}")
+        elif sensor_name not in self.sensors:
+            raise ValueError(f"Sensor {sensor_name} is not active")
+
+        old_path = self._replay_video_paths.get(sensor_name)
+
+        pipeline = self.pipeline
+        self.close()
+        pipeline.add_replay_video(sensor_name, video_path)
+        self.open(pipeline)
+
+        self._replay_video_paths[sensor_name] = video_path
+        if old_path and old_path != video_path:
+            Path(old_path).unlink(missing_ok=True)
+
+    def remove_replay_video(self, sensor_name: str):
+        self.__check_device_active()
+        if not isinstance(self.pipeline, StreamingPipeline):
+            raise RuntimeError("Server is in invalid state")
+        elif sensor_name not in self.all_sensors:
+            raise ValueError(f"Sensor {sensor_name} not found on camera {self.mxid}")
+
+        video_path = self._replay_video_paths.pop(sensor_name, None)
+        if video_path is None:
+            return
+
+        pipeline = self.pipeline
+        self.close()
+        pipeline.remove_replay_video(sensor_name)
+        self.open(pipeline)
+
+        Path(video_path).unlink(missing_ok=True)
+
+    def cleanup_replay_videos(self):
+        for video_path in self._replay_video_paths.values():
+            Path(video_path).unlink(missing_ok=True)
+        self._replay_video_paths.clear()
 
     def _check_device_connected(self, context: str) -> bool:
         """Check if device is still connected and log the status."""
