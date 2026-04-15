@@ -33,6 +33,7 @@ from ..camera.sensor.sensor_control import SensorControl
 from ..models.sensor_control import SensorControlUpdate
 from ..models.batch_stream_update import BatchStreamUpdate
 from ..models.stream_info import StreamInfo
+from ..models.dashboard.dashboard_config import DashboardConfigUpdate
 from ..models.dashboard.detection_event import DetectionEvent
 from ..paths import get_data_dir
 from ..utils.detections_parser import parse_detections
@@ -320,6 +321,10 @@ def serve_dashboard(
             "lineFlow": sensor.dashboard_config.lineFlow,
             "thresholds": [t.model_dump() for t in sensor.dashboard_config.thresholds],
             "remoteBackendUrl": sensor.dashboard_config.remoteBackendUrl,
+            "confidenceThreshold": sensor.dashboard_config.confidenceThreshold,
+            "debounceFrames": sensor.dashboard_config.debounceFrames,
+            "maxMissingFrames": sensor.dashboard_config.maxMissingFrames,
+            "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
             "running": sensor.dashboard_run_session_id is not None,
             "runningSince": running_since,
             "hasMultipleConfigs": has_multiple,
@@ -380,6 +385,47 @@ def delete_dashboard_config(sensor: SensorDep, mxid: Mxid, stream_name: StreamNa
     # TODO: If the deleted config is currently active, we should probably stop the dashboard and undeploy the model
     sensor.dashboard_config = None
     config_store_factory().clear_configs(mxid, stream_name)
+
+
+@stream_router.get("/dashboard/config")
+def get_dashboard_config_params(sensor: SensorDep):
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+    return {
+        "confidenceThreshold": sensor.dashboard_config.confidenceThreshold,
+        "debounceFrames": sensor.dashboard_config.debounceFrames,
+        "maxMissingFrames": sensor.dashboard_config.maxMissingFrames,
+        "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
+    }
+
+
+@stream_router.patch("/dashboard/config")
+def update_dashboard_config(
+    sensor: SensorDep,
+    update: DashboardConfigUpdate,
+):
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+
+    updated = sensor.dashboard_config.model_copy(
+        update=update.model_dump(exclude_unset=True)
+    )
+    # Assign directly to bypass the property setter which resets
+    # _dashboard_run_session_id and _active_config_id
+    sensor._dashboard_config = updated
+
+    return {
+        "confidenceThreshold": updated.confidenceThreshold,
+        "debounceFrames": updated.debounceFrames,
+        "maxMissingFrames": updated.maxMissingFrames,
+        "maxMatchDistance": updated.maxMatchDistance,
+    }
 
 
 @stream_router.get("/dashboard/configs")
