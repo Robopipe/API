@@ -207,3 +207,44 @@ class TestAssociation:
 
         assert tracker.time_since_update == 5
         assert tracker.hit_streak == 0
+
+
+class TestEuclideanGate:
+    def test_rejects_far_match(self):
+        """Euclidean gate rejects a pair that is spatially too far apart."""
+        tracker = KalmanBoxTracker(
+            np.array([0.1, 0.1, 0.1, 0.1]), tracking_id=1, label=0
+        )
+        measurement = np.array([0.5, 0.5, 0.1, 0.1])
+        matches, unmatched_t, unmatched_d = associate_detections_to_tracks(
+            [tracker], [measurement], [0], max_match_distance=0.2
+        )
+        assert matches == []
+        assert unmatched_t == [0]
+        assert unmatched_d == [0]
+
+    def test_allows_close_match(self):
+        """Euclidean gate allows a spatially close pair."""
+        tracker = KalmanBoxTracker(
+            np.array([0.5, 0.5, 0.1, 0.1]), tracking_id=1, label=0
+        )
+        measurement = np.array([0.51, 0.51, 0.1, 0.1])
+        matches, unmatched_t, unmatched_d = associate_detections_to_tracks(
+            [tracker], [measurement], [0], max_match_distance=0.2
+        )
+        assert len(matches) == 1
+        assert matches[0] == (0, 0)
+
+    def test_none_disables_gate(self):
+        """max_match_distance=None preserves Mahalanobis-only behavior."""
+        tracker = KalmanBoxTracker(
+            np.array([0.1, 0.1, 0.1, 0.1]), tracking_id=1, label=0
+        )
+        # Moderately far — would fail a tight Euclidean gate but may pass
+        # the Mahalanobis gate with initial covariance
+        measurement = np.array([0.2, 0.2, 0.1, 0.1])
+        matches_none, _, _ = associate_detections_to_tracks(
+            [tracker], [measurement], [0], max_match_distance=None
+        )
+        # With None the Euclidean gate is skipped — Mahalanobis decides
+        assert len(matches_none) == 1

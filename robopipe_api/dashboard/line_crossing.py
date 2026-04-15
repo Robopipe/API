@@ -22,8 +22,6 @@ class LineCrossingTracker:
 
     def __init__(self) -> None:
         self._tracks: dict[int, list[KalmanBoxTracker]] = {}
-        # self._max_missing_frames = max_missing_frames
-        # self._max_match_distance = max_match_distance
         self._next_id: dict[int, int] = {}
         # Previous frame's is_past_line per (config_id, tracking_id)
         self._prev_past_line: dict[int, dict[int, bool]] = {}
@@ -75,7 +73,8 @@ class LineCrossingTracker:
 
         # Associate detections to existing tracks
         matches, unmatched_tracks, unmatched_dets = associate_detections_to_tracks(
-            existing_tracks, measurements, labels
+            existing_tracks, measurements, labels,
+            max_match_distance=config.maxMatchDistance,
         )
 
         debounce_frames = config.debounceFrames

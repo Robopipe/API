@@ -110,6 +110,7 @@ def associate_detections_to_tracks(
     measurements: list[np.ndarray],
     labels: list[int],
     gate_threshold: float = _MAHALANOBIS_GATE,
+    max_match_distance: float | None = None,
 ) -> tuple[list[tuple[int, int]], list[int], list[int]]:
     """Associate detections to existing tracks using the Hungarian algorithm.
 
@@ -139,6 +140,12 @@ def associate_detections_to_tracks(
             # Gate: labels must match
             if tracks[ti].label != labels[di]:
                 continue
+            # Gate: hard Euclidean distance on center coordinates
+            if max_match_distance is not None:
+                dx = z_pred[0] - measurements[di][0]
+                dy = z_pred[1] - measurements[di][1]
+                if dx * dx + dy * dy > max_match_distance * max_match_distance:
+                    continue
             dist = _mahalanobis_sq(z_pred, S, measurements[di])
             if dist <= gate_threshold:
                 cost[ti, di] = dist

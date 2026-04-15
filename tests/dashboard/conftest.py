@@ -120,6 +120,8 @@ def make_config(
     line_position: float = 0.5,
     line_flow: DashboardLineFlow = DashboardLineFlow.POSITIVE,
     config_id: int = 1,
+    debounce_frames: int = 1,
+    max_match_distance: float = 1.0,
 ) -> DashboardConfig:
     return DashboardConfig(
         id=config_id,
@@ -129,6 +131,8 @@ def make_config(
         lineDirection=line_direction,
         linePosition=line_position,
         lineFlow=line_flow,
+        debounceFrames=debounce_frames,
+        maxMatchDistance=max_match_distance,
         testCases=test_cases or [],
         labels=labels if labels is not None else LABELS,
     )

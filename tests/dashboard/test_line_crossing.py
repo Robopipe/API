@@ -163,3 +163,57 @@ class TestLineCrossingTracking:
         crossed, has_new, _tids = tracker.find_crossed_detections(det5, config)
         assert len(crossed) == 1
         assert bool(has_new) is True
+
+
+class TestMaxMatchDistance:
+    """Euclidean distance gate prevents far-apart ID reuse."""
+
+    def test_far_reentry_gets_new_id(self):
+        """Object leaving frame should not donate its ID to a far-away entry."""
+        tracker = LineCrossingTracker()
+        config = make_config(
+            line_position=0.5,
+            line_flow=DashboardLineFlow.POSITIVE,
+            max_match_distance=0.2,
+        )
+
+        # Frame 1: detection at left side of frame (center ~0.15, 0.35)
+        det1 = [make_detection(label=0, coords=(0.1, 0.3, 0.2, 0.4))]
+        _, _, tids1 = tracker.find_crossed_detections(det1, config)
+
+        # Frame 2: detection disappears
+        tracker.find_crossed_detections([], config)
+
+        # Frame 3: detection reappears far away at right side (center ~0.85, 0.35)
+        det3 = [make_detection(label=0, coords=(0.8, 0.3, 0.9, 0.4))]
+        _, _, tids3 = tracker.find_crossed_detections(det3, config)
+
+        # The new detection must get a different tracking ID
+        id1 = tids1[0]
+        id3 = tids3[0]
+        # Both may be None if not yet confirmed, but if assigned they must differ
+        if id1 is not None and id3 is not None:
+            assert id1 != id3
+
+    def test_nearby_reentry_preserves_id(self):
+        """Object that briefly disappears nearby should keep its tracking ID."""
+        tracker = LineCrossingTracker()
+        config = make_config(
+            line_position=0.5,
+            line_flow=DashboardLineFlow.POSITIVE,
+            max_match_distance=0.2,
+        )
+
+        # Frame 1: detection appears (confirmed immediately with debounce=1)
+        det = [make_detection(label=0, coords=(0.4, 0.3, 0.6, 0.4))]
+        _, _, tids = tracker.find_crossed_detections(det, config)
+        id_before = tids[0]
+        assert id_before is not None
+
+        # Frame 2: detection disappears for 1 frame
+        tracker.find_crossed_detections([], config)
+
+        # Frame 3: reappears very close to where it was (center shifts by ~0.02)
+        det_near = [make_detection(label=0, coords=(0.42, 0.3, 0.62, 0.4))]
+        _, _, tids_after = tracker.find_crossed_detections(det_near, config)
+        assert tids_after[0] == id_before
