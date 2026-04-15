@@ -56,6 +56,7 @@ class CameraManager:
         camera.open(pipeline)
 
     def shutdown_camera(self, mxid: str):
+        self.cameras[mxid].cleanup_replay_videos()
         self.cameras[mxid].close()
 
 

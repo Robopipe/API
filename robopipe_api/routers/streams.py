@@ -61,7 +61,9 @@ router = APIRouter(
 @router.get("/")
 def list_all_streams(camera: CameraDep) -> list[StreamInfo]:
     get_sensor_info = lambda sensor: StreamInfo(
-        name=sensor, active=(sensor in camera.sensors)
+        name=sensor,
+        active=(sensor in camera.sensors),
+        replay=(sensor in camera._replay_video_paths),
     )
     sensors = list(map(get_sensor_info, camera.all_sensors.keys()))
 
@@ -86,7 +88,9 @@ def batch_update_streams(
         )
 
     get_sensor_info = lambda sensor: StreamInfo(
-        name=sensor, active=(sensor in camera.sensors)
+        name=sensor,
+        active=(sensor in camera.sensors),
+        replay=(sensor in camera._replay_video_paths),
     )
     return list(map(get_sensor_info, camera.all_sensors.keys()))
 
@@ -566,6 +570,34 @@ def get_event_picture(event_id: int, events_store: EventsStoreDep):
         raise HTTPException(status_code=404, detail="Picture file not found")
 
     return JpegResponse(file_path.read_bytes())
+
+
+@stream_router.post("/replay", status_code=status.HTTP_201_CREATED)
+async def add_replay_video(
+    camera: CameraDep,
+    stream_name: StreamName,
+    video: UploadFile,
+):
+    video_bytes = await video.read()
+
+    replay_dir = get_data_dir() / "replay_videos"
+    replay_dir.mkdir(parents=True, exist_ok=True)
+
+    extension = Path(video.filename).suffix if video.filename else ".mp4"
+    filename = f"{uuid.uuid4().hex}{extension}"
+    file_path = replay_dir / filename
+    file_path.write_bytes(video_bytes)
+
+    try:
+        camera.add_replay_video(stream_name, str(file_path))
+    except (ValueError, RuntimeError):
+        file_path.unlink(missing_ok=True)
+        raise
+
+
+@stream_router.delete("/replay", status_code=status.HTTP_202_ACCEPTED)
+def remove_replay_video(camera: CameraDep, stream_name: StreamName):
+    camera.remove_replay_video(stream_name)
 
 
 router.include_router(stream_router)
