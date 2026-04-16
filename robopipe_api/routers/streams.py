@@ -236,9 +236,14 @@ async def get_sensor_detections(
         sensor = camera.sensors.get(stream_name)
         if sensor is None:
             raise RuntimeError(f"Sensor {stream_name} no longer available")
-        detections = sensor.get_nn_detections()
-        seq = detections.getSequenceNum()
-        parsed_detections = parse_detections(detections)
+
+        if sensor.sahi_enabled:
+            parsed_detections, seq = sensor.get_merged_sahi_detections()
+        else:
+            detections = sensor.get_nn_detections()
+            seq = detections.getSequenceNum()
+            parsed_detections = parse_detections(detections)
+
         result = handle_detections(
             sensor.dashboard_config, parsed_detections, sensor.dashboard_run_session_id
         )

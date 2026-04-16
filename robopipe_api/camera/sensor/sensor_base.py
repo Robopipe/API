@@ -12,9 +12,13 @@ import av
 
 
 from ...models.dashboard.dashboard_config import DashboardConfig
+from ...models.detection.bbox_detection import BBoxDetections
 from ...models.nn_config import NNConfig
+from ...models.sahi_config import SAHIConfig
+from ...utils.detections_parser import parse_detections
 from ...utils.image import img_frame_to_video_frame
 from ..pipeline.pipeline_queue_type import PipelineQueueType
+from ..sahi import Tile, remap_tile_detections, nms_merge
 from .sensor_config import SensorConfigProperties
 from .sensor_control import SensorControl
 
@@ -36,6 +40,9 @@ class SensorBase(ABC):
         self.last_frame: av.VideoFrame | None = None
         self._video_seq: int = -1
         self._video_seq_cond = threading.Condition()
+        self._sahi_tile_queues: list[dai.MessageQueue] = []
+        self._sahi_tiles: list[Tile] = []
+        self._sahi_config: SAHIConfig | None = None
 
     @property
     @abstractmethod
@@ -133,6 +140,10 @@ class SensorBase(ABC):
 
         return (passthrough_frame, detections)
 
+    @property
+    def sahi_enabled(self) -> bool:
+        return self._sahi_config is not None and len(self._sahi_tile_queues) > 0
+
     def get_nn_detections(
         self,
     ) -> dai.ImgDetections | Classifications | ImgDetectionsExtended:
@@ -155,3 +166,30 @@ class SensorBase(ABC):
         #     )
 
         return detections
+
+    def get_merged_sahi_detections(self) -> tuple[BBoxDetections, int]:
+        # Full-frame detections
+        full_frame_raw = self.get_nn_detections()
+        seq = full_frame_raw.getSequenceNum()
+        full_frame_parsed = parse_detections(full_frame_raw)
+        all_dets = list(full_frame_parsed.detections)
+
+        # Tile detections
+        for tile_queue, tile in zip(self._sahi_tile_queues, self._sahi_tiles):
+            tile_raw = tile_queue.tryGet()
+            if tile_raw is None:
+                tile_raw = tile_queue.get(
+                    timeout=datetime.timedelta(seconds=1)
+                )
+            if tile_raw is None:
+                continue
+
+            tile_parsed = parse_detections(tile_raw)
+            remapped = remap_tile_detections(
+                BBoxDetections(detections=list(tile_parsed.detections)),
+                tile,
+            )
+            all_dets.extend(remapped)
+
+        merged = nms_merge(all_dets, self._sahi_config.nms_iou_threshold)
+        return BBoxDetections(detections=merged), seq
