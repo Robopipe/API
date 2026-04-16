@@ -238,16 +238,21 @@ async def get_sensor_detections(
             raise RuntimeError(f"Sensor {stream_name} no longer available")
 
         if sensor.sahi_enabled:
-            parsed_detections, seq = sensor.get_merged_sahi_detections()
+            parsed_detections, seq, sahi_info = (
+                sensor.get_merged_sahi_detections()
+            )
         else:
             detections = sensor.get_nn_detections()
             seq = detections.getSequenceNum()
             parsed_detections = parse_detections(detections)
+            sahi_info = None
 
         result = handle_detections(
             sensor.dashboard_config, parsed_detections, sensor.dashboard_run_session_id
         )
         result["seq"] = seq
+        if sahi_info is not None:
+            result["sahi"] = sahi_info
         return result
 
     await relay.subscribe(key=(mxid, stream_name, "nn"), ws=ws, producer=producer)
