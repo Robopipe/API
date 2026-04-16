@@ -19,9 +19,11 @@ class NNPipeline(DepthPipeline):
     ):
         self.neural_networks: dict[str, dai.node.NeuralNetwork] = {}
         self.nn_configs: dict[str, CameraNNConfig] = {}
-        self.sahi_tile_queues: dict[str, list[dai.MessageQueue]] = {}
+        self.sahi_tile_queue: dict[str, dai.MessageQueue] = {}
+        self.sahi_manip_cfg: dict[str, dai.InputQueue] = {}
         self.sahi_tiles: dict[str, list[Tile]] = {}
         self.sahi_configs: dict[str, SAHIConfig] = {}
+        self.sahi_model_input_sizes: dict[str, tuple[int, int]] = {}
 
         sensors = list(
             filter(
@@ -77,14 +79,14 @@ class NNPipeline(DepthPipeline):
             )
             self.add_queue(nn_video, PipelineQueueType.VIDEO, sensor_name, False)
 
-            tile_queues = []
-            for tile_nn in sahi_nodes.tile_nns:
-                tile_out = tile_nn.out.createOutputQueue(maxSize=1, blocking=False)
-                tile_queues.append(tile_out)
-
-            self.sahi_tile_queues[sensor_name] = tile_queues
+            tile_out = sahi_nodes.tile_nn.out.createOutputQueue(
+                maxSize=1, blocking=False
+            )
+            self.sahi_tile_queue[sensor_name] = tile_out
+            self.sahi_manip_cfg[sensor_name] = sahi_nodes.tile_manip_cfg
             self.sahi_tiles[sensor_name] = sahi_nodes.tiles
             self.sahi_configs[sensor_name] = nn.sahi_config
+            self.sahi_model_input_sizes[sensor_name] = sahi_nodes.model_input_size
         else:
             nn_node = nn.create_node(self.pipeline, cam)
             self.neural_networks[sensor_name] = nn_node
@@ -137,9 +139,11 @@ class NNPipeline(DepthPipeline):
             return
 
         self.del_all_queues(sensor_name)
-        self.sahi_tile_queues.pop(sensor_name, None)
+        self.sahi_tile_queue.pop(sensor_name, None)
+        self.sahi_manip_cfg.pop(sensor_name, None)
         self.sahi_tiles.pop(sensor_name, None)
         self.sahi_configs.pop(sensor_name, None)
+        self.sahi_model_input_sizes.pop(sensor_name, None)
         del self.neural_networks[sensor_name]
         del self.nn_configs[sensor_name]
 

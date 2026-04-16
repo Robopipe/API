@@ -11,15 +11,23 @@ ModelType = dai.NNArchive
 
 
 class SAHINodes:
+    """Result of building a SAHI pipeline: one full-frame NN plus a single
+    tile NN whose ImageManip crop is reconfigured at runtime to cycle
+    through tiles."""
+
     def __init__(
         self,
         full_frame_nn: dai.node.NeuralNetwork | ParsingNeuralNetwork,
-        tile_nns: list[dai.node.NeuralNetwork | ParsingNeuralNetwork],
+        tile_nn: dai.node.NeuralNetwork | ParsingNeuralNetwork,
+        tile_manip_cfg: dai.InputQueue,
         tiles: list[Tile],
+        model_input_size: tuple[int, int],
     ):
         self.full_frame_nn = full_frame_nn
-        self.tile_nns = tile_nns
+        self.tile_nn = tile_nn
+        self.tile_manip_cfg = tile_manip_cfg
         self.tiles = tiles
+        self.model_input_size = model_input_size
 
 
 class CameraNNConfig:
@@ -75,26 +83,33 @@ class CameraNNConfig:
         tiles = compute_tiles(self.sahi_config)
         model_input_size = self.model.getInputSize()
 
-        # Shared camera output for all tile crops (NV12 is most performant)
-        cam_output = camera.requestOutput(
-            model_input_size,
-            dai.ImgFrame.Type.NV12,
+        # Shared camera output for tile crops
+        cam_output = camera.requestOutput(model_input_size)
+
+        # Single ImageManip — crop is reconfigured at runtime to cycle tiles
+        manip = pipeline.create(dai.node.ImageManip)
+        first_tile = tiles[0]
+        crop_rect = dai.Rect(
+            dai.Point2f(first_tile.x1, first_tile.y1),
+            dai.Point2f(first_tile.x2, first_tile.y2),
         )
+        manip.initialConfig.addCrop(crop_rect, True)
+        manip.initialConfig.setOutputSize(
+            model_input_size[0], model_input_size[1]
+        )
+        manip.initialConfig.setFrameType(dai.ImgFrame.Type.BGR888i)
+        manip.setMaxOutputFrameSize(
+            model_input_size[0] * model_input_size[1] * 3
+        )
+        cam_output.link(manip.inputImage)
 
-        tile_nns = []
-        for tile in tiles:
-            manip = pipeline.create(dai.node.ImageManip)
-            crop_rect = dai.Rect(
-                dai.Point2f(tile.x1, tile.y1),
-                dai.Point2f(tile.x2, tile.y2),
-            )
-            manip.initialConfig.addCrop(crop_rect, True)
-            manip.initialConfig.setOutputSize(model_input_size[0], model_input_size[1])
-            manip.setMaxOutputFrameSize(model_input_size[0] * model_input_size[1] * 3)
-            cam_output.link(manip.inputImage)
+        # Host input queue for dynamic crop reconfiguration
+        manip_cfg = manip.inputConfig.createInputQueue()
 
-            tile_nn = self._create_nn_node(pipeline, 1)
-            tile_nn.build(manip.out, self.model)
-            tile_nns.append(tile_nn)
+        # Single tile NN
+        tile_nn = self._create_nn_node(pipeline, 1)
+        tile_nn.build(manip.out, self.model)
 
-        return SAHINodes(full_frame_nn, tile_nns, tiles)
+        return SAHINodes(
+            full_frame_nn, tile_nn, manip_cfg, tiles, model_input_size
+        )
