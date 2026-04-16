@@ -3,6 +3,8 @@ import depthai as dai
 from typing import Self
 
 from ..nn import CameraNNConfig
+from ..sahi import Tile
+from ...models.sahi_config import SAHIConfig
 from .depth_pipeline import DepthPipeline
 from .pipeline_queue_type import PipelineQueueType
 
@@ -17,6 +19,9 @@ class NNPipeline(DepthPipeline):
     ):
         self.neural_networks: dict[str, dai.node.NeuralNetwork] = {}
         self.nn_configs: dict[str, CameraNNConfig] = {}
+        self.sahi_tile_queues: dict[str, list[dai.MessageQueue]] = {}
+        self.sahi_tiles: dict[str, list[Tile]] = {}
+        self.sahi_configs: dict[str, SAHIConfig] = {}
 
         sensors = list(
             filter(
@@ -58,12 +63,37 @@ class NNPipeline(DepthPipeline):
             self.cameras[sensor_name] = cam
 
         cam = self.cameras[sensor_name]
-        nn_node = nn.create_node(self.pipeline, self.cameras.get(sensor_name))
-        self.neural_networks[sensor_name] = nn_node
-        nn_out = nn_node.out.createOutputQueue(maxSize=1, blocking=False)
-        self.add_queue(nn_out, PipelineQueueType.NN, sensor_name, False)
-        nn_video = nn_node.passthrough.createOutputQueue(maxSize=4, blocking=False)
-        self.add_queue(nn_video, PipelineQueueType.VIDEO, sensor_name, False)
+
+        if nn.sahi_config is not None:
+            sahi_nodes = nn.create_sahi_nodes(self.pipeline, cam)
+
+            self.neural_networks[sensor_name] = sahi_nodes.full_frame_nn
+            nn_out = sahi_nodes.full_frame_nn.out.createOutputQueue(
+                maxSize=1, blocking=False
+            )
+            self.add_queue(nn_out, PipelineQueueType.NN, sensor_name, False)
+            nn_video = sahi_nodes.full_frame_nn.passthrough.createOutputQueue(
+                maxSize=4, blocking=False
+            )
+            self.add_queue(nn_video, PipelineQueueType.VIDEO, sensor_name, False)
+
+            tile_queues = []
+            for tile_nn in sahi_nodes.tile_nns:
+                tile_out = tile_nn.out.createOutputQueue(maxSize=1, blocking=False)
+                tile_queues.append(tile_out)
+
+            self.sahi_tile_queues[sensor_name] = tile_queues
+            self.sahi_tiles[sensor_name] = sahi_nodes.tiles
+            self.sahi_configs[sensor_name] = nn.sahi_config
+        else:
+            nn_node = nn.create_node(self.pipeline, cam)
+            self.neural_networks[sensor_name] = nn_node
+            nn_out = nn_node.out.createOutputQueue(maxSize=1, blocking=False)
+            self.add_queue(nn_out, PipelineQueueType.NN, sensor_name, False)
+            nn_video = nn_node.passthrough.createOutputQueue(
+                maxSize=4, blocking=False
+            )
+            self.add_queue(nn_video, PipelineQueueType.VIDEO, sensor_name, False)
 
     def add_stereo_pair(self, left, right):
         nn_to_remove: list[CameraNNConfig] = []
@@ -107,6 +137,9 @@ class NNPipeline(DepthPipeline):
             return
 
         self.del_all_queues(sensor_name)
+        self.sahi_tile_queues.pop(sensor_name, None)
+        self.sahi_tiles.pop(sensor_name, None)
+        self.sahi_configs.pop(sensor_name, None)
         del self.neural_networks[sensor_name]
         del self.nn_configs[sensor_name]
 
