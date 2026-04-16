@@ -51,13 +51,15 @@ def handle_detections(
         for d in detections.detections
         if d.confidence >= dashboard_config.confidenceThreshold
     ]
-    result["detections"] = [d.model_dump() for d in filtered]
 
     evaluation_results, violation_event_ids, tracking_ids = (
         _dashboard_evaluator.evaluate(
             dashboard_config, filtered, dashboard_run_session_id
         )
     )
+
+    # Build after evaluate — line crossing sorts filtered in-place for stable ID assignment
+    result["detections"] = [d.model_dump() for d in filtered]
 
     # Build dashboard_detections from evaluation results (one per unique test case)
     seen_tc_ids: set[str] = set()

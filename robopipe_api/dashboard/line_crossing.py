@@ -56,6 +56,9 @@ class LineCrossingTracker:
         tracking_ids: list parallel to *detections* with a persistent ID per
             tracked object.
         """
+        detections.sort(
+            key=lambda d: bbox_center(d.coords)[0], reverse=True
+        )  # right-to-left for better matching of new detections
         existing_tracks = self._tracks.get(config.id, [])
         prev_past = self._prev_past_line.get(config.id, {})
 
@@ -73,7 +76,9 @@ class LineCrossingTracker:
 
         # Associate detections to existing tracks
         matches, unmatched_tracks, unmatched_dets = associate_detections_to_tracks(
-            existing_tracks, measurements, labels,
+            existing_tracks,
+            measurements,
+            labels,
             max_match_distance=config.maxMatchDistance,
         )
 
