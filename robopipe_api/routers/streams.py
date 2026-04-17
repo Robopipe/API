@@ -3,6 +3,7 @@ import tempfile
 import uuid
 
 import depthai as dai
+import httpx
 from fastapi import (
     APIRouter,
     Form,
@@ -17,6 +18,7 @@ import anyio
 import anyio.to_thread
 from fastapi.responses import Response, HTMLResponse
 from pathlib import Path
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 import json
 
@@ -618,21 +620,110 @@ def get_event_picture(event_id: int, events_store: EventsStoreDep):
     return JpegResponse(file_path.read_bytes())
 
 
+REPLAY_UPLOAD_CHUNK_SIZE = 1 << 20  # 1 MiB
+
+
+async def _write_request_stream(request: Request, dest: Path) -> None:
+    f = await anyio.to_thread.run_sync(lambda: dest.open("wb"))
+    try:
+        async for chunk in request.stream():
+            if chunk:
+                await anyio.to_thread.run_sync(f.write, chunk)
+    finally:
+        await anyio.to_thread.run_sync(f.close)
+
+
+async def _write_upload_file(video: UploadFile, dest: Path) -> None:
+    f = await anyio.to_thread.run_sync(lambda: dest.open("wb"))
+    try:
+        while True:
+            chunk = await video.read(REPLAY_UPLOAD_CHUNK_SIZE)
+            if not chunk:
+                break
+            await anyio.to_thread.run_sync(f.write, chunk)
+    finally:
+        await anyio.to_thread.run_sync(f.close)
+
+
+async def _download_url_to_file(source_url: str, dest: Path) -> None:
+    f = await anyio.to_thread.run_sync(lambda: dest.open("wb"))
+    try:
+        async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
+            async with client.stream("GET", source_url) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes(REPLAY_UPLOAD_CHUNK_SIZE):
+                    if chunk:
+                        await anyio.to_thread.run_sync(f.write, chunk)
+    finally:
+        await anyio.to_thread.run_sync(f.close)
+
+
 @stream_router.post("/replay", status_code=status.HTTP_201_CREATED)
 async def add_replay_video(
+    request: Request,
     camera: CameraDep,
     stream_name: StreamName,
-    video: UploadFile,
+    filename: str | None = None,
 ):
-    video_bytes = await video.read()
-
     replay_dir = get_data_dir() / "replay_videos"
     replay_dir.mkdir(parents=True, exist_ok=True)
 
-    extension = Path(video.filename).suffix if video.filename else ".mp4"
-    filename = f"{uuid.uuid4().hex}{extension}"
-    file_path = replay_dir / filename
-    file_path.write_bytes(video_bytes)
+    content_type = request.headers.get("content-type", "")
+    is_multipart = content_type.startswith("multipart/form-data")
+    is_json = content_type.startswith("application/json")
+
+    video: UploadFile | None = None
+    source_url: str | None = None
+    if is_json:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="JSON body must be an object",
+            )
+        source_url = payload.get("url")
+        if not isinstance(source_url, str) or not source_url:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Missing 'url' field in JSON body",
+            )
+        explicit_name = payload.get("filename")
+        source_name = (
+            explicit_name if isinstance(explicit_name, str) and explicit_name
+            else urlparse(source_url).path
+        )
+    elif is_multipart:
+        form = await request.form()
+        form_video = form.get("video")
+        if not isinstance(form_video, UploadFile):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Missing 'video' file field",
+            )
+        video = form_video
+        source_name = video.filename
+    else:
+        source_name = filename
+
+    extension = Path(source_name).suffix if source_name else ".mp4"
+    file_path = replay_dir / f"{uuid.uuid4().hex}{extension}"
+
+    try:
+        if source_url is not None:
+            await _download_url_to_file(source_url, file_path)
+        elif video is not None:
+            await _write_upload_file(video, file_path)
+        else:
+            await _write_request_stream(request, file_path)
+    except httpx.HTTPError as e:
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to download replay video from URL: {e}",
+        )
+    except Exception:
+        file_path.unlink(missing_ok=True)
+        raise
 
     try:
         camera.add_replay_video(stream_name, str(file_path))
