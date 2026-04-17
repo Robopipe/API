@@ -116,11 +116,12 @@ export const ModelSwitcher = () => {
   return (
     <>
       <button
-        className="py-3 px-4 bg-gray-700 rounded-xl flex items-center gap-2 shrink-0"
+        className="py-3 px-3 md:px-4 bg-gray-700 rounded-xl flex items-center gap-2 shrink-0"
         onClick={() => setOpen((prev) => !prev)}
+        title="Switch model"
       >
         <SwitchIcon />
-        <span>Switch model</span>
+        <span className="hidden md:inline">Switch model</span>
       </button>
 
       <Sidebar open={open} onClose={() => setOpen(false)}>

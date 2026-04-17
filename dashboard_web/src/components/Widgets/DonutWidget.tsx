@@ -9,10 +9,12 @@ export interface DonutWidgetProps {
   defaultColor?: string;
   /** Donut outer size in px (default 140) */
   size?: number;
-  /** Ring stroke width in px (default 12) */
+  /** Ring stroke width in px (derived from size when omitted) */
   strokeWidth?: number;
   /** Override the center label (defaults to zone_name from status) */
   primaryLabel?: string;
+  /** When false, the name label below the donut is hidden (used at very small sizes) */
+  showName?: boolean;
 }
 
 export const DonutWidget = ({
@@ -21,13 +23,19 @@ export const DonutWidget = ({
   displayMode = "failures",
   defaultColor = "#20a963",
   size = 140,
-  strokeWidth = 12,
+  strokeWidth,
   primaryLabel,
+  showName = true,
 }: DonutWidgetProps) => {
-  const radius = (size - strokeWidth) / 2;
+  const stroke = strokeWidth ?? Math.max(4, Math.round(size * 0.086));
+  const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const innerContentWidth = Math.round(size * 0.6);
-  const isLarge = size > 160;
+
+  const primaryFontSize = Math.max(10, Math.round(size * 0.11));
+  const secondaryFontSize = Math.max(9, Math.round(size * 0.085));
+  const nameFontSize = Math.max(10, Math.round(size * 0.095));
+  const warningSize = Math.max(10, Math.round(size * 0.1));
 
   const failures = status?.failures ?? 0;
   const total = status?.total ?? 0;
@@ -41,28 +49,28 @@ export const DonutWidget = ({
   const secondaryMetric = () => {
     if (displayMode === "pass_rate") {
       return (
-        <span className={`${isLarge ? "text-base" : "text-sm"} text-gray-400`}>
+        <span className="text-gray-400" style={{ fontSize: secondaryFontSize }}>
           {(passRate * 100).toFixed(1)}%
         </span>
       );
     }
     if (displayMode === "failures_of_total") {
       return (
-        <span className={`${isLarge ? "text-base" : "text-sm"} text-gray-400`}>
+        <span className="text-gray-400" style={{ fontSize: secondaryFontSize }}>
           {failures}/{total}
         </span>
       );
     }
     // default: "failures"
     return (
-      <span className={`${isLarge ? "text-base" : "text-sm"} text-gray-400`}>
+      <span className="text-gray-400" style={{ fontSize: secondaryFontSize }}>
         {failures} fail
       </span>
     );
   };
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-2" title={name}>
       <div className="relative" style={{ width: size, height: size }}>
         <svg
           width={size}
@@ -77,7 +85,7 @@ export const DonutWidget = ({
             r={radius}
             fill="none"
             stroke="#374151"
-            strokeWidth={strokeWidth}
+            strokeWidth={stroke}
           />
           {/* Foreground ring */}
           <circle
@@ -86,11 +94,11 @@ export const DonutWidget = ({
             r={radius}
             fill="none"
             stroke={zoneColor}
-            strokeWidth={strokeWidth}
+            strokeWidth={stroke}
             strokeDasharray={circumference}
             strokeDashoffset={fillOffset}
             strokeLinecap="round"
-            className="transition-all duration-500"
+            style={{ transition: "stroke-dashoffset 500ms" }}
           />
         </svg>
         {/* Center content */}
@@ -100,16 +108,19 @@ export const DonutWidget = ({
             style={{ width: innerContentWidth }}
           >
             <span
-              className={`${isLarge ? "text-xl" : "text-base"} font-bold text-white px-1 rounded leading-snug text-center w-full`}
-              style={{ backgroundColor: zoneColor + "33" }}
+              className="font-bold text-white px-1 rounded leading-snug text-center w-full truncate"
+              style={{
+                backgroundColor: zoneColor + "33",
+                fontSize: primaryFontSize,
+              }}
             >
               {primaryLabel ?? status?.zone_name ?? "—"}
             </span>
             {secondaryMetric()}
             {showWarning && (
               <svg
-                width="14"
-                height="14"
+                width={warningSize}
+                height={warningSize}
                 viewBox="0 0 24 24"
                 fill="none"
               >
@@ -134,11 +145,14 @@ export const DonutWidget = ({
           </div>
         </div>
       </div>
-      <span
-        className={`${isLarge ? "text-base" : "text-sm"} text-white font-medium text-center`}
-      >
-        {name}
-      </span>
+      {showName && (
+        <span
+          className="text-white font-medium text-center max-w-full truncate px-1"
+          style={{ fontSize: nameFontSize, maxWidth: size * 1.4 }}
+        >
+          {name}
+        </span>
+      )}
     </div>
   );
 };

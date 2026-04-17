@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+body.is-resizing-panels {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+body.is-resizing-panels * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 @theme {
   --color-*: initial;
 

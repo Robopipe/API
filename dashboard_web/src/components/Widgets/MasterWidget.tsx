@@ -23,6 +23,8 @@ export interface MasterWidgetProps {
   displayMode: MasterDisplayMode;
   onToggleVisible: () => void;
   onSetDisplayMode: (mode: MasterDisplayMode) => void;
+  /** Explicit donut size in px. Required for the widget to render at measured scale. */
+  size?: number;
 }
 
 export const MasterWidget = ({
@@ -32,6 +34,7 @@ export const MasterWidget = ({
   displayMode,
   onToggleVisible,
   onSetDisplayMode,
+  size,
 }: MasterWidgetProps) => {
   const hasMasterThresholds =
     (window.DASHBOARD_CONFIG.thresholds?.length ?? 0) > 0;
@@ -73,8 +76,7 @@ export const MasterWidget = ({
         status={status}
         displayMode="pass_rate"
         defaultColor={getMasterDefaultColor()}
-        size={200}
-        strokeWidth={16}
+        size={size && size > 0 ? size : 200}
         primaryLabel={primaryLabel}
       />
       {editMode && (

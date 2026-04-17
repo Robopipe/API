@@ -55,13 +55,17 @@ export const Header = () => {
 
   useEffect(() => {
     if (!menuOpen) return;
-    const handleClick = (e: MouseEvent) => {
+    const handleOutside = (e: Event) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
   }, [menuOpen]);
 
   const labelText =
@@ -89,21 +93,19 @@ export const Header = () => {
         {running ? "Stop" : "Start"}
       </button>
       <div
-        className={`py-3 px-6 bg-white/5 rounded-xl flex-1 flex items-center relative select-none ${labelText ? "justify-between" : "justify-center"}`}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setMenuOpen((prev) => !prev);
-        }}
+        ref={menuRef}
+        className={`py-3 px-4 sm:px-6 bg-white/5 hover:bg-white/10 rounded-xl flex-1 min-w-0 flex items-center gap-3 relative select-none cursor-pointer transition-colors ${labelText ? "justify-between" : "justify-center"}`}
+        onClick={() => setMenuOpen((prev) => !prev)}
       >
         {labelText && (
-          <span className="shrink-0 text-base">{labelText}</span>
+          <span className="min-w-0 flex-1 truncate text-base">{labelText}</span>
         )}
         <span className="font-mono shrink-0 text-base">{elapsed}</span>
 
         {menuOpen && (
           <div
-            ref={menuRef}
             className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-gray-800 border border-gray-700 rounded-xl p-2 z-50 min-w-40 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
           >
             {TIMER_LABEL_OPTIONS.map((option) => (
               <button
