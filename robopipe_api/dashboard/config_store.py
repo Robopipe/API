@@ -85,7 +85,6 @@ class DashboardConfigStore:
 
         metadata = json.loads(meta_path.read_text())
         dashboard_config = DashboardConfig.model_validate(metadata["dashboard_config"])
-        print(metadata["nn_config"])
         nn_config = NNConfig.model_validate(metadata["nn_config"])
 
         # Find the model file (could be .blob, .tar.xz, or .tar.gz)

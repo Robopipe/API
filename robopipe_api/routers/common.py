@@ -45,7 +45,6 @@ def get_sensor(camera: CameraDep, stream_name: StreamName):
             status.HTTP_404_NOT_FOUND,
             detail=f"Stream {stream_name} not found for camera {camera.mxid}",
         )
-    print(sensor)
     return sensor
 
 
