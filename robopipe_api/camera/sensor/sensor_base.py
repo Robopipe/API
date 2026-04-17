@@ -12,9 +12,13 @@ import av
 
 
 from ...models.dashboard.dashboard_config import DashboardConfig
+from ...models.detection.bbox_detection import BBoxDetection, BBoxDetections
 from ...models.nn_config import NNConfig
+from ...models.sahi_config import SAHIConfig
+from ...utils.detections_parser import parse_detections
 from ...utils.image import img_frame_to_video_frame
 from ..pipeline.pipeline_queue_type import PipelineQueueType
+from ..sahi import Tile, remap_tile_detections, nms_merge
 from .sensor_config import SensorConfigProperties
 from .sensor_control import SensorControl
 
@@ -36,6 +40,15 @@ class SensorBase(ABC):
         self.last_frame: av.VideoFrame | None = None
         self._video_seq: int = -1
         self._video_seq_cond = threading.Condition()
+
+        # SAHI state
+        self._sahi_tile_queue: dai.MessageQueue | None = None
+        self._sahi_manip_cfg: dai.InputQueue | None = None
+        self._sahi_tiles: list[Tile] = []
+        self._sahi_config: SAHIConfig | None = None
+        self._sahi_model_input_size: tuple[int, int] = (0, 0)
+        self._sahi_tile_index: int = 0
+        self._sahi_tile_cache: list[list[BBoxDetection]] = []
 
     @property
     @abstractmethod
@@ -134,6 +147,14 @@ class SensorBase(ABC):
 
         return (passthrough_frame, detections)
 
+    @property
+    def sahi_enabled(self) -> bool:
+        return (
+            self._sahi_config is not None
+            and self._sahi_tile_queue is not None
+            and len(self._sahi_tiles) > 0
+        )
+
     def get_nn_detections(
         self,
     ) -> dai.ImgDetections | Classifications | ImgDetectionsExtended:
@@ -156,3 +177,58 @@ class SensorBase(ABC):
         #     )
 
         return detections
+
+    def get_merged_sahi_detections(self) -> tuple[BBoxDetections, int, dict]:
+        # Full-frame detections (blocking — tiles should be ready after this)
+        full_frame_raw = self.get_nn_detections()
+        seq = full_frame_raw.getSequenceNum()
+        full_frame_parsed = parse_detections(full_frame_raw)
+        full_frame_count = len(full_frame_parsed.detections)
+        all_dets = list(full_frame_parsed.detections)
+
+        # Grab the tile detection for the current tile (non-blocking)
+        tile_raw = self._sahi_tile_queue.tryGet()
+        tile_got_result = tile_raw is not None
+        if tile_raw is not None:
+            tile = self._sahi_tiles[self._sahi_tile_index]
+            tile_parsed = parse_detections(tile_raw)
+            remapped = remap_tile_detections(
+                BBoxDetections(detections=list(tile_parsed.detections)),
+                tile,
+            )
+            self._sahi_tile_cache[self._sahi_tile_index] = remapped
+
+        # Advance to next tile and reconfigure ImageManip crop
+        self._sahi_tile_index = (
+            (self._sahi_tile_index + 1) % len(self._sahi_tiles)
+        )
+        next_tile = self._sahi_tiles[self._sahi_tile_index]
+        cfg = dai.ImageManipConfig()
+        crop_rect = dai.Rect(
+            dai.Point2f(next_tile.x1, next_tile.y1),
+            dai.Point2f(next_tile.x2, next_tile.y2),
+        )
+        cfg.addCrop(crop_rect, True)
+        cfg.setOutputSize(
+            self._sahi_model_input_size[0],
+            self._sahi_model_input_size[1],
+        )
+        cfg.setFrameType(dai.ImgFrame.Type.BGR888i)
+        self._sahi_manip_cfg.send(cfg)
+
+        # Merge full-frame + all cached tile detections
+        tile_det_count = 0
+        for cached in self._sahi_tile_cache:
+            all_dets.extend(cached)
+            tile_det_count += len(cached)
+
+        merged = nms_merge(all_dets, self._sahi_config.nms_iou_threshold)
+        sahi_info = {
+            "full_frame_dets": full_frame_count,
+            "tile_dets_cached": tile_det_count,
+            "merged_dets": len(merged),
+            "tile_nn_produced": tile_got_result,
+            "current_tile": self._sahi_tile_index,
+            "total_tiles": len(self._sahi_tiles),
+        }
+        return BBoxDetections(detections=merged), seq, sahi_info

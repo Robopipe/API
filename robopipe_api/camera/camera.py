@@ -99,6 +99,26 @@ class Camera:
 
                 self.sensors[sensor_name] = sensor
 
+                # Propagate SAHI state from pipeline to sensor
+                if (
+                    isinstance(self.pipeline, NNPipeline)
+                    and sensor_name in self.pipeline.sahi_tile_queue
+                ):
+                    sensor._sahi_tile_queue = self.pipeline.sahi_tile_queue[
+                        sensor_name
+                    ]
+                    sensor._sahi_manip_cfg = self.pipeline.sahi_manip_cfg[
+                        sensor_name
+                    ]
+                    sensor._sahi_tiles = self.pipeline.sahi_tiles[sensor_name]
+                    sensor._sahi_config = self.pipeline.sahi_configs[sensor_name]
+                    sensor._sahi_model_input_size = (
+                        self.pipeline.sahi_model_input_sizes[sensor_name]
+                    )
+                    sensor._sahi_tile_cache = [
+                        [] for _ in self.pipeline.sahi_tiles[sensor_name]
+                    ]
+
                 if sensor_name in existing_sensors:
                     existing_sensor = existing_sensors[sensor_name]
                     sensor.control = existing_sensor.control
