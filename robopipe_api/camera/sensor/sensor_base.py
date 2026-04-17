@@ -54,6 +54,10 @@ class SensorBase(ABC):
     def control(self, value: SensorControl) -> SensorControl: ...
 
     @property
+    @abstractmethod
+    def features(self) -> dai.CameraFeatures: ...
+
+    @property
     def nn_config(self) -> NNConfig | None:
         return self._nn_config
 
@@ -84,7 +88,10 @@ class SensorBase(ABC):
     def dashboard_run_session_id(self, value: int | None):
         self._dashboard_run_session_id = value
 
-    def __extract_img_properties(self, img: dai.ImgFrame):
+    def on_frame(self, img: dai.ImgFrame) -> None:
+        pass
+
+    def refresh_control_from_frame(self) -> None:
         pass
 
     def capture_still(self) -> dai.EncodedFrame:
@@ -96,18 +103,12 @@ class SensorBase(ABC):
         img_frame: dai.ImgFrame | None = video_queue.tryGet()
 
         if img_frame:
+            self.on_frame(img_frame)
             self.last_frame = img_frame_to_video_frame(img_frame)
-            # seq = img_frame.getSequenceNum()
-            # with self._video_seq_cond:
-            #     self._video_seq = seq
-            #     self._video_seq_cond.notify_all()
         elif self.last_frame is None:
             img_frame = video_queue.get()
+            self.on_frame(img_frame)
             self.last_frame = img_frame_to_video_frame(img_frame)
-            # seq = img_frame.getSequenceNum()
-            # with self._video_seq_cond:
-            #     self._video_seq = seq
-            #     self._video_seq_cond.notify_all()
 
         return self.last_frame
 

@@ -2,7 +2,6 @@ import depthai as dai
 
 from typing import Callable
 
-from ..pipeline.pipeline_queue_type import PipelineQueueType
 from .sensor import Sensor
 from .sensor_config import SensorConfig, SensorConfigProperties
 
@@ -10,13 +9,14 @@ from .sensor_config import SensorConfig, SensorConfigProperties
 class DepthSensor(Sensor):
     def __init__(
         self,
+        sensor_features: dai.CameraFeatures,
         sensor_nodes: tuple[dai.node.Camera, dai.node.Camera],
         input_queues: dict,
         output_queues: dict,
         restart_pipeline: Callable[[], None],
     ):
         super().__init__(
-            dai.CameraFeatures(),
+            sensor_features,
             sensor_nodes[0],
             input_queues,
             output_queues,
