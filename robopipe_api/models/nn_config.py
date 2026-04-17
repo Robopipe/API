@@ -1,6 +1,7 @@
 from enum import Enum
 
 from .base_model import BaseModel
+from .sahi_config import SAHIConfig
 
 
 class NNType(Enum):
@@ -11,6 +12,7 @@ class NNType(Enum):
 
 class NNGenericConfig(BaseModel):
     use_parser: bool = True
+    sahi_config: SAHIConfig | None = None
 
 
 class NNConfig(BaseModel):
