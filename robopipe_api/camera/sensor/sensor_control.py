@@ -78,7 +78,6 @@ class SensorControl(BaseModel):
 
     @classmethod
     def from_camera_control(cls, ctrl: dai.CameraControl, has_af: bool):
-        print(ctrl)
         properties = {
             "contrast": ctrl.contrast,
             "brightness": ctrl.brightness,
