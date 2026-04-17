@@ -1,283 +1,33 @@
-import os
-import tempfile
-import uuid
-
-import depthai as dai
-import httpx
-from fastapi import (
-    APIRouter,
-    Form,
-    HTTPException,
-    WebSocket,
-    UploadFile,
-    status,
-    Request,
-)
-from aiortc import RTCSessionDescription, RTCPeerConnection
-import anyio
-import anyio.to_thread
-from fastapi.responses import Response, HTMLResponse
-from pathlib import Path
-from urllib.parse import urlparse
-from bs4 import BeautifulSoup
 import json
+import uuid
+from pathlib import Path
 
+import anyio.to_thread
+from bs4 import BeautifulSoup
+from fastapi import Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import HTMLResponse, Response
+
+from robopipe_api.dashboard.config_store import config_store_factory
 from robopipe_api.dashboard.dashboard_handler import (
-    handle_detections,
-    reset_line_crossing,
     _threshold_tracker,
+    reset_line_crossing,
 )
 from robopipe_api.dashboard.events_store import events_store_factory
-from robopipe_api.dashboard.config_store import config_store_factory
 
-from ..camera.sensor.sensor_config import SensorConfigProperties
-from ..camera.sensor.sensor_control import SensorControl
-from ..models.sensor_control import SensorControlUpdate
-from ..models.batch_stream_update import BatchStreamUpdate
-from ..models.stream_info import StreamInfo
-from ..models.dashboard.dashboard_config import DashboardConfigUpdate
-from ..models.dashboard.detection_event import DetectionEvent
-from ..paths import get_data_dir
-from ..utils.detections_parser import parse_detections
-from .common import (
+from ...models.dashboard.dashboard_config import DashboardConfigUpdate
+from ...models.dashboard.detection_event import DetectionEvent
+from ...paths import get_data_dir
+from ..common import (
     CameraDep,
+    DashboardConfigsListDep,
     EventsStoreDep,
+    Mxid,
     SensorDep,
     StreamName,
-    NNConfigDep,
-    DashboardConfigsListDep,
-    VideoRelayDep,
-    VideoTrackDep,
-    WebRTCManagerDep,
-    WSRelayDep,
     SyncTaskDep,
-    Mxid,
 )
-
-router = APIRouter(
-    prefix="/cameras/{mxid}/streams",
-    tags=["streams"],
-    responses={404: {"description": "Camera not found"}},
-)
-
-
-@router.get("/")
-def list_all_streams(camera: CameraDep) -> list[StreamInfo]:
-    get_sensor_info = lambda sensor: StreamInfo(
-        name=sensor,
-        active=(sensor in camera.sensors),
-        replay=(sensor in camera._replay_video_paths),
-    )
-    sensors = list(map(get_sensor_info, camera.all_sensors.keys()))
-
-    return sensors
-
-
-@router.patch("/")
-def batch_update_streams(
-    camera: CameraDep, update: BatchStreamUpdate
-) -> list[StreamInfo]:
-    try:
-        camera.batch_update_sensors(update.activate, update.deactivate)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
-        )
-    except RuntimeError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
-        )
-
-    get_sensor_info = lambda sensor: StreamInfo(
-        name=sensor,
-        active=(sensor in camera.sensors),
-        replay=(sensor in camera._replay_video_paths),
-    )
-    return list(map(get_sensor_info, camera.all_sensors.keys()))
-
-
-stream_router = APIRouter(
-    prefix="/{stream_name}",
-    tags=["streams"],
-    responses={404: {"description": "Camera or stream not found"}},
-)
-
-
-class JpegResponse(Response):
-    media_type = "image/jpeg"
-
-
-@stream_router.post("/", status_code=status.HTTP_201_CREATED)
-def activate_stream(camera: CameraDep, stream_name: StreamName):
-    camera.activate_sensor(stream_name)
-
-
-@stream_router.delete("/", status_code=status.HTTP_202_ACCEPTED)
-def deactivate_stream(camera: CameraDep, stream_name: StreamName):
-    camera.deactivate_sensor(stream_name)
-
-
-@stream_router.get("/config")
-def get_stream_config(sensor: SensorDep) -> SensorConfigProperties:
-    return sensor.config
-
-
-@stream_router.post("/config")
-def update_stream_config(
-    sensor: SensorDep, config: SensorConfigProperties
-) -> SensorConfigProperties:
-    sensor.config = config
-
-    return sensor.config
-
-
-@stream_router.get("/control")
-def get_stream_control(sensor: SensorDep) -> SensorControl:
-    return sensor.control
-
-
-@stream_router.post("/control")
-def update_stream_control(
-    sensor: SensorDep, control: SensorControlUpdate
-) -> SensorControl:
-    updated_control = sensor.control.model_copy(
-        update=control.model_dump(exclude_unset=True, exclude_none=True)
-    )
-    sensor.control = SensorControl.model_validate(updated_control)
-
-    return sensor.control
-
-
-@stream_router.get(
-    "/still",
-    response_description="Image bytes in JPEG format",
-    response_class=JpegResponse,
-    responses={
-        200: {
-            "content": {
-                "image/jpeg": {"schema": {"type": "string", "format": "binary"}}
-            },
-            "description": "Image bytes in JPEG format",
-        }
-    },
-)
-async def capture_still_image(sensor: SensorDep) -> JpegResponse:
-    img = await anyio.to_thread.run_sync(sensor.capture_still)
-
-    return JpegResponse(img.getData().tobytes())
-
-
-@stream_router.get("/nn", tags=["nn"])
-def get_neural_network(sensor: SensorDep):
-    return sensor.nn_config
-
-
-def _load_model_blob_from_bytes(
-    model_bytes: bytes, filename: str
-) -> "dai.OpenVINO.Blob | dai.NNArchive":
-    """Load a model blob from raw bytes, handling both .blob and .tar.xz/.tar.gz formats."""
-    if filename.endswith(".tar.xz") or filename.endswith(".tar.gz"):
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=filename[filename.rfind(".tar") :]
-        ) as tmp:
-            tmp.write(model_bytes)
-            tmp_path = tmp.name
-        try:
-            return dai.NNArchive(tmp_path)
-        finally:
-            os.unlink(tmp_path)
-    else:
-        return dai.OpenVINO.Blob(list(model_bytes))
-
-
-def _load_model_blob_from_path(
-    model_path: str,
-) -> "dai.OpenVINO.Blob | dai.NNArchive":
-    """Load a model blob from a file path on disk."""
-    if model_path.endswith(".tar.xz") or model_path.endswith(".tar.gz"):
-        return dai.NNArchive(model_path)
-    else:
-        with open(model_path, "rb") as f:
-            return dai.OpenVINO.Blob(list(f.read()))
-
-
-@stream_router.post("/nn", status_code=status.HTTP_201_CREATED, tags=["nn"])
-async def deploy_neural_network(
-    camera: CameraDep,
-    stream_name: StreamName,
-    model: UploadFile,
-    config: NNConfigDep,
-    sensor: SensorDep,
-):
-    model_bytes = await model.read()
-    filename = model.filename or ""
-    blob = _load_model_blob_from_bytes(model_bytes, filename)
-
-    sensor.nn_config = config
-    camera.deploy_nn(stream_name, blob, config)
-
-
-@stream_router.delete("/nn", status_code=status.HTTP_202_ACCEPTED, tags=["nn"])
-async def delete_neural_network(camera: CameraDep, stream_name: StreamName):
-    camera.delete_nn(stream_name)
-
-
-@stream_router.websocket("/nn")
-async def get_sensor_detections(
-    ws: WebSocket,
-    camera: CameraDep,
-    mxid: Mxid,
-    stream_name: StreamName,
-    relay: WSRelayDep,
-):
-    await ws.accept()
-
-    def producer():
-        sensor = camera.sensors.get(stream_name)
-        if sensor is None:
-            raise RuntimeError(f"Sensor {stream_name} no longer available")
-        detections = sensor.get_nn_detections()
-        seq = detections.getSequenceNum()
-        parsed_detections = parse_detections(detections)
-        result = handle_detections(
-            sensor.dashboard_config, parsed_detections, sensor.dashboard_run_session_id
-        )
-        result["seq"] = seq
-        return result
-
-    await relay.subscribe(key=(mxid, stream_name, "nn"), ws=ws, producer=producer)
-
-
-@stream_router.post("/video")
-async def stream_video_offer(
-    req: Request,
-    video_track: VideoTrackDep,
-    video_relay: VideoRelayDep,
-    webrtc_manager: WebRTCManagerDep,
-):
-    params = await req.json()
-    rtc_offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
-    pc = RTCPeerConnection()
-    webrtc_manager.add_pc(pc)
-    pc.addTrack(video_relay.subscribe(video_track))
-    await pc.setRemoteDescription(rtc_offer)
-
-    @pc.on("iceconnectionstatechange")
-    async def on_iceconnectionstatechange():
-        if pc.iceConnectionState in ("failed", "disconnected", "closed"):
-            await webrtc_manager.remove_pc(pc)
-
-    @pc.on("connectionstatechange")
-    async def on_connectionstatechange():
-        if pc.connectionState in ("failed", "disconnected", "closed"):
-            await webrtc_manager.remove_pc(pc)
-
-    answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-
-    return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+from . import JpegResponse, stream_router
+from .nn import _load_model_blob_from_path
 
 
 @stream_router.get("/dashboard", response_class=HTMLResponse)
@@ -288,7 +38,7 @@ def serve_dashboard(
         return Response("No dashboard configured for this stream", status_code=404)
 
     dashboard_index = (
-        Path(__file__).parent.parent / "static" / "dashboard" / "index.html"
+        Path(__file__).parent.parent.parent / "static" / "dashboard" / "index.html"
     )
     soup = BeautifulSoup(dashboard_index.read_text(), "html.parser")
     head = soup.head
@@ -618,123 +368,3 @@ def get_event_picture(event_id: int, events_store: EventsStoreDep):
         raise HTTPException(status_code=404, detail="Picture file not found")
 
     return JpegResponse(file_path.read_bytes())
-
-
-REPLAY_UPLOAD_CHUNK_SIZE = 1 << 20  # 1 MiB
-
-
-async def _write_request_stream(request: Request, dest: Path) -> None:
-    f = await anyio.to_thread.run_sync(lambda: dest.open("wb"))
-    try:
-        async for chunk in request.stream():
-            if chunk:
-                await anyio.to_thread.run_sync(f.write, chunk)
-    finally:
-        await anyio.to_thread.run_sync(f.close)
-
-
-async def _write_upload_file(video: UploadFile, dest: Path) -> None:
-    f = await anyio.to_thread.run_sync(lambda: dest.open("wb"))
-    try:
-        while True:
-            chunk = await video.read(REPLAY_UPLOAD_CHUNK_SIZE)
-            if not chunk:
-                break
-            await anyio.to_thread.run_sync(f.write, chunk)
-    finally:
-        await anyio.to_thread.run_sync(f.close)
-
-
-async def _download_url_to_file(source_url: str, dest: Path) -> None:
-    f = await anyio.to_thread.run_sync(lambda: dest.open("wb"))
-    try:
-        async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
-            async with client.stream("GET", source_url) as response:
-                response.raise_for_status()
-                async for chunk in response.aiter_bytes(REPLAY_UPLOAD_CHUNK_SIZE):
-                    if chunk:
-                        await anyio.to_thread.run_sync(f.write, chunk)
-    finally:
-        await anyio.to_thread.run_sync(f.close)
-
-
-@stream_router.post("/replay", status_code=status.HTTP_201_CREATED)
-async def add_replay_video(
-    request: Request,
-    camera: CameraDep,
-    stream_name: StreamName,
-    filename: str | None = None,
-):
-    replay_dir = get_data_dir() / "replay_videos"
-    replay_dir.mkdir(parents=True, exist_ok=True)
-
-    content_type = request.headers.get("content-type", "")
-    is_multipart = content_type.startswith("multipart/form-data")
-    is_json = content_type.startswith("application/json")
-
-    video: UploadFile | None = None
-    source_url: str | None = None
-    if is_json:
-        payload = await request.json()
-        if not isinstance(payload, dict):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="JSON body must be an object",
-            )
-        source_url = payload.get("url")
-        if not isinstance(source_url, str) or not source_url:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Missing 'url' field in JSON body",
-            )
-        explicit_name = payload.get("filename")
-        source_name = (
-            explicit_name if isinstance(explicit_name, str) and explicit_name
-            else urlparse(source_url).path
-        )
-    elif is_multipart:
-        form = await request.form()
-        form_video = form.get("video")
-        if not isinstance(form_video, UploadFile):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Missing 'video' file field",
-            )
-        video = form_video
-        source_name = video.filename
-    else:
-        source_name = filename
-
-    extension = Path(source_name).suffix if source_name else ".mp4"
-    file_path = replay_dir / f"{uuid.uuid4().hex}{extension}"
-
-    try:
-        if source_url is not None:
-            await _download_url_to_file(source_url, file_path)
-        elif video is not None:
-            await _write_upload_file(video, file_path)
-        else:
-            await _write_request_stream(request, file_path)
-    except httpx.HTTPError as e:
-        file_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to download replay video from URL: {e}",
-        )
-    except Exception:
-        file_path.unlink(missing_ok=True)
-        raise
-
-    try:
-        camera.add_replay_video(stream_name, str(file_path))
-    except (ValueError, RuntimeError):
-        file_path.unlink(missing_ok=True)
-        raise
-
-
-@stream_router.delete("/replay", status_code=status.HTTP_202_ACCEPTED)
-def remove_replay_video(camera: CameraDep, stream_name: StreamName):
-    camera.remove_replay_video(stream_name)
-
-
-router.include_router(stream_router)
