@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 from ...camera.sensor.sensor_config import SensorConfigProperties
 from ...camera.sensor.sensor_control import SensorControl
 from ...models.batch_stream_update import BatchStreamUpdate
-from ...models.sensor_control import SensorControlUpdate
+from ...models.sensor_control import SensorControlCapabilities, SensorControlUpdate
 from ...models.stream_info import StreamInfo
 from ..common import CameraDep, SensorDep, StreamName
 from . import router, stream_router
@@ -75,13 +75,34 @@ def get_stream_control(sensor: SensorDep) -> SensorControl:
     return sensor.control
 
 
+@stream_router.get("/control/capabilities")
+def get_stream_control_capabilities(
+    sensor: SensorDep,
+) -> SensorControlCapabilities:
+    return SensorControlCapabilities.from_features(sensor.features)
+
+
 @stream_router.post("/control")
 def update_stream_control(
     sensor: SensorDep, control: SensorControlUpdate
 ) -> SensorControl:
-    updated_control = sensor.control.model_copy(
-        update=control.model_dump(exclude_unset=True, exclude_none=True)
-    )
+    update_dict = control.model_dump(exclude_unset=True, exclude_none=True)
+    capabilities = SensorControlCapabilities.from_features(sensor.features)
+    unsupported = capabilities.unsupported_fields(update_dict)
+    if unsupported:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Fields not supported by this sensor: {', '.join(unsupported)}",
+        )
+
+    updated_control = sensor.control.model_copy(update=update_dict)
     sensor.control = SensorControl.model_validate(updated_control)
 
+    return sensor.control
+
+
+@stream_router.post("/control/reset")
+def reset_stream_control(sensor: SensorDep) -> SensorControl:
+    sensor.control = SensorControl.default_for(sensor.features)
+    sensor.refresh_control_from_frame()
     return sensor.control

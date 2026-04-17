@@ -1,6 +1,7 @@
+import datetime
+
 import depthai as dai
 
-import math
 from typing import Callable
 
 from ...log import logger
@@ -11,6 +12,8 @@ from .sensor_base import SensorBase
 
 
 class Sensor(SensorBase):
+    INITIAL_SYNC_TIMEOUT = datetime.timedelta(seconds=1)
+
     def __init__(
         self,
         sensor_features: dai.CameraFeatures,
@@ -21,11 +24,27 @@ class Sensor(SensorBase):
     ):
         super().__init__(input_queues, output_queues, restart_pipeline)
 
+        self._sensor_features = sensor_features
         self.sensor_node = sensor_node
         self._config = SensorConfig(self.sensor_node)
-        self._control = SensorControl.from_camera_control(
-            self.sensor_node.initialControl, sensor_features.hasAutofocusIC
-        )
+        self._control = SensorControl.default_for(sensor_features)
+        self.refresh_control_from_frame()
+
+    def refresh_control_from_frame(self) -> None:
+        video_queue = self.output_queues.get(PipelineQueueType.VIDEO)
+        if video_queue is None:
+            return
+        try:
+            img = video_queue.get(timeout=self.INITIAL_SYNC_TIMEOUT)
+        except Exception as e:
+            logger.debug(f"Control state refresh failed: {e}")
+            return
+        if img is not None:
+            self.on_frame(img)
+
+    @property
+    def features(self) -> dai.CameraFeatures:
+        return self._sensor_features
 
     @property
     def config(self) -> SensorConfigProperties:
@@ -45,14 +64,7 @@ class Sensor(SensorBase):
         self._control = value
         control_queue = self.input_queues.get(PipelineQueueType.CONTROL)
         if control_queue is not None:
-            control_queue.send(self._control.to_camera_control())
+            control_queue.send(self._control.to_camera_control(self._sensor_features))
 
-    def __extract_img_properties(self, img: dai.ImgFrame):
-        self._control.sensitivity_iso = img.getSensitivity()
-        self._control.exposure_time = math.floor(
-            img.getExposureTime().total_seconds() * 1000
-        )
-        self._control.manual_whitebalance = img.getColorTemperature()
-
-        if self._control.focus is not None:
-            self._control.focus.lens_position = img.getLensPositionRaw()
+    def on_frame(self, img: dai.ImgFrame) -> None:
+        self._control.update_from_frame(img)

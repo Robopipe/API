@@ -113,7 +113,9 @@ class Camera:
             return
 
         depth_name = self.pipeline.get_depth_name()
+        left_features = self.pipeline.stereo_pair[0]
         self.sensors[depth_name] = DepthSensor(
+            left_features,
             (self.pipeline.cam_left, self.pipeline.cam_right),
             self.__get_sensor_queues(depth_name, True),
             self.__get_sensor_queues(depth_name, False),
