@@ -1,25 +1,10 @@
+import { useAppState } from "../../provider";
 import type {
   DetectionDisplayMode,
   MultiLimitDisplayMode,
 } from "../../types";
-import type { Label } from "../../types/label";
-import { Sidebar } from "../../ui";
 
-interface CounterSidebarProps {
-  open: boolean;
-  onClose: () => void;
-  labels: Label[];
-  selectedLabelId: number | null;
-  onSelectLabel: (labelId: number) => void;
-  displayMode: DetectionDisplayMode;
-  onDisplayModeChange: (mode: DetectionDisplayMode) => void;
-  multiLimitMode: MultiLimitDisplayMode;
-  onMultiLimitModeChange: (mode: MultiLimitDisplayMode) => void;
-  hiddenLabelIds: Set<number>;
-  onToggleLabelVisibility: (labelId: number) => void;
-  zoneVisible: boolean;
-  onZoneVisibleChange: (visible: boolean) => void;
-}
+const labels = window.DASHBOARD_CONFIG.labels;
 
 const displayModeOptions: { value: DetectionDisplayMode; label: string }[] = [
   { value: "all", label: "All" },
@@ -72,23 +57,22 @@ const EyeOffIcon = () => (
   </svg>
 );
 
-export const CounterSidebar = ({
-  open,
-  onClose,
-  labels,
-  selectedLabelId,
-  onSelectLabel,
-  displayMode,
-  onDisplayModeChange,
-  multiLimitMode,
-  onMultiLimitModeChange,
-  hiddenLabelIds,
-  onToggleLabelVisibility,
-  zoneVisible,
-  onZoneVisibleChange,
-}: CounterSidebarProps) => {
+export const DisplayTab = () => {
+  const {
+    selectedLabelId,
+    setSelectedLabelId,
+    displayMode,
+    setDisplayMode,
+    multiLimitMode,
+    setMultiLimitMode,
+    hiddenLabelIds,
+    toggleLabelVisibility,
+    zoneVisible,
+    setZoneVisible,
+  } = useAppState();
+
   return (
-    <Sidebar open={open} onClose={onClose}>
+    <div className="flex flex-col">
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">
           Labels
@@ -103,7 +87,7 @@ export const CounterSidebar = ({
             <div key={label.id} className="flex items-stretch gap-2">
               <button
                 className="w-10 shrink-0 rounded-xl bg-gray-800 hover:bg-gray-700 border border-transparent text-gray-300 transition-colors cursor-pointer flex items-center justify-center"
-                onClick={() => onToggleLabelVisibility(label.id)}
+                onClick={() => toggleLabelVisibility(label.id)}
                 title={isVisible ? "Hide label" : "Show label"}
                 aria-label={isVisible ? "Hide label" : "Show label"}
               >
@@ -115,7 +99,7 @@ export const CounterSidebar = ({
                     ? "bg-emerald-500/20 border border-emerald-500/50 cursor-default"
                     : "bg-gray-800 hover:bg-gray-700 border border-transparent cursor-pointer"
                 } ${!isVisible ? "opacity-50" : ""}`}
-                onClick={() => onSelectLabel(label.id)}
+                onClick={() => setSelectedLabelId(label.id)}
                 disabled={isCounted}
               >
                 <span
@@ -148,7 +132,7 @@ export const CounterSidebar = ({
                   ? "bg-emerald-500/20 border border-emerald-500/50 cursor-default"
                   : "bg-gray-800 hover:bg-gray-700 border border-transparent cursor-pointer"
               }`}
-              onClick={() => onDisplayModeChange(opt.value)}
+              onClick={() => setDisplayMode(opt.value)}
               disabled={isActive}
             >
               {opt.label}
@@ -171,7 +155,7 @@ export const CounterSidebar = ({
                   ? "bg-emerald-500/20 border border-emerald-500/50 cursor-default"
                   : "bg-gray-800 hover:bg-gray-700 border border-transparent cursor-pointer"
               }`}
-              onClick={() => onMultiLimitModeChange(opt.value)}
+              onClick={() => setMultiLimitMode(opt.value)}
               disabled={isActive}
             >
               {opt.label}
@@ -194,7 +178,7 @@ export const CounterSidebar = ({
                   ? "bg-emerald-500/20 border border-emerald-500/50 cursor-default"
                   : "bg-gray-800 hover:bg-gray-700 border border-transparent cursor-pointer"
               }`}
-              onClick={() => onZoneVisibleChange(opt.value)}
+              onClick={() => setZoneVisible(opt.value)}
               disabled={isActive}
             >
               {opt.label}
@@ -202,6 +186,6 @@ export const CounterSidebar = ({
           );
         })}
       </div>
-    </Sidebar>
+    </div>
   );
 };

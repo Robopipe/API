@@ -135,18 +135,20 @@ export const Header = () => {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
-      <button
-        className={
-          "p-3 rounded-xl transition-colors bg-white/5" +
-          (wakeLock.enabled
-            ? " text-emerald-400 hover:text-emerald-300"
-            : " text-gray-400 hover:text-white")
-        }
-        onClick={wakeLock.toggle}
-        title="Wake Lock"
-      >
-        <WakeLockIcon size={20} />
-      </button>
+      {wakeLock.supported && (
+        <button
+          className={
+            "p-3 rounded-xl transition-colors bg-white/5" +
+            (wakeLock.enabled
+              ? " text-emerald-400 hover:text-emerald-300"
+              : " text-gray-400 hover:text-white")
+          }
+          onClick={wakeLock.toggle}
+          title="Wake Lock"
+        >
+          <WakeLockIcon size={20} />
+        </button>
+      )}
     </header>
   );
 };

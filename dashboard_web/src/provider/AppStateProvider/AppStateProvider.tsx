@@ -5,6 +5,10 @@ import type {
   TestCase,
 } from "../../types";
 import {
+  loadSelectedLabel,
+  saveSelectedLabel,
+} from "../../components/Counter/counterStorage";
+import {
   loadDisplayMode,
   loadHiddenLabelIds,
   loadMultiLimitMode,
@@ -28,6 +32,8 @@ export interface AppState {
   toggleLabelVisibility: (labelId: number) => void;
   zoneVisible: boolean;
   setZoneVisible: (visible: boolean) => void;
+  selectedLabelId: number | null;
+  setSelectedLabelId: (labelId: number) => void;
 }
 
 const noop = () => {};
@@ -44,6 +50,8 @@ const appState = createContext<AppState>({
   toggleLabelVisibility: noop,
   zoneVisible: true,
   setZoneVisible: noop,
+  selectedLabelId: null,
+  setSelectedLabelId: noop,
 });
 export const AppStateContext = appState;
 
@@ -53,6 +61,7 @@ export const AppStateProvider = ({
   children: React.ReactNode;
 }) => {
   const configId = window.DASHBOARD_CONFIG.configId;
+  const labels = window.DASHBOARD_CONFIG.labels;
   const testCaseMap = window.DASHBOARD_CONFIG.testCases.reduce(
     (acc, tc) => {
       acc[tc.id] = tc;
@@ -62,6 +71,11 @@ export const AppStateProvider = ({
   );
   const [state, setState] = useState<AppState>(() => {
     const { running, runningSince } = window.DASHBOARD_CONFIG;
+    const savedLabelId = loadSelectedLabel(configId);
+    const initialLabelId =
+      savedLabelId !== null && labels.some((l) => l.id === savedLabelId)
+        ? savedLabelId
+        : (labels[0]?.id ?? null);
     return {
       running,
       runningSince:
@@ -75,6 +89,8 @@ export const AppStateProvider = ({
       toggleLabelVisibility: noop,
       zoneVisible: loadZoneVisible(configId),
       setZoneVisible: noop,
+      selectedLabelId: initialLabelId,
+      setSelectedLabelId: noop,
     };
   });
 
@@ -115,6 +131,14 @@ export const AppStateProvider = ({
     [configId],
   );
 
+  const setSelectedLabelId = useCallback(
+    (labelId: number) => {
+      saveSelectedLabel(configId, labelId);
+      setState((prev) => ({ ...prev, selectedLabelId: labelId }));
+    },
+    [configId],
+  );
+
   const toggleRunning = async () => {
     const nextRunning = !state.running;
     const endpoint = nextRunning ? "start" : "stop";
@@ -145,6 +169,7 @@ export const AppStateProvider = ({
         setMultiLimitMode,
         toggleLabelVisibility,
         setZoneVisible,
+        setSelectedLabelId,
       }}
     >
       {children}

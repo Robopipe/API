@@ -1,6 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+// `document.featurePolicy` is deprecated but still implemented in Chromium and
+// is the only runtime way to detect a missing `screen-wake-lock` Permissions
+// Policy allowance (e.g. cross-origin iframe without `allow="screen-wake-lock"`).
+// Absent in other browsers — fall back to true so we don't over-hide the icon.
+interface LegacyFeaturePolicy {
+  allowsFeature(feature: string): boolean;
+}
+const featurePolicy: LegacyFeaturePolicy | undefined =
+  typeof document !== "undefined"
+    ? (document as unknown as { featurePolicy?: LegacyFeaturePolicy })
+        .featurePolicy
+    : undefined;
+
+const supported =
+  typeof window !== "undefined" &&
+  window.isSecureContext &&
+  "wakeLock" in navigator &&
+  (featurePolicy?.allowsFeature("screen-wake-lock") ?? true);
+
 export const useWakeLock = () => {
   const [enabled, setEnabled] = useState(false);
   const wantedRef = useRef(false);
@@ -62,5 +81,5 @@ export const useWakeLock = () => {
     };
   }, []);
 
-  return { enabled, toggle };
+  return { enabled, toggle, supported };
 };
