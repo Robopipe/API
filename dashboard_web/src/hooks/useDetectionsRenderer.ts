@@ -21,6 +21,8 @@ export interface UseDetectionsRendererOptions {
   enabled?: boolean;
   displayMode?: DetectionDisplayMode;
   multiLimitMode?: MultiLimitDisplayMode;
+  hiddenLabelIds?: Set<number>;
+  zoneVisible?: boolean;
 }
 
 export interface UseDetectionsRendererReturn {
@@ -68,6 +70,8 @@ export const useDetectionsRenderer = ({
   enabled = true,
   displayMode = "all",
   multiLimitMode = "highest",
+  hiddenLabelIds,
+  zoneVisible = true,
 }: UseDetectionsRendererOptions): UseDetectionsRendererReturn => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -105,12 +109,14 @@ export const useDetectionsRenderer = ({
       offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
 
       if (displayMode === "all") {
-        renderSegmentationMask(offCtx, labels, detections);
+        renderSegmentationMask(offCtx, labels, detections, hiddenLabelIds);
       }
 
       for (const detection of detections.detections) {
         if (detection.confidence < window.DASHBOARD_CONFIG.confidenceThreshold)
           continue;
+        const detectionLabel = labels[detection.label];
+        if (detectionLabel && hiddenLabelIds?.has(detectionLabel.id)) continue;
         const prepared = prepareDetectionForRender(
           detection,
           displayMode,
@@ -123,15 +129,25 @@ export const useDetectionsRenderer = ({
 
       // Single
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      renderZone(
-        offCtx,
-        window.DASHBOARD_CONFIG.zoneDirection,
-        window.DASHBOARD_CONFIG.zoneCenter,
-        window.DASHBOARD_CONFIG.zoneThickness,
-      );
+      if (zoneVisible) {
+        renderZone(
+          offCtx,
+          window.DASHBOARD_CONFIG.zoneDirection,
+          window.DASHBOARD_CONFIG.zoneCenter,
+          window.DASHBOARD_CONFIG.zoneThickness,
+        );
+      }
       ctx.drawImage(offscreen, 0, 0);
     },
-    [videoRef, enabled, getOffscreenCanvas, displayMode, multiLimitMode],
+    [
+      videoRef,
+      enabled,
+      getOffscreenCanvas,
+      displayMode,
+      multiLimitMode,
+      hiddenLabelIds,
+      zoneVisible,
+    ],
   );
 
   useEffect(() => {

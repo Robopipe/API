@@ -14,12 +14,21 @@ interface BorderInfo {
 }
 
 export const VideoStream = () => {
-  const { running, testCaseMap, displayMode, multiLimitMode } = useAppState();
+  const {
+    running,
+    testCaseMap,
+    displayMode,
+    multiLimitMode,
+    hiddenLabelIds,
+    zoneVisible,
+  } = useAppState();
   const { videoRef, isStreaming, error } = useWebRTCStream();
   const { renderDetections, canvasRef } = useDetectionsRenderer({
     videoRef,
     displayMode,
     multiLimitMode,
+    hiddenLabelIds,
+    zoneVisible,
   });
   const [borderInfo, setBorderInfo] = useState<BorderInfo | null>(null);
 

@@ -16,7 +16,7 @@ function App() {
       <main className="p-2 bg-gray-950 text-white w-full h-screen">
         <ResizablePanels
           className="w-full h-full"
-          defaultLeftPct={50}
+          defaultLeftPct={40}
           left={<LiveStream className="h-full" />}
           right={<Widgets className="h-full" />}
         />

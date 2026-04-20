@@ -8,6 +8,14 @@ function multiLimitKey(configId: number): string {
   return `robopipe_multi_limit_${configId}`;
 }
 
+function hiddenLabelsKey(configId: number): string {
+  return `robopipe_hidden_labels_${configId}`;
+}
+
+function zoneVisibleKey(configId: number): string {
+  return `robopipe_zone_visible_${configId}`;
+}
+
 const VALID_DISPLAY_MODES: DetectionDisplayMode[] = [
   "all",
   "detections_only",
@@ -49,4 +57,39 @@ export function saveMultiLimitMode(
   mode: MultiLimitDisplayMode,
 ): void {
   localStorage.setItem(multiLimitKey(configId), mode);
+}
+
+export function loadHiddenLabelIds(configId: number): Set<number> {
+  try {
+    const raw = localStorage.getItem(hiddenLabelsKey(configId));
+    if (raw === null) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    const ids = parsed.filter((v): v is number => typeof v === "number");
+    return new Set(ids);
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveHiddenLabelIds(
+  configId: number,
+  ids: Set<number>,
+): void {
+  localStorage.setItem(hiddenLabelsKey(configId), JSON.stringify([...ids]));
+}
+
+export function loadZoneVisible(configId: number): boolean {
+  try {
+    const raw = localStorage.getItem(zoneVisibleKey(configId));
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+  } catch {
+    // fall through to default
+  }
+  return true;
+}
+
+export function saveZoneVisible(configId: number, visible: boolean): void {
+  localStorage.setItem(zoneVisibleKey(configId), String(visible));
 }

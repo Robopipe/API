@@ -163,6 +163,7 @@ export const renderSegmentationMask = (
   ctx: CanvasRenderingContext2D,
   labels: Label[],
   detections: NNDetections,
+  hiddenLabelIds?: Set<number>,
 ) => {
   const masks = detections.masks;
   if (!masks) return;
@@ -187,6 +188,7 @@ export const renderSegmentationMask = (
       if (labelId === -1) continue; // background
       const detLabel = detections.detections[labelId];
       const label = labels[detLabel.label];
+      if (label && hiddenLabelIds?.has(label.id)) continue;
       const color = label.color;
       const r = parseInt(color.slice(1, 3), 16);
       const g = parseInt(color.slice(3, 5), 16);

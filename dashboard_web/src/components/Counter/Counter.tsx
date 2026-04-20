@@ -26,6 +26,10 @@ export const Counter = () => {
     setDisplayMode,
     multiLimitMode,
     setMultiLimitMode,
+    hiddenLabelIds,
+    toggleLabelVisibility,
+    zoneVisible,
+    setZoneVisible,
   } = useAppState();
   const [count, setCount] = useState(0);
   const [warnings, setWarnings] = useState(0);
@@ -97,6 +101,10 @@ export const Counter = () => {
         onDisplayModeChange={setDisplayMode}
         multiLimitMode={multiLimitMode}
         onMultiLimitModeChange={setMultiLimitMode}
+        hiddenLabelIds={hiddenLabelIds}
+        onToggleLabelVisibility={toggleLabelVisibility}
+        zoneVisible={zoneVisible}
+        onZoneVisibleChange={setZoneVisible}
       />
     </>
   );

@@ -6,9 +6,13 @@ import type {
 } from "../../types";
 import {
   loadDisplayMode,
+  loadHiddenLabelIds,
   loadMultiLimitMode,
+  loadZoneVisible,
   saveDisplayMode,
+  saveHiddenLabelIds,
   saveMultiLimitMode,
+  saveZoneVisible,
 } from "../../components/Counter/displaySettingsStorage";
 
 export interface AppState {
@@ -20,6 +24,10 @@ export interface AppState {
   setDisplayMode: (mode: DetectionDisplayMode) => void;
   multiLimitMode: MultiLimitDisplayMode;
   setMultiLimitMode: (mode: MultiLimitDisplayMode) => void;
+  hiddenLabelIds: Set<number>;
+  toggleLabelVisibility: (labelId: number) => void;
+  zoneVisible: boolean;
+  setZoneVisible: (visible: boolean) => void;
 }
 
 const noop = () => {};
@@ -32,6 +40,10 @@ const appState = createContext<AppState>({
   setDisplayMode: noop,
   multiLimitMode: "highest",
   setMultiLimitMode: noop,
+  hiddenLabelIds: new Set(),
+  toggleLabelVisibility: noop,
+  zoneVisible: true,
+  setZoneVisible: noop,
 });
 export const AppStateContext = appState;
 
@@ -59,6 +71,10 @@ export const AppStateProvider = ({
       setDisplayMode: noop,
       multiLimitMode: loadMultiLimitMode(configId),
       setMultiLimitMode: noop,
+      hiddenLabelIds: loadHiddenLabelIds(configId),
+      toggleLabelVisibility: noop,
+      zoneVisible: loadZoneVisible(configId),
+      setZoneVisible: noop,
     };
   });
 
@@ -74,6 +90,27 @@ export const AppStateProvider = ({
     (mode: MultiLimitDisplayMode) => {
       saveMultiLimitMode(configId, mode);
       setState((prev) => ({ ...prev, multiLimitMode: mode }));
+    },
+    [configId],
+  );
+
+  const toggleLabelVisibility = useCallback(
+    (labelId: number) => {
+      setState((prev) => {
+        const next = new Set(prev.hiddenLabelIds);
+        if (next.has(labelId)) next.delete(labelId);
+        else next.add(labelId);
+        saveHiddenLabelIds(configId, next);
+        return { ...prev, hiddenLabelIds: next };
+      });
+    },
+    [configId],
+  );
+
+  const setZoneVisible = useCallback(
+    (visible: boolean) => {
+      saveZoneVisible(configId, visible);
+      setState((prev) => ({ ...prev, zoneVisible: visible }));
     },
     [configId],
   );
@@ -106,6 +143,8 @@ export const AppStateProvider = ({
         toggleRunning,
         setDisplayMode,
         setMultiLimitMode,
+        toggleLabelVisibility,
+        setZoneVisible,
       }}
     >
       {children}
