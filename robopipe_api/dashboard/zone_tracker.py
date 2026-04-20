@@ -27,6 +27,8 @@ class ZoneTrackingResult:
     just_entered_indices: set[int] = field(default_factory=set)
     exited_tracker_ids: list[int] = field(default_factory=list)
     tracking_ids: list[int | None] = field(default_factory=list)
+    display_ids: list[int | None] = field(default_factory=list)
+    just_confirmed: list[tuple[int, int]] = field(default_factory=list)
 
 
 class ZoneTracker:
@@ -35,6 +37,8 @@ class ZoneTracker:
     def __init__(self) -> None:
         self._tracks: dict[int, list[KalmanBoxTracker]] = {}
         self._next_id: dict[int, int] = {}
+        # Per-label display-id counter per config: config_id -> label -> next value
+        self._next_display_id: dict[int, dict[int, int]] = {}
         # Previous frame's in-zone state per (config_id, tracking_id)
         self._prev_in_zone: dict[int, dict[int, bool]] = {}
 
@@ -42,6 +46,12 @@ class ZoneTracker:
         tid = self._next_id.get(config_id, 1)
         self._next_id[config_id] = tid + 1
         return tid
+
+    def _allocate_display_id(self, config_id: int, label: int) -> int:
+        per_label = self._next_display_id.setdefault(config_id, {})
+        did = per_label.get(label, 1)
+        per_label[label] = did + 1
+        return did
 
     @staticmethod
     def _zone_range(config: DashboardConfig) -> tuple[float, float]:
@@ -108,13 +118,21 @@ class ZoneTracker:
         debounce_frames = config.debounceFrames
 
         tracking_ids: list[int | None] = [None] * len(detections)
+        display_ids: list[int | None] = [None] * len(detections)
+        just_confirmed: list[tuple[int, int]] = []
 
         # Matched: update track and inherit ID if confirmed
         for ti, di in matches:
             track = existing_tracks[ti]
             track.update(measurements[di])
             if _is_confirmed(track, debounce_frames):
+                if track.display_id is None:
+                    track.display_id = self._allocate_display_id(
+                        config.id, track.label
+                    )
+                    just_confirmed.append((track.display_id, track.label))
                 tracking_ids[di] = track.tracking_id
+                display_ids[di] = track.display_id
 
         # Unmatched detections: create new tracks
         new_tracks: list[KalmanBoxTracker] = []
@@ -123,7 +141,12 @@ class ZoneTracker:
             new_track = KalmanBoxTracker(measurements[di], tid, labels[di])
             new_tracks.append(new_track)
             if _is_confirmed(new_track, debounce_frames):
+                new_track.display_id = self._allocate_display_id(
+                    config.id, new_track.label
+                )
+                just_confirmed.append((new_track.display_id, new_track.label))
                 tracking_ids[di] = tid
+                display_ids[di] = new_track.display_id
 
         # Unmatched tracks: age them (ghost expiry)
         surviving_ghosts: list[KalmanBoxTracker] = []
@@ -211,10 +234,13 @@ class ZoneTracker:
             just_entered_indices=just_entered_indices,
             exited_tracker_ids=exited_tracker_ids,
             tracking_ids=tracking_ids,
+            display_ids=display_ids,
+            just_confirmed=just_confirmed,
         )
 
     def reset(self, config_id: int) -> None:
         """Clear tracking state for a config (e.g. on dashboard start)."""
         self._tracks.pop(config_id, None)
         self._next_id.pop(config_id, None)
+        self._next_display_id.pop(config_id, None)
         self._prev_in_zone.pop(config_id, None)

@@ -584,21 +584,23 @@ class DashboardEvaluator:
         config: DashboardConfig,
         detections: list[BBoxDetection],
         dashboard_run_session_id: int,
-    ) -> tuple[list[EvaluationResult], list[int], list[int]]:
+    ) -> tuple[list[EvaluationResult], list[int], list[int | None], list[int | None]]:
         """Evaluate test cases and return per-frame overlay results.
 
         Returns a tuple of:
         - list of EvaluationResult for the live per-frame overlay
         - list of violation event IDs created at exit-commit this frame
         - tracking IDs parallel to the input detections list
+        - display IDs parallel to the input detections list (per-label)
         """
         events_store = events_store_factory()
         zr = self._tracker.find_in_zone_detections(detections, config)
 
-        # Counters fire on first zone entry per tracker (analogous to former
-        # line crossing). `just_entered_indices` already dedupes per tracker.
-        for i in zr.just_entered_indices:
-            label = config.labels[zr.in_zone[i].label]
+        # Class counter: one tick per newly-confirmed tracker, regardless of
+        # zone presence. `just_confirmed` fires exactly once per tracker in
+        # its lifetime.
+        for _display_id, label_int in zr.just_confirmed:
+            label = config.labels[label_int]
             events_store.inc_counter(
                 dashboard_run_session_id, label.id, label.name
             )
@@ -684,4 +686,4 @@ class DashboardEvaluator:
         for evaluator in tc_evaluators:
             results.extend(evaluator.evaluate(detections, detections))
 
-        return results, violation_event_ids, zr.tracking_ids
+        return results, violation_event_ids, zr.tracking_ids, zr.display_ids

@@ -52,7 +52,7 @@ def handle_detections(
         if d.confidence >= dashboard_config.confidenceThreshold
     ]
 
-    evaluation_results, violation_event_ids, tracking_ids = (
+    evaluation_results, violation_event_ids, tracking_ids, display_ids = (
         _dashboard_evaluator.evaluate(
             dashboard_config, filtered, dashboard_run_session_id
         )
@@ -83,6 +83,7 @@ def handle_detections(
 
     for i, tid in enumerate(tracking_ids):
         result["detections"][i]["tracking_id"] = tid
+        result["detections"][i]["display_id"] = display_ids[i]
 
     result["threshold_status"] = _threshold_tracker.get_status(
         dashboard_config.id, dashboard_config.testCases

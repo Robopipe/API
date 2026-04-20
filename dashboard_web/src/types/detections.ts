@@ -15,6 +15,7 @@ export interface BBDetection extends Detection {
   coords: [number, number, number, number];
   violations?: DetectionViolation[];
   tracking_id?: number;
+  display_id?: number;
 }
 
 export type SegmentationDetection = BBDetection;

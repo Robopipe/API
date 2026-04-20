@@ -107,8 +107,8 @@ export const renderBBoxDetection: DetectionRenderer = (
       : label.color;
   const labelTextColor = isWarning ? "rgba(0,0,0,0.9)" : "#fff";
   const idPrefix =
-    isBBDetection(detection) && detection.tracking_id != null
-      ? `#${detection.tracking_id} `
+    isBBDetection(detection) && detection.display_id != null
+      ? `#${detection.display_id} `
       : "";
   const text = violations?.length
     ? `${idPrefix}${violations.map((v) => v.limit_name).join(", ")}`

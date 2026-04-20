@@ -41,6 +41,7 @@ class KalmanBoxTracker:
     def __init__(self, measurement: np.ndarray, tracking_id: int, label: int) -> None:
         self.tracking_id = tracking_id
         self.label = label
+        self.display_id: int | None = None
         self.time_since_update = 0
         self.hit_streak = 0
 
