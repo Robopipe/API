@@ -12,8 +12,8 @@ import {
   isBBDetection,
   renderBBoxDetection,
   renderClassificationDetection,
-  renderLine,
   renderSegmentationMask,
+  renderZone,
 } from "../utils/renderDetections";
 
 export interface UseDetectionsRendererOptions {
@@ -123,10 +123,11 @@ export const useDetectionsRenderer = ({
 
       // Single
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      renderLine(
+      renderZone(
         offCtx,
-        window.DASHBOARD_CONFIG.lineDirection,
-        window.DASHBOARD_CONFIG.linePosition,
+        window.DASHBOARD_CONFIG.zoneDirection,
+        window.DASHBOARD_CONFIG.zoneCenter,
+        window.DASHBOARD_CONFIG.zoneThickness,
       );
       ctx.drawImage(offscreen, 0, 0);
     },

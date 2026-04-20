@@ -1,13 +1,8 @@
 import type { Label } from "./label";
 
-export enum DashboardLineDirection {
+export enum DashboardZoneDirection {
   HORIZONTAL = "HORIZONTAL",
   VERTICAL = "VERTICAL",
-}
-
-export enum DashboardLineFlow {
-  POSITIVE = "POSITIVE",
-  NEGATIVE = "NEGATIVE",
 }
 
 export interface EvalThreshold {
@@ -39,9 +34,10 @@ export interface DashboardConfig {
   labels: Label[];
   testCases: TestCase[];
   thresholds: EvalThreshold[];
-  lineDirection: DashboardLineDirection;
-  linePosition: number;
-  lineFlow: DashboardLineFlow;
+  zoneDirection: DashboardZoneDirection;
+  zoneCenter: number;
+  zoneThickness: number;
+  optimistic: boolean;
   remoteBackendUrl?: string;
   confidenceThreshold: number;
   debounceFrames: number;

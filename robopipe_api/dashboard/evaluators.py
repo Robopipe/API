@@ -9,8 +9,8 @@ from .geometry import (
     is_within_bbox,
     value_within_limits,
 )
-from .line_crossing import LineCrossingTracker
 from .threshold_tracker import ThresholdTracker
+from .zone_tracker import ZoneTracker
 
 from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.dashboard.eval_models import (
@@ -530,15 +530,54 @@ class TestCaseEvaluator:
 
 
 class DashboardEvaluator:
-    """Top-level evaluator: manages line crossing state and evaluates test cases."""
+    """Top-level evaluator: manages zone presence state and evaluates test cases.
+
+    For each confirmed tracker, evaluation samples are accumulated while it is
+    inside the configured zone. When the tracker leaves the zone (or its
+    Kalman ghost expires), the accumulated pass/fail samples are reduced to a
+    single verdict using the config's optimistic/pessimistic flag, and that
+    verdict is committed to the threshold tracker and events store exactly
+    once per (tracker, test case).
+    """
 
     def __init__(
         self,
-        line_crossing_tracker: LineCrossingTracker,
+        zone_tracker: ZoneTracker,
         threshold_tracker: ThresholdTracker,
     ) -> None:
-        self._tracker = line_crossing_tracker
+        self._tracker = zone_tracker
         self._threshold_tracker = threshold_tracker
+        # config_id -> tracker_id -> test_case_id -> sample accumulator
+        self._samples: dict[int, dict[int, dict[str, dict]]] = {}
+
+    def reset(self, config_id: int) -> None:
+        """Clear all per-tracker state for a config (on dashboard start)."""
+        self._tracker.reset(config_id)
+        self._samples.pop(config_id, None)
+
+    def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
+        total = samples["pass"] + samples["fail"]
+        if total == 0:
+            return None
+        if optimistic:
+            return samples["pass"] > 0
+        return samples["fail"] == 0
+
+    @staticmethod
+    def _subject_label_ids(test_case: EvalTestCase) -> set[int]:
+        """Label IDs whose trackers accumulate samples for this test case.
+
+        A limit's subject is its parent label (when present) else its target
+        label — i.e. the "item" whose verdict we are aggregating across the
+        zone dwell.
+        """
+        ids: set[int] = set()
+        for limit in test_case.limits:
+            if limit.targetParentLabel is not None:
+                ids.add(limit.targetParentLabel.id)
+            else:
+                ids.add(limit.targetLabel.id)
+        return ids
 
     def evaluate(
         self,
@@ -546,63 +585,103 @@ class DashboardEvaluator:
         detections: list[BBoxDetection],
         dashboard_run_session_id: int,
     ) -> tuple[list[EvaluationResult], list[int], list[int]]:
-        """Evaluate test cases and return evaluation results.
+        """Evaluate test cases and return per-frame overlay results.
 
         Returns a tuple of:
-        - list of EvaluationResult for each violated test case / limit pair
-        - list of violation event IDs (for picture capture by the frontend)
+        - list of EvaluationResult for the live per-frame overlay
+        - list of violation event IDs created at exit-commit this frame
+        - tracking IDs parallel to the input detections list
         """
         events_store = events_store_factory()
-        crossed, just_crossed_indices, tracking_ids = (
-            self._tracker.find_crossed_detections(detections, config)
-        )
-        for i in just_crossed_indices:
-            label = config.labels[crossed[i].label]
-            events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
-        just_crossed = [d for i, d in enumerate(crossed) if i in just_crossed_indices]
-        tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
+        zr = self._tracker.find_in_zone_detections(detections, config)
 
-        # Record threshold tracking and save events for just-crossed detections
-        violation_event_ids: list[int] = []
-        for evaluator in tc_evaluators:
-            violated, fired = evaluator.is_violated(detections, just_crossed)
-            if fired:
-                self._threshold_tracker.record(
-                    config.id, evaluator.test_case.id, passed=not violated
-                )
-                tc = evaluator.test_case
+        # Counters fire on first zone entry per tracker (analogous to former
+        # line crossing). `just_entered_indices` already dedupes per tracker.
+        for i in zr.just_entered_indices:
+            label = config.labels[zr.in_zone[i].label]
+            events_store.inc_counter(
+                dashboard_run_session_id, label.id, label.name
+            )
+
+        tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
+        cfg_samples = self._samples.setdefault(config.id, {})
+
+        # Per-frame sampling: attribute the test case verdict only to the
+        # subject trackers in the zone (parent label where present, else the
+        # target label). This keeps threshold metrics item-scoped — e.g. a
+        # pallet defect is charged to the pallet, not to every crate riding
+        # on top of it.
+        if zr.in_zone and zr.in_zone_tracker_ids:
+            for evaluator in tc_evaluators:
+                violated, fired = evaluator.is_violated(detections, zr.in_zone)
+                if not fired:
+                    continue
+                subject_ids = self._subject_label_ids(evaluator.test_case)
+                if not subject_ids:
+                    continue
+                # Snapshot per-limit results only for violation frames so we
+                # can commit the event metadata on exit.
+                latest_results: list[EvaluationResult] | None = None
                 if violated:
-                    eval_results = evaluator.evaluate(detections, just_crossed)
-                    for r in eval_results:
+                    latest_results = evaluator.evaluate(detections, zr.in_zone)
+                for i, det in enumerate(zr.in_zone):
+                    if config.labels[det.label].id not in subject_ids:
+                        continue
+                    tid = zr.in_zone_tracker_ids[i]
+                    tr_samples = cfg_samples.setdefault(tid, {})
+                    tc_samples = tr_samples.setdefault(
+                        evaluator.test_case.id,
+                        {"pass": 0, "fail": 0, "last_violation": None},
+                    )
+                    if violated:
+                        tc_samples["fail"] += 1
+                        tc_samples["last_violation"] = latest_results
+                    else:
+                        tc_samples["pass"] += 1
+
+        # Commit on zone exit: reduce accumulated samples and record once.
+        violation_event_ids: list[int] = []
+        tc_by_id = {e.test_case.id: e.test_case for e in tc_evaluators}
+        for tid in zr.exited_tracker_ids:
+            tr_samples = cfg_samples.pop(tid, None)
+            if tr_samples is None:
+                continue
+            for tc_id, s in tr_samples.items():
+                tc = tc_by_id.get(tc_id)
+                if tc is None:
+                    continue
+                passed = self._reduce_verdict(s, config.optimistic)
+                if passed is None:
+                    continue
+                self._threshold_tracker.record(config.id, tc_id, passed=passed)
+
+                if passed:
+                    events_store.save_event(
+                        dashboard_run_session_id, tc_id, tc.name, None, None
+                    )
+                    continue
+
+                last_violation = s.get("last_violation") or []
+                if last_violation:
+                    for r in last_violation:
                         event_id = events_store.save_event(
                             dashboard_run_session_id,
-                            tc.id,
+                            tc_id,
                             tc.name,
                             r.violated_limit_id,
                             r.violated_limit_name,
                         )
                         violation_event_ids.append(event_id)
-                    if not eval_results:
-                        event_id = events_store.save_event(
-                            dashboard_run_session_id,
-                            tc.id,
-                            tc.name,
-                            None,
-                            None,
-                        )
-                        violation_event_ids.append(event_id)
                 else:
-                    events_store.save_event(
-                        dashboard_run_session_id,
-                        tc.id,
-                        tc.name,
-                        None,
-                        None,
+                    event_id = events_store.save_event(
+                        dashboard_run_session_id, tc_id, tc.name, None, None
                     )
+                    violation_event_ids.append(event_id)
 
-        # Collect per-limit evaluation results from all violated test cases
+        # Live overlay: evaluate every visible detection regardless of zone
+        # presence so the UI keeps highlighting violating items once spotted.
         results: list[EvaluationResult] = []
         for evaluator in tc_evaluators:
             results.extend(evaluator.evaluate(detections, detections))
 
-        return results, violation_event_ids, tracking_ids
+        return results, violation_event_ids, zr.tracking_ids

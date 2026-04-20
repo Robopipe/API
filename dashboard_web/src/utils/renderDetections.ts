@@ -1,4 +1,4 @@
-import { DashboardLineDirection, type Label } from "../types";
+import { DashboardZoneDirection, type Label } from "../types";
 import type {
   BBDetection,
   ClassificationDetection,
@@ -211,24 +211,42 @@ export const renderSegmentationMask = (
   ctx.imageSmoothingQuality = prevQuality;
 };
 
-export const renderLine = (
+export const renderZone = (
   ctx: CanvasRenderingContext2D,
-  direction: DashboardLineDirection,
-  position: number,
+  direction: DashboardZoneDirection,
+  center: number,
+  thickness: number,
 ) => {
   const { width, height } = ctx.canvas;
+  const lo = Math.max(0, center - thickness / 2);
+  const hi = Math.min(1, center + thickness / 2);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 0, 0, 0.12)";
   ctx.strokeStyle = "#ff0000";
   ctx.lineWidth = 2;
   ctx.setLineDash([10, 5]);
-  ctx.beginPath();
-  if (direction === DashboardLineDirection.HORIZONTAL) {
-    const y = position * height;
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
+
+  if (direction === DashboardZoneDirection.HORIZONTAL) {
+    const yLo = lo * height;
+    const yHi = hi * height;
+    ctx.fillRect(0, yLo, width, yHi - yLo);
+    ctx.beginPath();
+    ctx.moveTo(0, yLo);
+    ctx.lineTo(width, yLo);
+    ctx.moveTo(0, yHi);
+    ctx.lineTo(width, yHi);
+    ctx.stroke();
   } else {
-    const x = position * width;
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
+    const xLo = lo * width;
+    const xHi = hi * width;
+    ctx.fillRect(xLo, 0, xHi - xLo, height);
+    ctx.beginPath();
+    ctx.moveTo(xLo, 0);
+    ctx.lineTo(xLo, height);
+    ctx.moveTo(xHi, 0);
+    ctx.lineTo(xHi, height);
+    ctx.stroke();
   }
-  ctx.stroke();
+  ctx.restore();
 };

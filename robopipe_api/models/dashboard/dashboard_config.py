@@ -9,14 +9,9 @@ from .eval_models import EvalTestCase
 from .label import Label
 
 
-class DashboardLineDirection(str, Enum):
+class DashboardZoneDirection(str, Enum):
     HORIZONTAL = "HORIZONTAL"
     VERTICAL = "VERTICAL"
-
-
-class DashboardLineFlow(str, Enum):
-    POSITIVE = "POSITIVE"
-    NEGATIVE = "NEGATIVE"
 
 
 class DashboardConfig(BaseModel):
@@ -26,9 +21,10 @@ class DashboardConfig(BaseModel):
     name: str
     projectId: int
     projectName: str
-    lineDirection: DashboardLineDirection
-    linePosition: float
-    lineFlow: DashboardLineFlow = DashboardLineFlow.POSITIVE
+    zoneDirection: DashboardZoneDirection
+    zoneCenter: float
+    zoneThickness: float = Field(default=0.1, ge=0.0, le=1.0)
+    optimistic: bool = True
     confidenceThreshold: float = 0.5
     debounceFrames: int = 5
     maxMissingFrames: int = 5

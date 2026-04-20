@@ -3,15 +3,19 @@
 ## Overview
 
 The evaluation system determines whether detections from NN inference trigger
-alerts or warnings. It processes detections that cross a configurable line and
-evaluates them against a tree of test cases, limits, and logic nodes.
+alerts or warnings. It samples detections that dwell inside a configurable
+rectangular zone and evaluates them against a tree of test cases, limits, and
+logic nodes. Each tracked object contributes to the dashboard metrics exactly
+once — the per-frame verdicts are accumulated while the object is in the zone
+and reduced to a single verdict when it leaves.
 
 ## Architecture
 
 ```
 DashboardConfig
-├── lineDirection / linePosition / lineFlow   ← line crossing filter
-├── labels[]                                  ← maps detection.label index → Label
+├── zoneDirection / zoneCenter / zoneThickness   ← evaluation zone
+├── optimistic                                    ← per-tracker reducer
+├── labels[]                                      ← maps detection.label index → Label
 └── testCases[]
     ├── type (CHECK / DEFECT)
     ├── severity (ALERT / WARNING)
@@ -33,11 +37,13 @@ DashboardConfig
 Raw detections
     │
     ▼
-LineCrossingTracker.find_crossed_detections()
-    │  Filters to detections that have crossed the line.
-    │  Returns early (None) if no NEW crossings this frame.
+ZoneTracker.find_in_zone_detections()
+    │  Kalman tracking + debouncing. Emits:
+    │    in_zone            — currently dwelling detections
+    │    just_entered       — trackers that entered this frame (→ counters)
+    │    exited_tracker_ids — trackers that left (→ commit verdict)
     ▼
-For each TestCase:
+For each TestCase (per frame, using in_zone as the evaluated set):
     │
     ▼
 LogicTreeEvaluator.evaluate()
@@ -58,25 +64,45 @@ LimitItemEvaluator.evaluate()
 TestCaseEvaluator.is_violated()
     CHECK  → violated when combined result is False  (NOT of result)
     DEFECT → violated when combined result is True   (result directly)
+    ▼
+Per-tracker sample accumulator (pass/fail)
+    │  One sample per firing test case per frame, attributed to every
+    │  tracker currently in the zone.
+    ▼
+On zone exit (or Kalman ghost expiry while in-zone):
+    │  Reduce accumulated samples:
+    │    optimistic=True  → passed if any pass sample was observed
+    │    optimistic=False → passed only if no fail sample was observed
+    │  ThresholdTracker.record() and save_event() fire exactly once per
+    │  (tracker, test case).
 ```
 
-## Line crossing
+## Evaluation zone
 
-The `LineCrossingTracker` tracks detection movement across a line configured by:
+The `ZoneTracker` tracks detection movement against a rectangular zone
+configured by:
 
-- **lineDirection**: `HORIZONTAL` (line is a horizontal bar) or `VERTICAL`
-- **linePosition**: 0.0–1.0 normalized coordinate
-- **lineFlow**: direction of "past"
-  - `POSITIVE`: past = coord ≥ linePosition (top→bottom / left→right)
-  - `NEGATIVE`: past = coord ≤ linePosition (bottom→top / right→left)
+- **zoneDirection**: `HORIZONTAL` (zone spans full width, thick on y) or
+  `VERTICAL` (zone spans full height, thick on x)
+- **zoneCenter**: 0.0–1.0 normalized zone center on the direction axis
+- **zoneThickness**: 0.0–1.0 normalized zone thickness on the direction axis
 
-Detections are matched between frames using nearest-neighbour distance per label.
-A detection is "crossed" when it transitions from before the line to past it.
-Once crossed, it stays crossed as long as it's visible.
+The active zone range on the direction axis is
+`[zoneCenter − zoneThickness/2, zoneCenter + zoneThickness/2]`, clamped
+to `[0, 1]`.
 
-The evaluator only runs test cases when at least one NEW crossing occurs in the
-current frame. Otherwise it returns `None` (no `dashboard_detections` in the WS
-message), which tells the frontend that nothing changed.
+Detections are matched between frames using nearest-neighbour distance per
+label (Kalman filter under the hood). A tracker is "in the zone" while its
+bbox center lies within the zone; it "enters" on the first confirmed frame
+inside and "exits" on the first frame outside (or when its Kalman ghost
+expires while still marked in-zone).
+
+- **Counters** (`dashboard_counter`) increment once per tracker on entry.
+- **Metric samples** and **violation events** are committed once per
+  `(tracker, test case)` on exit, using the optimistic/pessimistic reducer.
+- **Live overlay** (`dashboard_detections` + per-detection `violations`)
+  still reflects the current-frame evaluation of in-zone detections so the
+  UI highlights violating objects in real time.
 
 ## CHECK vs DEFECT
 
@@ -154,8 +180,8 @@ The `handle_detections()` function returns the detection payload enriched with a
 }
 ```
 
-`dashboard_detections` is `null` when no new line crossings occurred, and an
-empty list is normalized to `null`.
+`dashboard_detections` is populated every frame an in-zone detection violates
+at least one test case.
 
 ## Running tests
 

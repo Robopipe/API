@@ -2,13 +2,13 @@ from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.detection.bbox_detection import BBoxDetection
 from ..models.detection.detection import BaseNNDetections
 from .evaluators import DashboardEvaluator, EvaluationResult
-from .line_crossing import LineCrossingTracker
+from .zone_tracker import ZoneTracker
 from .threshold_tracker import ThresholdTracker
 from .events_store import events_store_factory
 
-_line_crossing_tracker = LineCrossingTracker()
+_zone_tracker = ZoneTracker()
 _threshold_tracker = ThresholdTracker()
-_dashboard_evaluator = DashboardEvaluator(_line_crossing_tracker, _threshold_tracker)
+_dashboard_evaluator = DashboardEvaluator(_zone_tracker, _threshold_tracker)
 
 
 def _annotate_detections(
@@ -99,7 +99,7 @@ def handle_detections(
     return result
 
 
-def reset_line_crossing(config_id: int) -> None:
-    """Reset line crossing and threshold state for a config (called on dashboard start)."""
-    _line_crossing_tracker.reset(config_id)
+def reset_zone_tracking(config_id: int) -> None:
+    """Reset zone tracking and threshold state for a config (called on dashboard start)."""
+    _dashboard_evaluator.reset(config_id)
     _threshold_tracker.reset(config_id)

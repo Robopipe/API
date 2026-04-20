@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, Response
 from robopipe_api.dashboard.config_store import config_store_factory
 from robopipe_api.dashboard.dashboard_handler import (
     _threshold_tracker,
-    reset_line_crossing,
+    reset_zone_tracking,
 )
 from robopipe_api.dashboard.events_store import events_store_factory
 
@@ -68,9 +68,10 @@ def serve_dashboard(
                 }
                 for tc in sensor.dashboard_config.testCases
             ],
-            "lineDirection": sensor.dashboard_config.lineDirection,
-            "linePosition": sensor.dashboard_config.linePosition,
-            "lineFlow": sensor.dashboard_config.lineFlow,
+            "zoneDirection": sensor.dashboard_config.zoneDirection,
+            "zoneCenter": sensor.dashboard_config.zoneCenter,
+            "zoneThickness": sensor.dashboard_config.zoneThickness,
+            "optimistic": sensor.dashboard_config.optimistic,
             "thresholds": [t.model_dump() for t in sensor.dashboard_config.thresholds],
             "remoteBackendUrl": sensor.dashboard_config.remoteBackendUrl,
             "confidenceThreshold": sensor.dashboard_config.confidenceThreshold,
@@ -223,7 +224,7 @@ def switch_dashboard_config(
         events_store.end_session(sensor.dashboard_run_session_id)
         sensor.dashboard_run_session_id = None
     if sensor.dashboard_config is not None:
-        reset_line_crossing(sensor.dashboard_config.id)
+        reset_zone_tracking(sensor.dashboard_config.id)
         _threshold_tracker.reset(sensor.dashboard_config.id)
 
     # Load model from disk and deploy
@@ -245,7 +246,7 @@ def start_dashboard(sensor: SensorDep, events_store: EventsStoreDep):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No dashboard configured for this stream",
         )
-    reset_line_crossing(sensor.dashboard_config.id)
+    reset_zone_tracking(sensor.dashboard_config.id)
     sensor.dashboard_run_session_id = events_store.start_session(
         sensor.dashboard_config.id
     )
