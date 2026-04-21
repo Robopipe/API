@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.dashboard.stored_config import StoredConfigSummary, StoredDashboardConfig
+from ..models.dashboard.user_settings import DashboardUserSettings
 from ..models.nn_config import NNConfig
 from ..paths import get_data_dir
 
@@ -110,6 +111,31 @@ class DashboardConfigStore:
         stream_dir = self._stream_dir(mxid, stream_name)
         if stream_dir.exists():
             shutil.rmtree(stream_dir)
+
+    def _user_settings_path(
+        self, mxid: str, stream_name: str, config_id: int
+    ) -> Path:
+        return self._stream_dir(mxid, stream_name) / f"{config_id}.user.json"
+
+    def load_user_settings(
+        self, mxid: str, stream_name: str, config_id: int
+    ) -> DashboardUserSettings:
+        path = self._user_settings_path(mxid, stream_name, config_id)
+        if not path.exists():
+            return DashboardUserSettings()
+        return DashboardUserSettings.model_validate_json(path.read_text())
+
+    def save_user_settings(
+        self,
+        mxid: str,
+        stream_name: str,
+        config_id: int,
+        settings: DashboardUserSettings,
+    ) -> None:
+        stream_dir = self._stream_dir(mxid, stream_name)
+        stream_dir.mkdir(parents=True, exist_ok=True)
+        path = self._user_settings_path(mxid, stream_name, config_id)
+        path.write_text(settings.model_dump_json())
 
 
 @lru_cache(maxsize=1)

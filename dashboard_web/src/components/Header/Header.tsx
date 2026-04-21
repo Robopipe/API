@@ -4,11 +4,8 @@ import { useAppState } from "../../provider";
 import { GearIcon, WakeLockIcon } from "../../ui";
 import { ModelSwitcher } from "./ModelSwitcher";
 import { SettingsModal } from "./SettingsModal";
-import {
-  loadTimerLabelDisplay,
-  saveTimerLabelDisplay,
-  type TimerLabelDisplay,
-} from "./timerLabelStorage";
+import { getUserSettings, updateUserSettings } from "../../api/userSettings";
+import type { TimerLabelDisplay } from "../../types";
 
 const formatElapsed = (ms: number): string => {
   const totalSeconds = Math.floor(ms / 1000);
@@ -34,7 +31,7 @@ export const Header = () => {
   const wakeLock = useWakeLock();
   const [elapsed, setElapsed] = useState("00:00:00");
   const [labelDisplay, setLabelDisplay] = useState<TimerLabelDisplay>(
-    loadTimerLabelDisplay,
+    () => getUserSettings().timerLabelDisplay,
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -77,7 +74,7 @@ export const Header = () => {
 
   const handleLabelChange = (value: TimerLabelDisplay) => {
     setLabelDisplay(value);
-    saveTimerLabelDisplay(value);
+    updateUserSettings({ timerLabelDisplay: value });
     setMenuOpen(false);
   };
 

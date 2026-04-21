@@ -24,6 +24,34 @@ export type DetectionDisplayMode = "all" | "alerts" | "alerts_and_warnings" | "d
 
 export type MultiLimitDisplayMode = "highest" | "show_all";
 
+export type WidgetDisplayMode = "failures" | "pass_rate" | "failures_of_total";
+
+export type MasterDisplayMode = "zone" | "grade";
+
+export type TimerLabelDisplay = "project_name" | "dashboard_name" | "nothing";
+
+export interface WidgetSlot {
+  id: string;
+  mode: WidgetDisplayMode;
+}
+
+export interface WidgetConfig {
+  gridSize: number;
+  slots: (WidgetSlot | null)[];
+  masterVisible: boolean;
+  masterDisplayMode: MasterDisplayMode;
+}
+
+export interface UserSettings {
+  displayMode: DetectionDisplayMode;
+  multiLimitMode: MultiLimitDisplayMode;
+  hiddenLabelIds: number[];
+  zoneVisible: boolean;
+  selectedLabelId: number | null;
+  widgetConfig: WidgetConfig;
+  timerLabelDisplay: TimerLabelDisplay;
+}
+
 export interface DashboardConfig {
   configId: number;
   name: string;
@@ -46,6 +74,7 @@ export interface DashboardConfig {
   running: boolean;
   runningSince: string | null;
   hasMultipleConfigs: boolean;
+  userSettings: UserSettings;
 }
 
 export interface StoredConfigSummary {

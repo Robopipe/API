@@ -16,6 +16,7 @@ from robopipe_api.dashboard.events_store import events_store_factory
 
 from ...models.dashboard.dashboard_config import DashboardConfigUpdate
 from ...models.dashboard.detection_event import DetectionEvent
+from ...models.dashboard.user_settings import DashboardUserSettings
 from ...paths import get_data_dir
 from ..common import (
     CameraDep,
@@ -51,6 +52,9 @@ def serve_dashboard(
             running_since = events_store.get_session_start_time(
                 sensor.dashboard_run_session_id
             )
+        user_settings = store.load_user_settings(
+            mxid, stream_name, sensor.dashboard_config.id
+        )
         dashboard_config = {
             "configId": sensor.dashboard_config.id,
             "name": sensor.dashboard_config.name,
@@ -81,6 +85,7 @@ def serve_dashboard(
             "running": sensor.dashboard_run_session_id is not None,
             "runningSince": running_since,
             "hasMultipleConfigs": has_multiple,
+            "userSettings": user_settings.model_dump(),
         }
         script_tag = soup.new_tag("script")
         script_tag.string = f"""
@@ -179,6 +184,40 @@ def update_dashboard_config(
         "maxMissingFrames": updated.maxMissingFrames,
         "maxMatchDistance": updated.maxMatchDistance,
     }
+
+
+@stream_router.get("/dashboard/user-settings")
+def get_dashboard_user_settings(
+    mxid: Mxid,
+    stream_name: StreamName,
+    sensor: SensorDep,
+) -> DashboardUserSettings:
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+    return config_store_factory().load_user_settings(
+        mxid, stream_name, sensor.dashboard_config.id
+    )
+
+
+@stream_router.put("/dashboard/user-settings")
+def update_dashboard_user_settings(
+    mxid: Mxid,
+    stream_name: StreamName,
+    sensor: SensorDep,
+    settings: DashboardUserSettings,
+) -> DashboardUserSettings:
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+    config_store_factory().save_user_settings(
+        mxid, stream_name, sensor.dashboard_config.id, settings
+    )
+    return settings
 
 
 @stream_router.get("/dashboard/configs")

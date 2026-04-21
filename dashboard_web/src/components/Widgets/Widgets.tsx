@@ -2,20 +2,23 @@ import { useEffect, useState } from "react";
 import { Container, type ContainerProps, GearIcon } from "../../ui";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useAppState } from "../../provider";
+import { getUserSettings, updateUserSettings } from "../../api/userSettings";
+import type { MasterDisplayMode, WidgetConfig, WidgetDisplayMode } from "../../types";
 import { DisplayModeSelector } from "./DisplayModeSelector";
 import { DonutWidget } from "./DonutWidget";
 import { GridSizeSelector } from "./GridSizeSelector";
 import { MasterWidget } from "./MasterWidget";
 import { useThresholdStatus } from "./useThresholdStatus";
 import { WidgetSidebar } from "./WidgetSidebar";
-import {
-  loadWidgetSlots,
-  resizeSlots,
-  saveWidgetSlots,
-  type MasterDisplayMode,
-  type WidgetDisplayMode,
-  type WidgetSlots,
-} from "./widgetStorage";
+import { MAX_GRID_SIZE, MIN_GRID_SIZE } from "./widgetStorage";
+
+function resizeSlots(current: WidgetConfig, newSize: number): WidgetConfig {
+  const gs = Math.min(MAX_GRID_SIZE, Math.max(MIN_GRID_SIZE, Math.round(newSize)));
+  const count = gs * gs;
+  const slots = current.slots.slice(0, count);
+  while (slots.length < count) slots.push(null);
+  return { ...current, gridSize: gs, slots };
+}
 
 const DISPLAY_MODES: { value: WidgetDisplayMode; label: string }[] = [
   { value: "failures", label: "Failures" },
@@ -112,15 +115,13 @@ function computeSizes(
   };
 }
 
-const configId = window.DASHBOARD_CONFIG.configId;
-
 export type WidgetsProps = ContainerProps;
 
 export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const { running } = useAppState();
   const { thresholdStatus, masterStatus } = useThresholdStatus(running);
-  const [widgetSlots, setWidgetSlots] = useState<WidgetSlots>(() =>
-    loadWidgetSlots(configId),
+  const [widgetSlots, setWidgetSlots] = useState<WidgetConfig>(
+    () => getUserSettings().widgetConfig,
   );
   const [editMode, setEditMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -148,9 +149,9 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
 
   // --- Slot helpers ---
 
-  const updateSlots = (updated: WidgetSlots) => {
+  const updateSlots = (updated: WidgetConfig) => {
     setWidgetSlots(updated);
-    saveWidgetSlots(configId, updated);
+    updateUserSettings({ widgetConfig: updated });
   };
 
   const showMaster = widgetSlots.masterVisible !== false;

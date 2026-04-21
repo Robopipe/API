@@ -4,20 +4,7 @@ import type {
   MultiLimitDisplayMode,
   TestCase,
 } from "../../types";
-import {
-  loadSelectedLabel,
-  saveSelectedLabel,
-} from "../../components/Counter/counterStorage";
-import {
-  loadDisplayMode,
-  loadHiddenLabelIds,
-  loadMultiLimitMode,
-  loadZoneVisible,
-  saveDisplayMode,
-  saveHiddenLabelIds,
-  saveMultiLimitMode,
-  saveZoneVisible,
-} from "../../components/Counter/displaySettingsStorage";
+import { getUserSettings, updateUserSettings } from "../../api/userSettings";
 
 export interface AppState {
   running: boolean;
@@ -60,7 +47,6 @@ export const AppStateProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const configId = window.DASHBOARD_CONFIG.configId;
   const labels = window.DASHBOARD_CONFIG.labels;
   const testCaseMap = window.DASHBOARD_CONFIG.testCases.reduce(
     (acc, tc) => {
@@ -71,73 +57,59 @@ export const AppStateProvider = ({
   );
   const [state, setState] = useState<AppState>(() => {
     const { running, runningSince } = window.DASHBOARD_CONFIG;
-    const savedLabelId = loadSelectedLabel(configId);
+    const settings = getUserSettings();
     const initialLabelId =
-      savedLabelId !== null && labels.some((l) => l.id === savedLabelId)
-        ? savedLabelId
+      settings.selectedLabelId !== null &&
+      labels.some((l) => l.id === settings.selectedLabelId)
+        ? settings.selectedLabelId
         : (labels[0]?.id ?? null);
     return {
       running,
       runningSince:
         running && runningSince ? new Date(runningSince + "Z") : null,
       testCaseMap,
-      displayMode: loadDisplayMode(configId),
+      displayMode: settings.displayMode,
       setDisplayMode: noop,
-      multiLimitMode: loadMultiLimitMode(configId),
+      multiLimitMode: settings.multiLimitMode,
       setMultiLimitMode: noop,
-      hiddenLabelIds: loadHiddenLabelIds(configId),
+      hiddenLabelIds: new Set(settings.hiddenLabelIds),
       toggleLabelVisibility: noop,
-      zoneVisible: loadZoneVisible(configId),
+      zoneVisible: settings.zoneVisible,
       setZoneVisible: noop,
       selectedLabelId: initialLabelId,
       setSelectedLabelId: noop,
     };
   });
 
-  const setDisplayMode = useCallback(
-    (mode: DetectionDisplayMode) => {
-      saveDisplayMode(configId, mode);
-      setState((prev) => ({ ...prev, displayMode: mode }));
-    },
-    [configId],
-  );
+  const setDisplayMode = useCallback((mode: DetectionDisplayMode) => {
+    updateUserSettings({ displayMode: mode });
+    setState((prev) => ({ ...prev, displayMode: mode }));
+  }, []);
 
-  const setMultiLimitMode = useCallback(
-    (mode: MultiLimitDisplayMode) => {
-      saveMultiLimitMode(configId, mode);
-      setState((prev) => ({ ...prev, multiLimitMode: mode }));
-    },
-    [configId],
-  );
+  const setMultiLimitMode = useCallback((mode: MultiLimitDisplayMode) => {
+    updateUserSettings({ multiLimitMode: mode });
+    setState((prev) => ({ ...prev, multiLimitMode: mode }));
+  }, []);
 
-  const toggleLabelVisibility = useCallback(
-    (labelId: number) => {
-      setState((prev) => {
-        const next = new Set(prev.hiddenLabelIds);
-        if (next.has(labelId)) next.delete(labelId);
-        else next.add(labelId);
-        saveHiddenLabelIds(configId, next);
-        return { ...prev, hiddenLabelIds: next };
-      });
-    },
-    [configId],
-  );
+  const toggleLabelVisibility = useCallback((labelId: number) => {
+    setState((prev) => {
+      const next = new Set(prev.hiddenLabelIds);
+      if (next.has(labelId)) next.delete(labelId);
+      else next.add(labelId);
+      updateUserSettings({ hiddenLabelIds: [...next] });
+      return { ...prev, hiddenLabelIds: next };
+    });
+  }, []);
 
-  const setZoneVisible = useCallback(
-    (visible: boolean) => {
-      saveZoneVisible(configId, visible);
-      setState((prev) => ({ ...prev, zoneVisible: visible }));
-    },
-    [configId],
-  );
+  const setZoneVisible = useCallback((visible: boolean) => {
+    updateUserSettings({ zoneVisible: visible });
+    setState((prev) => ({ ...prev, zoneVisible: visible }));
+  }, []);
 
-  const setSelectedLabelId = useCallback(
-    (labelId: number) => {
-      saveSelectedLabel(configId, labelId);
-      setState((prev) => ({ ...prev, selectedLabelId: labelId }));
-    },
-    [configId],
-  );
+  const setSelectedLabelId = useCallback((labelId: number) => {
+    updateUserSettings({ selectedLabelId: labelId });
+    setState((prev) => ({ ...prev, selectedLabelId: labelId }));
+  }, []);
 
   const toggleRunning = async () => {
     const nextRunning = !state.running;
