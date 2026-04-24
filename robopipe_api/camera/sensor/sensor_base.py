@@ -17,6 +17,7 @@ from ...models.nn_config import NNConfig
 from ...models.sahi_config import SAHIConfig
 from ...utils.detections_parser import parse_detections
 from ...utils.image import img_frame_to_video_frame
+from ...ws_relay import ProducerTerminated
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from ..sahi import Tile, remap_tile_detections, nms_merge
 from .sensor_config import SensorConfigProperties
@@ -158,7 +159,14 @@ class SensorBase(ABC):
     def get_nn_detections(
         self,
     ) -> dai.ImgDetections | Classifications | ImgDetectionsExtended:
-        nn_queue = self.output_queues[PipelineQueueType.NN]
+        # Soft fail when the NN pipeline has been removed (e.g. DELETE /nn
+        # while a detections WS is still connected). Raising ProducerTerminated
+        # instead of KeyError lets ws_relay's _produce loop exit cleanly
+        # rather than log-spamming at 10Hz.
+        nn_queue = self.output_queues.get(PipelineQueueType.NN)
+        if nn_queue is None:
+            raise ProducerTerminated()
+
         detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
 
         if detections is None:

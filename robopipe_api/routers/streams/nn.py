@@ -15,6 +15,7 @@ from ..common import (
     WSRelayDep,
 )
 from ...utils.detections_parser import parse_detections
+from ...ws_relay import ProducerTerminated
 from . import stream_router
 
 
@@ -84,9 +85,12 @@ async def get_sensor_detections(
     await ws.accept()
 
     def producer():
+        # Terminate cleanly (no retry log spam) when the sensor or NN have
+        # been torn down under us — typically a DELETE /nn arriving while
+        # this WS is still connected.
         sensor = camera.sensors.get(stream_name)
-        if sensor is None:
-            raise RuntimeError(f"Sensor {stream_name} no longer available")
+        if sensor is None or sensor.nn_config is None:
+            raise ProducerTerminated()
         detections = sensor.get_nn_detections()
         seq = detections.getSequenceNum()
         parsed_detections = parse_detections(detections)

@@ -29,6 +29,13 @@ class Camera:
     }
 
     def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
+        # Pre-set attributes that close()/__del__ touch so a failure in
+        # dai.Device(...) below doesn't cause AttributeError during GC,
+        # which masks the real startup error in "Application startup failed"
+        # logs.
+        self.camera_handle = None
+        self.pipeline = None
+
         self.mxid = mxid
         self.boot_name = name if name == Camera.DEFAULT_POE_IP else mxid
         self.camera_handle = dai.Device(self.boot_name)
