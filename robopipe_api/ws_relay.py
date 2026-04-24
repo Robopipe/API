@@ -12,6 +12,17 @@ logger = logging.getLogger(__name__)
 ChannelKey = Hashable
 
 
+class ProducerTerminated(Exception):
+    """
+    Raised by a producer to signal the relay should stop invoking it.
+
+    Distinct from a plain Exception (which the relay logs and retries after
+    a sleep). Use this when the underlying resource is gone and retries
+    will never succeed — e.g. the NN pipeline was deleted out from under
+    the stream.
+    """
+
+
 class _Channel:
     """Internal state for a single relay channel."""
 
@@ -110,6 +121,11 @@ class WebSocketRelay:
                     data = await anyio.to_thread.run_sync(
                         producer, abandon_on_cancel=True
                     )
+                except ProducerTerminated:
+                    logger.info(
+                        "Producer terminated for channel %s (resource gone)", key
+                    )
+                    return
                 except Exception:
                     logger.exception("Producer error on channel %s", key)
                     await asyncio.sleep(0.1)
