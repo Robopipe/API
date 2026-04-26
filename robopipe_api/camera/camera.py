@@ -355,6 +355,14 @@ class Camera:
         if not isinstance(self.pipeline, NNPipeline):
             return
 
+        # Clear nn_config on the current sensor BEFORE the pipeline restart.
+        # reload_sensors() propagates the old sensor's nn_config to the new
+        # one on open(), so without this GET /nn keeps returning the deployed
+        # config after delete — client shows a stale "NN" badge.
+        existing = self.sensors.get(sensor_name)
+        if existing is not None:
+            existing.nn_config = None
+
         pipeline = self.pipeline
         self.close()
         pipeline.remove_nn(sensor_name)
