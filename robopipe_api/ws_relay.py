@@ -23,6 +23,17 @@ class ProducerTerminated(Exception):
     """
 
 
+class ProducerSkipMessage(Exception):
+    """
+    Raised by a producer to skip broadcasting this iteration.
+
+    The relay keeps the producer loop alive and immediately calls the
+    producer again. Use this for rate-limiting where the producer still
+    needs to run side effects (state updates) every tick but only wants
+    to broadcast some of them.
+    """
+
+
 class _Channel:
     """Internal state for a single relay channel."""
 
@@ -126,6 +137,8 @@ class WebSocketRelay:
                         "Producer terminated for channel %s (resource gone)", key
                     )
                     return
+                except ProducerSkipMessage:
+                    continue
                 except Exception:
                     logger.exception("Producer error on channel %s", key)
                     await asyncio.sleep(0.1)
