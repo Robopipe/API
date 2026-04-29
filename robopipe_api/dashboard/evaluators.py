@@ -12,7 +12,7 @@ from .geometry import (
 from .threshold_tracker import ThresholdTracker
 from .zone_tracker import ZoneTracker
 
-from ..models.dashboard.dashboard_config import DashboardConfig
+from ..models.dashboard.dashboard_config import DashboardConfig, DashboardCountMode
 from ..models.dashboard.eval_models import (
     EvalLimit,
     EvalLimitItemParameter,
@@ -599,14 +599,21 @@ class DashboardEvaluator:
         events_store = events_store_factory()
         zr = self._tracker.find_in_zone_detections(detections, config)
 
-        # Class counter: one tick per newly-confirmed tracker, regardless of
-        # zone presence. `just_confirmed` fires exactly once per tracker in
-        # its lifetime.
-        for _display_id, label_int in zr.just_confirmed:
-            label = config.labels[label_int]
-            events_store.inc_counter(
-                dashboard_run_session_id, label.id, label.name
-            )
+        if config.countMode == DashboardCountMode.ON_ZONE_ENTER:
+            # Counter ticks the first frame a tracker crosses into the zone.
+            for i in zr.just_entered_indices:
+                label = config.labels[zr.in_zone[i].label]
+                events_store.inc_counter(
+                    dashboard_run_session_id, label.id, label.name
+                )
+        else:  # ON_CONFIRM
+            # Counter ticks the frame a tracker is confirmed by Kalman,
+            # regardless of zone presence.
+            for _display_id, label_int in zr.just_confirmed:
+                label = config.labels[label_int]
+                events_store.inc_counter(
+                    dashboard_run_session_id, label.id, label.name
+                )
 
         tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
         cfg_samples = self._samples.setdefault(config.id, {})

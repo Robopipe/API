@@ -14,6 +14,11 @@ class DashboardZoneDirection(str, Enum):
     VERTICAL = "VERTICAL"
 
 
+class DashboardCountMode(str, Enum):
+    ON_ZONE_ENTER = "ON_ZONE_ENTER"
+    ON_CONFIRM = "ON_CONFIRM"
+
+
 class DashboardConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -24,6 +29,7 @@ class DashboardConfig(BaseModel):
     zoneDirection: DashboardZoneDirection
     zoneCenter: float
     zoneThickness: float = Field(default=0.1, ge=0.0, le=1.0)
+    countMode: DashboardCountMode = DashboardCountMode.ON_ZONE_ENTER
     optimistic: bool = True
     confidenceThreshold: float = 0.5
     debounceFrames: int = 5
