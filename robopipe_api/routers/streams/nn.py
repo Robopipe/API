@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 
 import depthai as dai
 from fastapi import UploadFile, WebSocket, status
@@ -15,7 +16,7 @@ from ..common import (
     WSRelayDep,
 )
 from ...utils.detections_parser import parse_detections
-from ...ws_relay import ProducerTerminated
+from ...ws_relay import ProducerSkipMessage, ProducerTerminated
 from . import stream_router
 
 
@@ -84,6 +85,9 @@ async def get_sensor_detections(
 ):
     await ws.accept()
 
+    # Track of last broadcast time per producer closure for throttle_hz.
+    last_send_t: list[float] = [0.0]
+
     def producer():
         # Terminate cleanly (no retry log spam) when the sensor or NN have
         # been torn down under us — typically a DELETE /nn arriving while
@@ -91,13 +95,32 @@ async def get_sensor_detections(
         sensor = camera.sensors.get(stream_name)
         if sensor is None or sensor.nn_config is None:
             raise ProducerTerminated()
+        nn_config = sensor.nn_config
+
         detections = sensor.get_nn_detections()
         seq = detections.getSequenceNum()
-        parsed_detections = parse_detections(detections)
+        parsed_detections = parse_detections(
+            detections, mask_max_dim=nn_config.mask_max_dim
+        )
+        # handle_detections() runs every tick: it updates zone tracking,
+        # threshold accumulators and the events store. Throttling skips
+        # only the network broadcast, not the evaluation.
         result = handle_detections(
             sensor.dashboard_config, parsed_detections, sensor.dashboard_run_session_id
         )
         result["seq"] = seq
+
+        throttle_hz = nn_config.throttle_hz
+        if throttle_hz and throttle_hz > 0:
+            min_interval = 1.0 / throttle_hz
+            now = time.monotonic()
+            # Always emit frames carrying just-fired violations so QC
+            # alerts aren't delayed by the throttle.
+            has_violation_event = bool(result.get("violation_event_ids"))
+            if not has_violation_event and now - last_send_t[0] < min_interval:
+                raise ProducerSkipMessage()
+            last_send_t[0] = now
+
         return result
 
     await relay.subscribe(key=(mxid, stream_name, "nn"), ws=ws, producer=producer)

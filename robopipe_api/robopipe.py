@@ -138,10 +138,10 @@ def hello_robopipe():
     return PlainTextResponse("Hello from Robopipe API!")
 
 
-@app.exception_handler(Exception)
-def global_exception_handler(request: Request, exc: Exception):
-    if isinstance(exc, (CameraNotFoundException, SensorNotFoundException)):
-        return JSONResponse(status_code=404, content=None)
+@app.exception_handler(CameraNotFoundException)
+@app.exception_handler(SensorNotFoundException)
+def not_found_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(status_code=404, content=None)
 
 
 def app_setup():
