@@ -65,6 +65,8 @@ class DashboardConfigStore:
 
         configs = []
         for meta_file in sorted(stream_dir.glob("*.json")):
+            if meta_file.name.endswith(".user.json"):
+                continue
             metadata = json.loads(meta_file.read_text())
             dc = metadata["dashboard_config"]
             configs.append(
