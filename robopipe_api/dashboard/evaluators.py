@@ -371,18 +371,8 @@ class LogicTreeEvaluator:
     ) -> tuple[bool, bool, list[LimitResult]]:
         """Evaluate the logic tree. Returns (is_satisfied, fired, limit_results)."""
         if not self.test_case.logicNodes:
-            # Default: AND all limits
-            limit_results = [
-                ev.evaluate(all_detections, crossed)
-                for ev in self.limit_evaluators.values()
-            ]
-            if not limit_results:
-                return True, False, []
-            return (
-                all(lr.is_satisfied for lr in limit_results),
-                any(lr.fired for lr in limit_results),
-                limit_results,
-            )
+            # No logic nodes means no limits → test case is trivially satisfied but not fired.
+            return True, False, []
 
         return self._evaluate_nodes(self.test_case.logicNodes, all_detections, crossed)
 
@@ -603,17 +593,13 @@ class DashboardEvaluator:
             # Counter ticks the first frame a tracker crosses into the zone.
             for i in zr.just_entered_indices:
                 label = config.labels[zr.in_zone[i].label]
-                events_store.inc_counter(
-                    dashboard_run_session_id, label.id, label.name
-                )
+                events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
         else:  # ON_CONFIRM
             # Counter ticks the frame a tracker is confirmed by Kalman,
             # regardless of zone presence.
             for _display_id, label_int in zr.just_confirmed:
                 label = config.labels[label_int]
-                events_store.inc_counter(
-                    dashboard_run_session_id, label.id, label.name
-                )
+                events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
 
         tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
         cfg_samples = self._samples.setdefault(config.id, {})
