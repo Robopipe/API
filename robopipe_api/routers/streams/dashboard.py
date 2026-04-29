@@ -59,7 +59,7 @@ def serve_dashboard(
             "configId": sensor.dashboard_config.id,
             "name": sensor.dashboard_config.name,
             "projectName": sensor.dashboard_config.projectName,
-            "apiBase": str(request.url).rstrip("/dashboard"),
+            "apiBase": str(request.url).removesuffix("/dashboard"),
             "mxid": mxid,
             "streamName": stream_name,
             "labels": [label.model_dump() for label in sensor.dashboard_config.labels],

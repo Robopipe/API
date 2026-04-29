@@ -120,9 +120,10 @@ export type WidgetsProps = ContainerProps;
 export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const { running } = useAppState();
   const { thresholdStatus, masterStatus } = useThresholdStatus(running);
-  const [widgetSlots, setWidgetSlots] = useState<WidgetConfig>(
-    () => getUserSettings().widgetConfig,
-  );
+  const [widgetSlots, setWidgetSlots] = useState<WidgetConfig>(() => {
+    const cfg = getUserSettings().widgetConfig;
+    return resizeSlots(cfg, cfg.gridSize);
+  });
   const [editMode, setEditMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(
