@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useWebRTCStream } from "../../hooks";
 import { useDetections } from "../../hooks/useDetections";
-import { useDetectionsRenderer } from "../../hooks/useDetectionsRenderer";
+import { useSyncedRenderer } from "../../hooks/useSyncedRenderer";
 import { useAppState } from "../../provider";
 import type { NNDetections } from "../../types";
 import { collectViolations } from "../../utils/collectViolations";
-import { detectionsManager } from "../../utils/detectionsManager";
 
 interface BorderInfo {
   severity: "ALERT" | "WARNING";
@@ -22,9 +21,8 @@ export const VideoStream = () => {
     hiddenLabelIds,
     zoneVisible,
   } = useAppState();
-  const { videoRef, isStreaming, error } = useWebRTCStream();
-  const { renderDetections, canvasRef } = useDetectionsRenderer({
-    videoRef,
+  const { isStreaming, error } = useWebRTCStream();
+  const { canvasRef } = useSyncedRenderer({
     displayMode,
     multiLimitMode,
     hiddenLabelIds,
@@ -34,8 +32,6 @@ export const VideoStream = () => {
 
   const onDetections = useCallback(
     (detections: NNDetections) => {
-      renderDetections(detections);
-
       const allViolations = collectViolations(detections, testCaseMap);
 
       if (allViolations.length === 0) {
@@ -54,19 +50,9 @@ export const VideoStream = () => {
         extraCount: allViolations.length - 1,
       });
     },
-    [renderDetections, testCaseMap],
+    [testCaseMap],
   );
   useDetections({ onDetections });
-
-  useEffect(() => {
-    detectionsManager.setVideoRef(videoRef.current);
-    return () => detectionsManager.setVideoRef(null);
-  }, [videoRef]);
-
-  useEffect(() => {
-    detectionsManager.setCanvasRef(canvasRef.current);
-    return () => detectionsManager.setCanvasRef(null);
-  }, [canvasRef]);
 
   const getBorderClassName = (info: BorderInfo | null): string => {
     if (!info) return "bg-emerald-500/80";
@@ -86,14 +72,7 @@ export const VideoStream = () => {
         (running ? " rounded-xl p-1.5 " + getBorderClassName(borderInfo) : "")
       }
     >
-      <div className="relative bg-gray-950 rounded-md overflow-hidden">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="rounded-md w-full"
-        />
+      <div className="relative bg-gray-950 rounded-md overflow-hidden aspect-square">
         <canvas
           ref={canvasRef}
           className="absolute top-0 left-0 w-full h-full"
