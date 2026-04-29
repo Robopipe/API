@@ -61,6 +61,7 @@ class EvalLimit(BaseModel):
     targetLabel: Label
     targetParentLabel: Label | None = None
     severity: EvalSeverity | None = None
+    enabled: bool = True
     limitItems: list[EvalLimitItem] = []
 
 

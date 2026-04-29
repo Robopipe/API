@@ -242,6 +242,9 @@ class LimitEvaluator:
 
         Returns (value, fired, satisfying, non_satisfying).
         """
+        if not self.limit.enabled:
+            return True, False, [], []
+
         satisfying: list[BBoxDetection] = []
         non_satisfying: list[BBoxDetection] = []
 
