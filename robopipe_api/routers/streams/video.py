@@ -16,7 +16,7 @@ async def stream_video_offer(
     rtc_offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
     pc = RTCPeerConnection()
     webrtc_manager.add_pc(pc)
-    pc.addTrack(video_relay.subscribe(video_track))
+    pc.addTrack(video_relay.subscribe(video_track, buffered=False))
     await pc.setRemoteDescription(rtc_offer)
 
     @pc.on("iceconnectionstatechange")

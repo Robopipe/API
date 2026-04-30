@@ -49,7 +49,9 @@ def encode_payload(ts_us: int) -> int:
 
 
 def burn_timestamp(frame: av.VideoFrame, ts_us: int) -> av.VideoFrame:
-    """Return a new VideoFrame with ts_us burned into its top strip.
+    """Burn ts_us into the top strip of `frame` in place and return it.
+    Mutates plane 0 directly (Y plane for gray/nv12/yuv420p, packed BGR for
+    bgr24) to avoid a full to_ndarray/from_ndarray round-trip per frame.
     On unsupported formats or frames too small to fit the strip, returns the
     input frame unchanged."""
     fmt = frame.format.name
@@ -62,20 +64,22 @@ def burn_timestamp(frame: av.VideoFrame, ts_us: int) -> av.VideoFrame:
     if block * TOTAL_BITS > width or block > height:
         return frame
 
-    arr = frame.to_ndarray()
+    plane = frame.planes[0]
+    plane_view = np.frombuffer(plane, dtype=np.uint8).reshape(
+        plane.height, plane.line_size
+    )
+
+    # bgr24 is packed 3 bytes/pixel; writing the same value to all 3 channels
+    # produces black/white blocks that decode identically to the Y-plane case.
+    bpp = 3 if fmt == "bgr24" else 1
     payload = encode_payload(ts_us)
-    is_packed = fmt == "bgr24"
     for i in range(TOTAL_BITS):
         bit = (payload >> (TOTAL_BITS - 1 - i)) & 1
-        x0 = i * block
-        x1 = x0 + block
-        value = 255 if bit else 0
-        if is_packed:
-            arr[0:block, x0:x1, :] = value
-        else:
-            arr[0:block, x0:x1] = value
+        x0 = i * block * bpp
+        x1 = x0 + block * bpp
+        plane_view[0:block, x0:x1] = 255 if bit else 0
 
-    return av.VideoFrame.from_ndarray(arr, format=fmt)
+    return frame
 
 
 def decode_payload(strip: np.ndarray, width: int) -> int | None:

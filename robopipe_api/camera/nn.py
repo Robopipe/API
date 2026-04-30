@@ -94,13 +94,9 @@ class CameraNNConfig:
             dai.Point2f(first_tile.x2, first_tile.y2),
         )
         manip.initialConfig.addCrop(crop_rect, True)
-        manip.initialConfig.setOutputSize(
-            model_input_size[0], model_input_size[1]
-        )
+        manip.initialConfig.setOutputSize(model_input_size[0], model_input_size[1])
         manip.initialConfig.setFrameType(dai.ImgFrame.Type.BGR888i)
-        manip.setMaxOutputFrameSize(
-            model_input_size[0] * model_input_size[1] * 3
-        )
+        manip.setMaxOutputFrameSize(model_input_size[0] * model_input_size[1] * 3)
         cam_output.link(manip.inputImage)
 
         # Host input queue for dynamic crop reconfiguration
@@ -110,6 +106,4 @@ class CameraNNConfig:
         tile_nn = self._create_nn_node(pipeline, 1)
         tile_nn.build(manip.out, self.model)
 
-        return SAHINodes(
-            full_frame_nn, tile_nn, manip_cfg, tiles, model_input_size
-        )
+        return SAHINodes(full_frame_nn, tile_nn, manip_cfg, tiles, model_input_size)
