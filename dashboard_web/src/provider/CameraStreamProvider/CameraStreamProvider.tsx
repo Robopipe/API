@@ -445,10 +445,13 @@ export const CameraStreamProvider = ({
               void reportDashboardDetections(parsed.dashboard_detections);
             }
 
-            setDetections((prev) => {
-              prev.maskBitmap?.close?.();
-              return parsed;
-            });
+            // Notify subscribers via callback path. We deliberately do NOT
+            // call setDetections here — the legacy `detections` state is
+            // unused by every consumer (all of them use onDetections), and
+            // updating it 12×/s thrashes the React tree (provider context
+            // value churn → all useCameraStream consumers re-render),
+            // which starves requestVideoFrameCallback on the off-DOM
+            // capture video and breaks the matcher's frame ingestion.
             subscribersRef.current.forEach((cb) => cb(parsed));
 
             if (parsed.ts_us !== undefined && matcherRef.current) {
@@ -469,6 +472,10 @@ export const CameraStreamProvider = ({
                 performance.now(),
               );
             }
+
+            // The matcher took its own cloned maskBitmap above (or none);
+            // close the original so we don't leak GPU memory.
+            parsed.maskBitmap?.close?.();
 
             if (parsed.violation_event_ids?.length) {
               void captureViolationPicture(parsed.violation_event_ids);

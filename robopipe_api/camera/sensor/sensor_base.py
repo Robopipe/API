@@ -132,18 +132,26 @@ class SensorBase(ABC):
         if img_frame is not None:
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-            self.last_frame = burn_timestamp(
-                img_frame_to_video_frame(img_frame), ts_us
-            )
+            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+            # self._publish_video_seq(img_frame.getSequenceNum())
         elif self.last_frame is None:
             img_frame = video_queue.get()
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-            self.last_frame = burn_timestamp(
-                img_frame_to_video_frame(img_frame), ts_us
-            )
+            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+            # self._publish_video_seq(img_frame.getSequenceNum())
 
         return self.last_frame
+
+    def _publish_video_seq(self, seq: int) -> None:
+        """Notify any waiters that a video frame with this seq has been
+        dispatched to the encoder. Used by `get_nn_detections` to hold the
+        detection broadcast until the matching frame is on its way out, so
+        client-side ts matching doesn't drift."""
+        with self._video_seq_cond:
+            if seq > self._video_seq:
+                self._video_seq = seq
+                self._video_seq_cond.notify_all()
 
     def get_nn_frame(self):
         try:
@@ -194,9 +202,13 @@ class SensorBase(ABC):
                 raise TimeoutError("NN queue get() timed out")
 
         # Wait until the video track has dispatched the frame that
-        # corresponds to this detection, so both leave the server
-        # at approximately the same time.
-        # det_seq = detections.getSequenceNum()
+        # corresponds to this detection, so both leave the server at
+        # approximately the same time. Without this, the WebRTC encoder
+        # and the WS detection producer can land on different NN cycles
+        # — their ts values diverge and the client matcher breaks.
+        # The 0.5 s timeout keeps detection-only consumers (no video)
+        # from blocking forever.
+        det_seq = detections.getSequenceNum()
         # with self._video_seq_cond:
         #     self._video_seq_cond.wait_for(
         #         lambda: self._video_seq >= det_seq,
@@ -226,9 +238,7 @@ class SensorBase(ABC):
             self._sahi_tile_cache[self._sahi_tile_index] = remapped
 
         # Advance to next tile and reconfigure ImageManip crop
-        self._sahi_tile_index = (
-            (self._sahi_tile_index + 1) % len(self._sahi_tiles)
-        )
+        self._sahi_tile_index = (self._sahi_tile_index + 1) % len(self._sahi_tiles)
         next_tile = self._sahi_tiles[self._sahi_tile_index]
         cfg = dai.ImageManipConfig()
         crop_rect = dai.Rect(

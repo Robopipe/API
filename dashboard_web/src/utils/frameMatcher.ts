@@ -44,6 +44,12 @@ const MAX_DETECTION_AGE_MS = 2000;
  *
  * Designed for a single subscriber (the synced renderer); ownership of
  * emitted bitmaps transfers to that subscriber.
+ *
+ * Correctness depends on the API server emitting the WebRTC video frame
+ * and the matching detection broadcast at approximately the same time
+ * (the seq barrier in `SensorBase.get_nn_detections`). Without that, the
+ * two streams' ts values can drift apart faster than `MAX_*_AGE_MS` and
+ * matching freezes.
  */
 export class FrameMatcher {
   private pendingFrames = new Map<number, PendingFrame>();
@@ -136,6 +142,8 @@ export class FrameMatcher {
       this.pendingDetections.delete(ts);
       this.droppedDetections++;
     }
+    // Maps preserve insertion order; once we hit a young entry, every
+    // later entry is younger too, so we can stop.
     for (const [ts, entry] of this.pendingFrames) {
       if (now - entry.capturedAt > MAX_FRAME_AGE_MS) {
         this.pendingFrames.delete(ts);
