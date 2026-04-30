@@ -92,9 +92,7 @@ class NNPipeline(DepthPipeline):
             self.neural_networks[sensor_name] = nn_node
             nn_out = nn_node.out.createOutputQueue(maxSize=1, blocking=False)
             self.add_queue(nn_out, PipelineQueueType.NN, sensor_name, False)
-            nn_video = nn_node.passthrough.createOutputQueue(
-                maxSize=4, blocking=False
-            )
+            nn_video = nn_node.passthrough.createOutputQueue(maxSize=4, blocking=False)
             self.add_queue(nn_video, PipelineQueueType.VIDEO, sensor_name, False)
 
     def add_stereo_pair(self, left, right):

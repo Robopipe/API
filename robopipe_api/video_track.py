@@ -1,3 +1,6 @@
+import fractions
+import time
+
 from aiortc import VideoStreamTrack, MediaStreamError
 from aiortc.contrib.media import MediaRelay
 import anyio.to_thread
@@ -7,6 +10,9 @@ from functools import lru_cache
 
 from .camera.sensor.sensor_base import SensorBase
 from .log import logger
+
+VIDEO_CLOCK_RATE = 90000
+VIDEO_TIME_BASE = fractions.Fraction(1, VIDEO_CLOCK_RATE)
 
 
 class VideoTrack(VideoStreamTrack):
@@ -27,7 +33,16 @@ class VideoTrack(VideoStreamTrack):
             media_relay_factory.cache_clear()
             raise MediaStreamError()
 
-        frame.pts, frame.time_base = await self.next_timestamp()
+        # PTS from wall clock so a slow recv shrinks the framerate instead of
+        # silently lagging the stream. aiortc's default next_timestamp() advances
+        # PTS at a fixed nominal 30 FPS regardless of how long recv() actually
+        # took, which compounds into unbounded drift between encoder PTS and
+        # real time and eventually freezes the receiver.
+        now = time.monotonic()
+        if self._start is None:
+            self._start = now
+        frame.pts = int((now - self._start) * VIDEO_CLOCK_RATE)
+        frame.time_base = VIDEO_TIME_BASE
 
         return frame
 
