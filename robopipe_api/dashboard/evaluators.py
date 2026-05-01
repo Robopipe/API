@@ -546,12 +546,17 @@ class DashboardEvaluator:
         # configured zoneDirection. Only these trackers accumulate samples
         # and are eligible for commit on exit.
         self._valid_entries: dict[int, set[int]] = {}
+        # config_id -> set of tracker_ids already counted by ON_ZONE_ENTER.
+        # Prevents bbox jitter near the entry edge (in/out/in flips for the
+        # same physical object) from incrementing the counter multiple times.
+        self._counted: dict[int, set[int]] = {}
 
     def reset(self, config_id: int) -> None:
         """Clear all per-tracker state for a config (on dashboard start)."""
         self._tracker.reset(config_id)
         self._samples.pop(config_id, None)
         self._valid_entries.pop(config_id, None)
+        self._counted.pop(config_id, None)
 
     def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
         total = samples["pass"] + samples["fail"]
@@ -597,6 +602,7 @@ class DashboardEvaluator:
         expected_in = expected_entry_side(config.zoneDirection)
         expected_out = expected_exit_side(config.zoneDirection)
         valid_entries = self._valid_entries.setdefault(config.id, set())
+        counted = self._counted.setdefault(config.id, set())
 
         # Record trackers whose entry matched the configured direction. These
         # are the only ones eligible for the direction-aware counter and for
@@ -607,11 +613,15 @@ class DashboardEvaluator:
 
         if config.countMode == DashboardCountMode.ON_ZONE_ENTER:
             # Counter ticks the first frame a tracker crosses into the zone
-            # from the direction's expected entry side.
+            # from the direction's expected entry side. Each tracker_id is
+            # counted at most once per session — bbox jitter that flips a
+            # tracker out and back in across the entry edge must not double
+            # increment.
             for i in zr.just_entered_indices:
                 tid = zr.in_zone_tracker_ids[i]
-                if tid not in valid_entries:
+                if tid not in valid_entries or tid in counted:
                     continue
+                counted.add(tid)
                 label = config.labels[zr.in_zone[i].label]
                 events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
         else:  # ON_CONFIRM
