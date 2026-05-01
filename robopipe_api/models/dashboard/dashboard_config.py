@@ -10,8 +10,10 @@ from .label import Label
 
 
 class DashboardZoneDirection(str, Enum):
-    HORIZONTAL = "HORIZONTAL"
-    VERTICAL = "VERTICAL"
+    LeftToRight = "LEFT_TO_RIGHT"
+    RightToLeft = "RIGHT_TO_LEFT"
+    TopToBottom = "TOP_TO_BOTTOM"
+    BottomToTop = "BOTTOM_TO_TOP"
 
 
 class DashboardCountMode(str, Enum):

@@ -10,7 +10,7 @@ from .geometry import (
     value_within_limits,
 )
 from .threshold_tracker import ThresholdTracker
-from .zone_tracker import ZoneTracker
+from .zone_tracker import ZoneTracker, expected_entry_side, expected_exit_side
 
 from ..models.dashboard.dashboard_config import DashboardConfig, DashboardCountMode
 from ..models.dashboard.eval_models import (
@@ -542,11 +542,16 @@ class DashboardEvaluator:
         self._threshold_tracker = threshold_tracker
         # config_id -> tracker_id -> test_case_id -> sample accumulator
         self._samples: dict[int, dict[int, dict[str, dict]]] = {}
+        # config_id -> set of tracker_ids whose entry side matched the
+        # configured zoneDirection. Only these trackers accumulate samples
+        # and are eligible for commit on exit.
+        self._valid_entries: dict[int, set[int]] = {}
 
     def reset(self, config_id: int) -> None:
         """Clear all per-tracker state for a config (on dashboard start)."""
         self._tracker.reset(config_id)
         self._samples.pop(config_id, None)
+        self._valid_entries.pop(config_id, None)
 
     def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
         total = samples["pass"] + samples["fail"]
@@ -589,9 +594,24 @@ class DashboardEvaluator:
         events_store = events_store_factory()
         zr = self._tracker.find_in_zone_detections(detections, config)
 
+        expected_in = expected_entry_side(config.zoneDirection)
+        expected_out = expected_exit_side(config.zoneDirection)
+        valid_entries = self._valid_entries.setdefault(config.id, set())
+
+        # Record trackers whose entry matched the configured direction. These
+        # are the only ones eligible for the direction-aware counter and for
+        # an evaluation commit on exit.
+        for tid, side in zr.entry_sides.items():
+            if side == expected_in:
+                valid_entries.add(tid)
+
         if config.countMode == DashboardCountMode.ON_ZONE_ENTER:
-            # Counter ticks the first frame a tracker crosses into the zone.
+            # Counter ticks the first frame a tracker crosses into the zone
+            # from the direction's expected entry side.
             for i in zr.just_entered_indices:
+                tid = zr.in_zone_tracker_ids[i]
+                if tid not in valid_entries:
+                    continue
                 label = config.labels[zr.in_zone[i].label]
                 events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
         else:  # ON_CONFIRM
@@ -626,6 +646,8 @@ class DashboardEvaluator:
                     if config.labels[det.label].id not in subject_ids:
                         continue
                     tid = zr.in_zone_tracker_ids[i]
+                    if tid not in valid_entries:
+                        continue
                     tr_samples = cfg_samples.setdefault(tid, {})
                     tc_samples = tr_samples.setdefault(
                         evaluator.test_case.id,
@@ -638,11 +660,17 @@ class DashboardEvaluator:
                         tc_samples["pass"] += 1
 
         # Commit on zone exit: reduce accumulated samples and record once.
+        # Discard everything for trackers whose entry/exit didn't follow the
+        # configured zoneDirection (wrong-flow exit, expired ghosts, etc.).
         violation_event_ids: list[int] = []
         tc_by_id = {e.test_case.id: e.test_case for e in tc_evaluators}
         for tid in zr.exited_tracker_ids:
             tr_samples = cfg_samples.pop(tid, None)
-            if tr_samples is None:
+            entry_ok = tid in valid_entries
+            valid_entries.discard(tid)
+            if tr_samples is None or not entry_ok:
+                continue
+            if zr.exit_sides.get(tid) != expected_out:
                 continue
             for tc_id, s in tr_samples.items():
                 tc = tc_by_id.get(tc_id)

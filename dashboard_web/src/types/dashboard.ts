@@ -1,8 +1,10 @@
 import type { Label } from "./label";
 
 export enum DashboardZoneDirection {
-  HORIZONTAL = "HORIZONTAL",
-  VERTICAL = "VERTICAL",
+  LeftToRight = "LEFT_TO_RIGHT",
+  RightToLeft = "RIGHT_TO_LEFT",
+  TopToBottom = "TOP_TO_BOTTOM",
+  BottomToTop = "BOTTOM_TO_TOP",
 }
 
 export interface EvalThreshold {

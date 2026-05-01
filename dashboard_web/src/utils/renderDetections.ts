@@ -285,17 +285,11 @@ export const renderZone = (
   ctx.lineWidth = 2;
   ctx.setLineDash([10, 5]);
 
-  if (direction === DashboardZoneDirection.HORIZONTAL) {
-    const yLo = lo * height;
-    const yHi = hi * height;
-    ctx.fillRect(0, yLo, width, yHi - yLo);
-    ctx.beginPath();
-    ctx.moveTo(0, yLo);
-    ctx.lineTo(width, yLo);
-    ctx.moveTo(0, yHi);
-    ctx.lineTo(width, yHi);
-    ctx.stroke();
-  } else {
+  const isXAxis =
+    direction === DashboardZoneDirection.LeftToRight ||
+    direction === DashboardZoneDirection.RightToLeft;
+
+  if (isXAxis) {
     const xLo = lo * width;
     const xHi = hi * width;
     ctx.fillRect(xLo, 0, xHi - xLo, height);
@@ -304,6 +298,16 @@ export const renderZone = (
     ctx.lineTo(xLo, height);
     ctx.moveTo(xHi, 0);
     ctx.lineTo(xHi, height);
+    ctx.stroke();
+  } else {
+    const yLo = lo * height;
+    const yHi = hi * height;
+    ctx.fillRect(0, yLo, width, yHi - yLo);
+    ctx.beginPath();
+    ctx.moveTo(0, yLo);
+    ctx.lineTo(width, yLo);
+    ctx.moveTo(0, yHi);
+    ctx.lineTo(width, yHi);
     ctx.stroke();
   }
   ctx.restore();
