@@ -111,12 +111,8 @@ class Camera:
                     isinstance(self.pipeline, NNPipeline)
                     and sensor_name in self.pipeline.sahi_tile_queue
                 ):
-                    sensor._sahi_tile_queue = self.pipeline.sahi_tile_queue[
-                        sensor_name
-                    ]
-                    sensor._sahi_manip_cfg = self.pipeline.sahi_manip_cfg[
-                        sensor_name
-                    ]
+                    sensor._sahi_tile_queue = self.pipeline.sahi_tile_queue[sensor_name]
+                    sensor._sahi_manip_cfg = self.pipeline.sahi_manip_cfg[sensor_name]
                     sensor._sahi_tiles = self.pipeline.sahi_tiles[sensor_name]
                     sensor._sahi_config = self.pipeline.sahi_configs[sensor_name]
                     sensor._sahi_model_input_size = (
