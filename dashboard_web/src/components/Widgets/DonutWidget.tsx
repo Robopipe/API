@@ -70,7 +70,7 @@ export const DonutWidget = ({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2" title={name}>
+    <div className="flex flex-col items-center gap-2 max-w-full min-w-0" title={name}>
       <div className="relative" style={{ width: size, height: size }}>
         <svg
           width={size}
@@ -148,7 +148,10 @@ export const DonutWidget = ({
       {showName && (
         <span
           className="text-white font-medium text-center max-w-full truncate px-1"
-          style={{ fontSize: nameFontSize, maxWidth: size * 1.4 }}
+          style={{
+            fontSize: nameFontSize,
+            maxWidth: `min(100%, ${size * 1.4}px)`,
+          }}
         >
           {name}
         </span>

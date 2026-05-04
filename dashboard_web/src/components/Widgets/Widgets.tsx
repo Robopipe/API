@@ -27,7 +27,6 @@ const DISPLAY_MODES: { value: WidgetDisplayMode; label: string }[] = [
 ];
 
 const GRID_GAP = 16; // gap-4
-const MIN_DONUT_SIZE = 40;
 const MAX_DONUT_SIZE = 320;
 const NAME_LABEL_THRESHOLD = 55;
 const MASTER_MIN_SIZE = 140;
@@ -43,11 +42,16 @@ interface ComputedSizes {
   masterSize: number;
 }
 
+function labelReserveFor(d: number, editMode: boolean): number {
+  if (editMode) return 64;
+  if (d < NAME_LABEL_THRESHOLD) return 0;
+  return 8 + Math.ceil(1.5 * Math.max(10, d * 0.095)) + 2;
+}
+
 function computeSizes(
   panelW: number,
   panelH: number,
   n: number,
-  labelReserve: number,
   hasMaster: boolean,
   editMode: boolean,
 ): ComputedSizes {
@@ -58,61 +62,79 @@ function computeSizes(
     (panelW - GRID_GAP * (n - 1)) / n,
   );
   const gridVGap = GRID_GAP * (n - 1);
-
-  if (!hasMaster) {
-    const cellH = (panelH - PANEL_TOPBAR_H - gridVGap) / n;
-    const donutSize = Math.max(
-      MIN_DONUT_SIZE,
-      Math.min(cellWMax, cellH - labelReserve),
-    );
-    return { donutSize: Math.round(donutSize), masterSize: 0 };
-  }
-
   const masterFooter = editMode ? MASTER_FOOTER_H_EDIT : MASTER_FOOTER_H_VIEW;
-  const masterCap = Math.min(MASTER_MAX_SIZE, panelH * MASTER_MAX_PANEL_RATIO);
+  // Account for the master's name label, which can extend up to 1.4 * size
+  // (DonutWidget.tsx). Cap by panelW / 1.4 so the master + label fit horizontally.
+  const widthCap = Math.max(0, panelW / 1.4);
+  const masterCap = Math.min(
+    MASTER_MAX_SIZE,
+    panelH * MASTER_MAX_PANEL_RATIO,
+    widthCap,
+  );
   const masterBase = Math.min(
     MASTER_MAX_SIZE,
     Math.max(MASTER_MIN_SIZE, panelH * 0.25),
+    widthCap,
   );
+  const masterFloor = Math.min(MASTER_MIN_SIZE, masterCap);
 
-  const heightBudget =
-    panelH - PANEL_TOPBAR_H - masterFooter - gridVGap - n * labelReserve;
-  const dEquality = heightBudget / (n + MASTER_OVER_GRID_RATIO);
-  const mEquality = dEquality * MASTER_OVER_GRID_RATIO;
+  const solve = (labelReserve: number): ComputedSizes => {
+    if (!hasMaster) {
+      const cellH = (panelH - PANEL_TOPBAR_H - gridVGap) / n;
+      let donutSize = Math.min(cellWMax, cellH - labelReserve);
+      donutSize = donutSize < 24 ? 0 : Math.min(donutSize, MAX_DONUT_SIZE);
+      return { donutSize: Math.round(donutSize), masterSize: 0 };
+    }
 
-  let masterSize: number;
-  let donutSize: number;
+    const heightBudget =
+      panelH - PANEL_TOPBAR_H - masterFooter - gridVGap - n * labelReserve;
+    const dEquality = heightBudget / (n + MASTER_OVER_GRID_RATIO);
+    const mEquality = dEquality * MASTER_OVER_GRID_RATIO;
 
-  if (mEquality >= masterCap) {
-    masterSize = masterCap;
-    const cellH =
-      (panelH - PANEL_TOPBAR_H - masterSize - masterFooter - gridVGap) / n;
-    donutSize = cellH - labelReserve;
-  } else if (mEquality <= masterBase) {
-    masterSize = masterBase;
-    const cellH =
-      (panelH - PANEL_TOPBAR_H - masterSize - masterFooter - gridVGap) / n;
-    donutSize = cellH - labelReserve;
-  } else {
-    donutSize = dEquality;
-    masterSize = mEquality;
-  }
+    let masterSize: number;
+    let donutSize: number;
 
-  if (donutSize > cellWMax) {
-    donutSize = cellWMax;
-    masterSize = Math.min(
-      masterCap,
-      Math.max(masterBase, donutSize * MASTER_OVER_GRID_RATIO),
-    );
-  }
+    if (mEquality >= masterCap) {
+      masterSize = masterCap;
+      const cellH =
+        (panelH - PANEL_TOPBAR_H - masterSize - masterFooter - gridVGap) / n;
+      donutSize = cellH - labelReserve;
+    } else if (mEquality <= masterBase) {
+      masterSize = masterBase;
+      const cellH =
+        (panelH - PANEL_TOPBAR_H - masterSize - masterFooter - gridVGap) / n;
+      donutSize = cellH - labelReserve;
+    } else {
+      donutSize = dEquality;
+      masterSize = mEquality;
+    }
 
-  donutSize = Math.max(MIN_DONUT_SIZE, donutSize);
-  masterSize = Math.max(MASTER_MIN_SIZE, Math.min(masterCap, masterSize));
+    if (donutSize > cellWMax) {
+      donutSize = cellWMax;
+      masterSize = Math.min(
+        masterCap,
+        Math.max(masterBase, donutSize * MASTER_OVER_GRID_RATIO),
+      );
+    }
 
-  return {
-    donutSize: Math.round(donutSize),
-    masterSize: Math.round(masterSize),
+    donutSize = donutSize < 24 ? 0 : Math.min(donutSize, MAX_DONUT_SIZE);
+    masterSize = Math.max(masterFloor, Math.min(masterCap, masterSize));
+
+    return {
+      donutSize: Math.round(donutSize),
+      masterSize: Math.round(masterSize),
+    };
   };
+
+  let reserve = editMode ? 64 : 26;
+  let result = solve(reserve);
+  for (let i = 0; i < 2; i++) {
+    const next = labelReserveFor(result.donutSize, editMode);
+    if (Math.abs(next - reserve) < 1) break;
+    reserve = next;
+    result = solve(reserve);
+  }
+  return result;
 }
 
 export type WidgetsProps = ContainerProps;
@@ -243,12 +265,10 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
     (window.DASHBOARD_CONFIG.thresholds?.length ?? 0) > 0;
   const hasMaster = showMaster && hasMasterThresholds;
   const n = widgetSlots.gridSize;
-  const labelReserve = editMode ? 64 : 26;
   const { donutSize, masterSize } = computeSizes(
     panelSize.width,
     panelSize.height,
     n,
-    labelReserve,
     hasMaster,
     editMode,
   );
@@ -257,10 +277,10 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
 
   return (
     <Container
-      className={`relative flex flex-col ${className || ""}`}
+      className={`relative flex flex-col min-w-0 ${className || ""}`}
       {...props}
     >
-      <div ref={panelRef} className="flex flex-col flex-1 min-h-0">
+      <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
         {/* Top bar */}
         <div className="flex items-center justify-between mb-3 shrink-0">
           <div>
@@ -293,10 +313,10 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
 
         {/* Widget grid */}
         <div
-          className="flex-1 min-h-0 grid gap-4 place-items-center"
+          className="flex-1 min-w-0 min-h-0 overflow-hidden grid gap-4 place-items-center"
           style={{
-            gridTemplateColumns: `repeat(${widgetSlots.gridSize}, 1fr)`,
-            gridTemplateRows: `repeat(${widgetSlots.gridSize}, 1fr)`,
+            gridTemplateColumns: `repeat(${widgetSlots.gridSize}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${widgetSlots.gridSize}, minmax(0, 1fr))`,
           }}
         >
           {widgetSlots.slots.map((slot, index) => {
