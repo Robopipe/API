@@ -58,6 +58,7 @@ class CameraManager:
     def shutdown_camera(self, mxid: str):
         self.cameras[mxid].cleanup_replay_videos()
         self.cameras[mxid].close()
+        del self.cameras[mxid]
 
 
 @lru_cache(maxsize=1)

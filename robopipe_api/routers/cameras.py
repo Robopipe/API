@@ -51,6 +51,7 @@ def delete_camera(
     camera_manager: CameraManagerDep, mxid: Mxid, camera: CameraDep
 ) -> DeviceInfo:
     camera_manager.shutdown_camera(mxid)
+    camera_manager.reload_cameras()
 
     return camera.info
 
