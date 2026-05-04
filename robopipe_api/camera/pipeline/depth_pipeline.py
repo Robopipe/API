@@ -97,3 +97,9 @@ class DepthPipeline(StreamingPipeline):
             return self.remove_stereo_pair()
 
         return super().remove_sensor(sensor_name)
+
+    def dispose_dai(self):
+        super().dispose_dai()
+        self.stereo = None
+        self.cam_left = None
+        self.cam_right = None

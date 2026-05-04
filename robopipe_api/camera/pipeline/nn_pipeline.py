@@ -149,3 +149,9 @@ class NNPipeline(DepthPipeline):
         self.remove_nn(sensor)
 
         return super().remove_sensor(sensor)
+
+    def dispose_dai(self):
+        super().dispose_dai()
+        self.neural_networks.clear()
+        self.sahi_tile_queue.clear()
+        self.sahi_manip_cfg.clear()
