@@ -143,17 +143,24 @@ class SensorBase(ABC):
 
         # return self.last_frame
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
-        img_frame: dai.ImgFrame | None = video_queue.tryGet()
+        try:
+            img_frame: dai.ImgFrame | None = video_queue.tryGet()
+        except Exception as e:
+            # The dai.Device backing this queue was closed (pipeline restart).
+            # Surface as RuntimeError so consumers tear down rather than loop
+            # on the cached `last_frame`.
+            raise RuntimeError("video queue closed") from e
 
         if img_frame:
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
             self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
-            # self.last_frame = img_frame_to_video_frame(img_frame)
         elif self.last_frame is None:
-            img_frame = video_queue.get()
+            try:
+                img_frame = video_queue.get()
+            except Exception as e:
+                raise RuntimeError("video queue closed") from e
             self.on_frame(img_frame)
-            # self.last_frame = img_frame_to_video_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
             self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
 

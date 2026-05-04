@@ -1,3 +1,4 @@
+import asyncio
 import fractions
 import time
 
@@ -6,9 +7,7 @@ from aiortc.contrib.media import MediaRelay
 import anyio.to_thread
 from av import VideoFrame
 
-from functools import lru_cache
-
-from .camera.sensor.sensor_base import SensorBase
+from .camera.camera import Camera
 from .log import logger
 
 VIDEO_CLOCK_RATE = 90000
@@ -16,21 +15,31 @@ VIDEO_TIME_BASE = fractions.Fraction(1, VIDEO_CLOCK_RATE)
 
 
 class VideoTrack(VideoStreamTrack):
-    def __init__(self, sensor: SensorBase):
+    def __init__(self, camera: Camera, sensor_name: str):
         super().__init__()
-        self.sensor = sensor
+        self.camera = camera
+        self.sensor_name = sensor_name
         self._start: float | None = None
 
     async def recv(self) -> VideoFrame:
+        sensor = self.camera.sensors.get(self.sensor_name)
+        if sensor is None:
+            # Sensor briefly absent during reload_sensors() — wait one tick and retry.
+            await asyncio.sleep(0.01)
+            sensor = self.camera.sensors.get(self.sensor_name)
+            if sensor is None:
+                self.stop()
+                _drop_track(self.camera.mxid, self.sensor_name)
+                raise MediaStreamError()
+
         try:
             frame = await anyio.to_thread.run_sync(
-                self.sensor.get_video_frame, abandon_on_cancel=True
+                sensor.get_video_frame, abandon_on_cancel=True
             )
         except Exception as e:
             logger.error(f"Error in get_video_frame: {e}")
             self.stop()
-            video_track_factory.cache_clear()
-            media_relay_factory.cache_clear()
+            _drop_track(self.camera.mxid, self.sensor_name)
             raise MediaStreamError()
 
         # PTS from wall clock so a slow recv shrinks the framerate instead of
@@ -47,11 +56,30 @@ class VideoTrack(VideoStreamTrack):
         return frame
 
 
-@lru_cache(maxsize=1)
-def video_track_factory(sensor: SensorBase) -> VideoTrack:
-    return VideoTrack(sensor)
+_TrackKey = tuple[str, str]
+_video_tracks: dict[_TrackKey, VideoTrack] = {}
+_media_relays: dict[_TrackKey, MediaRelay] = {}
 
 
-@lru_cache(maxsize=1)
-def media_relay_factory(sensor: SensorBase) -> MediaRelay:
-    return MediaRelay()
+def video_track_factory(camera: Camera, sensor_name: str) -> VideoTrack:
+    key = (camera.mxid, sensor_name)
+    track = _video_tracks.get(key)
+    if track is None:
+        track = VideoTrack(camera, sensor_name)
+        _video_tracks[key] = track
+    return track
+
+
+def media_relay_factory(camera: Camera, sensor_name: str) -> MediaRelay:
+    key = (camera.mxid, sensor_name)
+    relay = _media_relays.get(key)
+    if relay is None:
+        relay = MediaRelay()
+        _media_relays[key] = relay
+    return relay
+
+
+def _drop_track(mxid: str, sensor_name: str) -> None:
+    key = (mxid, sensor_name)
+    _video_tracks.pop(key, None)
+    _media_relays.pop(key, None)

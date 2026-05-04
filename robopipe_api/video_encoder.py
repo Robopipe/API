@@ -5,7 +5,7 @@ import io
 import math
 
 
-from .camera.sensor.sensor_base import SensorBase
+from .camera.camera import Camera
 
 
 class VideoEncoder:
@@ -21,14 +21,17 @@ class VideoEncoder:
 
     def __init__(
         self,
-        sensor: SensorBase,
+        camera: Camera,
+        sensor_name: str,
         container_options: dict = CONTAINER_OPTIONS,
         encoder_options: dict = ENCODER_OPTIONS,
     ):
-        self.sensor = sensor
+        self.camera = camera
+        self.sensor_name = sensor_name
         self.buffer = io.BytesIO()
         self.container = av.open(self.buffer, "w", "mp4", options=container_options)
 
+        sensor = camera.sensors[sensor_name]
         sample_frame = sensor.get_video_frame()
 
         fps = fractions.Fraction(120)
@@ -41,7 +44,7 @@ class VideoEncoder:
             sample_frame.width
             * sample_frame.height
             * 0.5  # High Quality video
-            * self.sensor.config.fps
+            * sensor.config.fps
         )
         video_stream.bit_rate = bit_rate
         self.video_stream = video_stream
@@ -70,8 +73,13 @@ class VideoEncoder:
         return self.next()
 
     def next(self):
+        sensor = self.camera.sensors.get(self.sensor_name)
+        if sensor is None:
+            self.close()
+            raise StopIteration()
+
         try:
-            frame = self.sensor.get_video_frame()
+            frame = sensor.get_video_frame()
         except Exception:
             self.close()
             raise StopIteration()
