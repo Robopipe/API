@@ -1,6 +1,5 @@
 import depthai as dai
 
-import gc
 import time
 from pathlib import Path
 
@@ -156,19 +155,6 @@ class Camera:
                 self.pipeline = None
             self.camera_handle.close()
             self.camera_handle = None
-
-    def _release_template(self, pipeline: Pipeline):
-        """Drop the OLD pipeline wrapper's dai-bound references and force a
-        gc cycle so the previous dai.Pipeline / node objects release their
-        device-side state before the new dai.Device is opened. Without
-        this, the OAK firmware keeps NN-mode resources allocated across
-        the rebuild and the next streaming-only pipeline runs degraded."""
-        try:
-            pipeline.dispose_dai()
-        except Exception:
-            pass
-        gc.collect()
-        time.sleep(0.2)
 
     def open(self, pipeline: Pipeline | None = None):
         if self.camera_handle is not None:
@@ -359,7 +345,6 @@ class Camera:
         pipeline = self.pipeline
         self.close()
         pipeline.add_nn_config(nn)
-        self._release_template(pipeline)
         self.open(pipeline)
 
     def delete_nn(self, sensor_name: str):
@@ -378,7 +363,6 @@ class Camera:
         self.close()
         pipeline.remove_nn(sensor_name)
         pipeline.add_sensor_config(self.all_sensors[sensor_name])
-        self._release_template(pipeline)
         self.open(pipeline)
 
     def __check_device_active(self):

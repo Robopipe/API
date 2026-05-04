@@ -80,19 +80,6 @@ class Pipeline:
         if sensor_name in self.output_queues:
             del self.output_queues[sensor_name]
 
-    def dispose_dai(self):
-        """Drop all dai-bound references so the underlying dai.Pipeline /
-        node objects can be released. Python config attributes used by
-        recreate() (`_streaming_cameras`, `nn_configs`, `_replay_videos`,
-        `stereo_pair`) are preserved. Subclasses extend to drop their own
-        dai-bound state."""
-        self.cameras.clear()
-        self.outputs.clear()
-        self.inputs.clear()
-        self.input_queues.clear()
-        self.output_queues.clear()
-        self.pipeline = None
-
 
 class EmptyPipeline(Pipeline):
     pass

@@ -20,6 +20,7 @@ from ...models.dashboard.user_settings import DashboardUserSettings
 from ...paths import get_data_dir
 from ..common import (
     CameraDep,
+    CameraManagerDep,
     DashboardConfigsListDep,
     EventsStoreDep,
     Mxid,
@@ -149,17 +150,19 @@ async def set_dashboard_config(
 
 @stream_router.delete("/dashboard")
 def delete_dashboard_config(
-    camera: CameraDep,
+    camera_manager: CameraManagerDep,
     sensor: SensorDep,
     mxid: Mxid,
     stream_name: StreamName,
     events_store: EventsStoreDep,
 ):
     _teardown_dashboard_run(sensor, events_store)
-    sensor.dashboard_config = None
-    sensor.nn_config = None
     config_store_factory().clear_configs(mxid, stream_name)
-    camera.delete_nn(stream_name)
+    # Hard-reset the camera. An in-place pipeline rebuild leaves the
+    # streaming-only mode degraded after coming back from NN mode (lag
+    # observed even after explicit dispose + gc). Recreating the Camera
+    # from scratch is the only thing that reliably restores full fps.
+    camera_manager.restart_camera(mxid)
 
 
 @stream_router.get("/dashboard/config")
