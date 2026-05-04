@@ -1,4 +1,8 @@
 import json
+import os
+import sys
+import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -20,7 +24,6 @@ from ...models.dashboard.user_settings import DashboardUserSettings
 from ...paths import get_data_dir
 from ..common import (
     CameraDep,
-    CameraManagerDep,
     DashboardConfigsListDep,
     EventsStoreDep,
     Mxid,
@@ -30,6 +33,15 @@ from ..common import (
 )
 from . import JpegResponse, stream_router
 from .nn import _load_model_blob_from_path
+
+
+def _restart_api_process():
+    """Hard-restart the API by re-execing the Python process. Used as a
+    nuclear reset when nothing else clears the streaming-mode lag after
+    coming back from NN mode. Sleeps briefly so the HTTP response can
+    flush before the process image is replaced."""
+    time.sleep(0.5)
+    os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
 def _teardown_dashboard_run(sensor, events_store):
@@ -148,9 +160,8 @@ async def set_dashboard_config(
     }
 
 
-@stream_router.delete("/dashboard")
+@stream_router.delete("/dashboard", status_code=status.HTTP_202_ACCEPTED)
 def delete_dashboard_config(
-    camera_manager: CameraManagerDep,
     sensor: SensorDep,
     mxid: Mxid,
     stream_name: StreamName,
@@ -158,11 +169,12 @@ def delete_dashboard_config(
 ):
     _teardown_dashboard_run(sensor, events_store)
     config_store_factory().clear_configs(mxid, stream_name)
-    # Hard-reset the camera. An in-place pipeline rebuild leaves the
-    # streaming-only mode degraded after coming back from NN mode (lag
-    # observed even after explicit dispose + gc). Recreating the Camera
-    # from scratch is the only thing that reliably restores full fps.
-    camera_manager.restart_camera(mxid)
+    # Re-exec the whole API process. In-place pipeline rebuild and full
+    # camera recreation both still leave the streaming-only mode degraded
+    # after NN mode. A clean process restart is the only thing that
+    # reliably restores full fps. Client must reconnect after ~3s.
+    threading.Thread(target=_restart_api_process, daemon=True).start()
+    return {"status": "restarting"}
 
 
 @stream_router.get("/dashboard/config")
