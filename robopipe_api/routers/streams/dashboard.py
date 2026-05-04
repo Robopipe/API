@@ -31,6 +31,15 @@ from . import JpegResponse, stream_router
 from .nn import _load_model_blob_from_path
 
 
+def _teardown_dashboard_run(sensor, events_store):
+    if sensor.dashboard_run_session_id is not None:
+        events_store.end_session(sensor.dashboard_run_session_id)
+        sensor.dashboard_run_session_id = None
+    if sensor.dashboard_config is not None:
+        reset_zone_tracking(sensor.dashboard_config.id)
+        _threshold_tracker.reset(sensor.dashboard_config.id)
+
+
 @stream_router.get("/dashboard", response_class=HTMLResponse)
 def serve_dashboard(
     request: Request, mxid: Mxid, stream_name: StreamName, sensor: SensorDep
@@ -139,10 +148,18 @@ async def set_dashboard_config(
 
 
 @stream_router.delete("/dashboard")
-def delete_dashboard_config(sensor: SensorDep, mxid: Mxid, stream_name: StreamName):
-    # TODO: If the deleted config is currently active, we should probably stop the dashboard and undeploy the model
+def delete_dashboard_config(
+    camera: CameraDep,
+    sensor: SensorDep,
+    mxid: Mxid,
+    stream_name: StreamName,
+    events_store: EventsStoreDep,
+):
+    _teardown_dashboard_run(sensor, events_store)
     sensor.dashboard_config = None
+    sensor.nn_config = None
     config_store_factory().clear_configs(mxid, stream_name)
+    camera.delete_nn(stream_name)
 
 
 @stream_router.get("/dashboard/config")
@@ -259,12 +276,7 @@ def switch_dashboard_config(
         )
 
     # Stop dashboard and reset evaluation state
-    if sensor.dashboard_run_session_id is not None:
-        events_store.end_session(sensor.dashboard_run_session_id)
-        sensor.dashboard_run_session_id = None
-    if sensor.dashboard_config is not None:
-        reset_zone_tracking(sensor.dashboard_config.id)
-        _threshold_tracker.reset(sensor.dashboard_config.id)
+    _teardown_dashboard_run(sensor, events_store)
 
     # Load model from disk and deploy
     blob = _load_model_blob_from_path(stored.model_path)
