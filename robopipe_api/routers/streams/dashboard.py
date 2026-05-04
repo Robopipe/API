@@ -38,10 +38,12 @@ from .nn import _load_model_blob_from_path
 def _restart_api_process():
     """Hard-restart the API by re-execing the Python process. Used as a
     nuclear reset when nothing else clears the streaming-mode lag after
-    coming back from NN mode. Sleeps briefly so the HTTP response can
-    flush before the process image is replaced."""
+    coming back from NN mode — neither in-place pipeline rebuild, full
+    Camera + dai.Device recreation, nor clearing all our Python-side
+    caches (VideoTrack/MediaRelay/PCs) is enough. Re-execs with
+    `-m robopipe_api` because sys.argv[0] points at __main__.py."""
     time.sleep(0.5)
-    os.execv(sys.executable, [sys.executable, *sys.argv])
+    os.execv(sys.executable, [sys.executable, "-m", "robopipe_api", *sys.argv[1:]])
 
 
 def _teardown_dashboard_run(sensor, events_store):
@@ -169,10 +171,12 @@ def delete_dashboard_config(
 ):
     _teardown_dashboard_run(sensor, events_store)
     config_store_factory().clear_configs(mxid, stream_name)
-    # Re-exec the whole API process. In-place pipeline rebuild and full
-    # camera recreation both still leave the streaming-only mode degraded
-    # after NN mode. A clean process restart is the only thing that
-    # reliably restores full fps. Client must reconnect after ~3s.
+    # Re-exec the whole API process. Less drastic options (in-place
+    # pipeline rebuild, full Camera + dai.Device recreation, clearing
+    # cached VideoTracks/MediaRelays + closing WebRTC PCs) all leave
+    # the streaming-only mode degraded after NN mode. Only a clean
+    # process restart reliably restores full fps. Client must
+    # reconnect after ~3s.
     threading.Thread(target=_restart_api_process, daemon=True).start()
     return {"status": "restarting"}
 
