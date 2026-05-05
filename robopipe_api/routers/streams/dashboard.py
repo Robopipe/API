@@ -18,11 +18,8 @@ from ...models.dashboard.dashboard_config import DashboardConfigUpdate
 from ...models.dashboard.detection_event import DetectionEvent
 from ...models.dashboard.user_settings import DashboardUserSettings
 from ...paths import get_data_dir
-from ...video_track import invalidate_camera as invalidate_video_track_camera
-from ...webrtc_manager import webrtc_manager_factory
 from ..common import (
     CameraDep,
-    CameraManagerDep,
     DashboardConfigsListDep,
     EventsStoreDep,
     Mxid,
@@ -150,31 +147,18 @@ async def set_dashboard_config(
     }
 
 
-@stream_router.delete("/dashboard", status_code=status.HTTP_202_ACCEPTED)
-async def delete_dashboard_config(
-    camera_manager: CameraManagerDep,
+@stream_router.delete("/dashboard")
+def delete_dashboard_config(
+    camera: CameraDep,
     sensor: SensorDep,
     mxid: Mxid,
     stream_name: StreamName,
     events_store: EventsStoreDep,
 ):
     _teardown_dashboard_run(sensor, events_store)
+    sensor.dashboard_config = None
     config_store_factory().clear_configs(mxid, stream_name)
-
-    # Tear down everything that holds a reference to the soon-to-be-replaced
-    # Camera / sensor objects. With VideoTrack.recv now honoring readyState,
-    # `track.stop()` here actually halts MediaRelay's __run_track loop —
-    # previously it kept spinning on the dead source forever, which was the
-    # root cause of the post-dashboard streaming lag.
-    webrtc_manager = webrtc_manager_factory()
-    await webrtc_manager.remove_all_pcs()
-    invalidate_video_track_camera(mxid)
-
-    # Recreate the Camera (close pipeline + dai.Device, drop the wrapper,
-    # rediscover, re-boot).
-    await anyio.to_thread.run_sync(camera_manager.restart_camera, mxid)
-
-    return {"status": "restarted"}
+    camera.delete_nn(stream_name)
 
 
 @stream_router.get("/dashboard/config")

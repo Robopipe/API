@@ -1,6 +1,5 @@
 import depthai as dai
 
-import time
 from functools import lru_cache
 
 from ..error import CameraNotFoundException
@@ -60,35 +59,6 @@ class CameraManager:
         self.cameras[mxid].cleanup_replay_videos()
         self.cameras[mxid].close()
         del self.cameras[mxid]
-
-    def restart_camera(self, mxid: str):
-        """Tear down the Camera (close pipeline + dai.Device, drop the wrapper),
-        let the firmware settle, then re-discover and re-boot. Used as a hard
-        reset when a delete-from-NN-mode rebuild leaves the streaming-only
-        pipeline in a degraded state that an in-place close+open doesn't
-        recover from."""
-        if mxid in self.cameras:
-            try:
-                self.cameras[mxid].cleanup_replay_videos()
-            except Exception:
-                pass
-            try:
-                self.cameras[mxid].close()
-            except Exception:
-                pass
-            del self.cameras[mxid]
-
-        # Brief settle so the device firmware fully releases before re-discovery.
-        time.sleep(0.5)
-
-        for dev in dai.DeviceBase.getAllConnectedDevices():
-            if dev.deviceId == mxid:
-                self.cameras[mxid] = Camera(mxid, dev.name)
-                break
-        else:
-            raise CameraNotFoundException()
-
-        self.boot_camera(mxid)
 
 
 @lru_cache(maxsize=1)
