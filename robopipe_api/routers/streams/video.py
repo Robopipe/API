@@ -12,6 +12,14 @@ async def stream_video_offer(
     video_relay: VideoRelayDep,
     webrtc_manager: WebRTCManagerDep,
 ):
+    # Close any prior peer connections before accepting a new one. The
+    # OAK + edge host can't sustain two concurrent H.264 encoders feeding
+    # from the same source — opening the dashboard alongside the main
+    # viewer would put two PCs on the relay, saturate CPU, and leave the
+    # stream degraded even after one tab is closed. Enforcing one PC at
+    # a time means the latest offer wins; the previous viewer disconnects.
+    await webrtc_manager.remove_all_pcs()
+
     params = await req.json()
     rtc_offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
     pc = RTCPeerConnection()

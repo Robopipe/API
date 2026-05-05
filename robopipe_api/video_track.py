@@ -22,6 +22,15 @@ class VideoTrack(VideoStreamTrack):
         self._start: float | None = None
 
     async def recv(self) -> VideoFrame:
+        # Mirror aiortc's own VideoStreamTrack.recv: bail out as soon as
+        # the track has been stopped. Without this, MediaRelay's
+        # __run_track loop keeps calling recv() on a "stopped" track
+        # forever (it only stops on MediaStreamError), pinning a CPU
+        # core polling the (now-dead) source sensor and leaving zombie
+        # tasks behind every time the camera is swapped or invalidated.
+        if self.readyState != "live":
+            raise MediaStreamError()
+
         sensor = self.camera.sensors.get(self.sensor_name)
         if sensor is None:
             # Sensor briefly absent during reload_sensors() — wait one tick and retry.
@@ -83,3 +92,19 @@ def _drop_track(mxid: str, sensor_name: str) -> None:
     key = (mxid, sensor_name)
     _video_tracks.pop(key, None)
     _media_relays.pop(key, None)
+
+
+def invalidate_camera(mxid: str) -> None:
+    """Drop all cached VideoTrack / MediaRelay entries for this camera.
+    Call when the underlying Camera object is being recreated so new
+    WebRTC offers don't pick up the cached source track that still
+    references the old Camera (and its dead sensor queues)."""
+    keys = [k for k in _video_tracks if k[0] == mxid]
+    for key in keys:
+        track = _video_tracks.pop(key, None)
+        if track is not None:
+            try:
+                track.stop()
+            except Exception:
+                pass
+        _media_relays.pop(key, None)
