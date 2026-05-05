@@ -18,19 +18,19 @@ async def stream_video_offer(
     webrtc_manager.add_pc(pc)
     sender = pc.addTrack(video_relay.subscribe(video_track, buffered=False))
 
-    # The track yields pre-encoded H.264 av.Packets, so the negotiated codec
-    # must be H.264. Without this, aiortc's answer picks VP8 (the default
-    # first entry) and the browser tries to decode H.264 bitstream with a
-    # VP8 decoder — webrtc-internals shows keyFramesDecoded climbing while
-    # framesDecoded stays at 0 (every "frame" fails to decode).
-    h264_codecs = [
+    # The track yields pre-encoded VP8 av.Packets, so the negotiated codec
+    # must be VP8. aiortc's answer would otherwise pick whatever the
+    # browser offered first (often H.264), and the browser would try to
+    # decode VP8 bitstream with the wrong decoder — webrtc-internals
+    # would show keyFramesDecoded climbing while framesDecoded stayed at 0.
+    vp8_codecs = [
         c
         for c in RTCRtpSender.getCapabilities("video").codecs
-        if c.mimeType.lower() == "video/h264"
+        if c.mimeType.lower() == "video/vp8"
     ]
     for transceiver in pc.getTransceivers():
         if transceiver.sender is sender:
-            transceiver.setCodecPreferences(h264_codecs)
+            transceiver.setCodecPreferences(vp8_codecs)
             break
 
     await pc.setRemoteDescription(rtc_offer)
