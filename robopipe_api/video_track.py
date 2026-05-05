@@ -1,5 +1,6 @@
 import asyncio
 import fractions
+import time
 from collections import deque
 
 import av
@@ -30,7 +31,8 @@ class VideoTrack(VideoStreamTrack):
         self.sensor_name = sensor_name
         self._codec: av.CodecContext | None = None
         self._packet_buffer: deque[av.Packet] = deque()
-        self._next_pts: int = 0
+        self._start_time: float | None = None
+        self._last_pts: int = -1
 
     def _ensure_codec(self, frame: av.VideoFrame) -> av.CodecContext:
         if (
@@ -67,12 +69,24 @@ class VideoTrack(VideoStreamTrack):
         # the timestamp burnin in the Y strip survives.
         if frame.format.name != "yuv420p":
             frame = frame.reformat(format="yuv420p")
-        # libav demands monotonically increasing PTS in the codec's time_base
-        # (90 kHz here). The source frame carries no usable PTS, so we pace
-        # at 1/30 s in 90 kHz units.
-        frame.pts = self._next_pts
+        # PTS from wall clock (90 kHz). Pacing at a fixed 30 fps stride
+        # makes the stream jumpy under variable source rate (NN load
+        # slows the camera below 30 fps): the receiver paces playback to
+        # PTS-implied 30 fps, but real frames arrive slower, so its
+        # buffer drains → freeze → fills on burst → jumpy. Wall-clock
+        # PTS reflects actual arrival cadence, so the receiver paces
+        # playback correctly.
+        now = time.monotonic()
+        if self._start_time is None:
+            self._start_time = now
+        pts = int((now - self._start_time) * VIDEO_CLOCK_RATE)
+        # libav requires strictly increasing PTS — guard against rare
+        # same-microsecond ticks (would crash the encoder).
+        if pts <= self._last_pts:
+            pts = self._last_pts + 1
+        self._last_pts = pts
+        frame.pts = pts
         frame.time_base = VIDEO_TIME_BASE
-        self._next_pts += VIDEO_CLOCK_RATE // 30
         packets = list(codec.encode(frame))
         for pkt in packets:
             # H264Encoder.pack() reads pkt.pts / pkt.time_base via
