@@ -1,8 +1,4 @@
 import json
-import os
-import sys
-import threading
-import time
 import uuid
 from pathlib import Path
 
@@ -22,8 +18,11 @@ from ...models.dashboard.dashboard_config import DashboardConfigUpdate
 from ...models.dashboard.detection_event import DetectionEvent
 from ...models.dashboard.user_settings import DashboardUserSettings
 from ...paths import get_data_dir
+from ...video_track import invalidate_camera as invalidate_video_track_camera
+from ...webrtc_manager import webrtc_manager_factory
 from ..common import (
     CameraDep,
+    CameraManagerDep,
     DashboardConfigsListDep,
     EventsStoreDep,
     Mxid,
@@ -33,17 +32,6 @@ from ..common import (
 )
 from . import JpegResponse, stream_router
 from .nn import _load_model_blob_from_path
-
-
-def _restart_api_process():
-    """Hard-restart the API by re-execing the Python process. Used as a
-    nuclear reset when nothing else clears the streaming-mode lag after
-    coming back from NN mode — neither in-place pipeline rebuild, full
-    Camera + dai.Device recreation, nor clearing all our Python-side
-    caches (VideoTrack/MediaRelay/PCs) is enough. Re-execs with
-    `-m robopipe_api` because sys.argv[0] points at __main__.py."""
-    time.sleep(0.5)
-    os.execv(sys.executable, [sys.executable, "-m", "robopipe_api", *sys.argv[1:]])
 
 
 def _teardown_dashboard_run(sensor, events_store):
@@ -163,7 +151,8 @@ async def set_dashboard_config(
 
 
 @stream_router.delete("/dashboard", status_code=status.HTTP_202_ACCEPTED)
-def delete_dashboard_config(
+async def delete_dashboard_config(
+    camera_manager: CameraManagerDep,
     sensor: SensorDep,
     mxid: Mxid,
     stream_name: StreamName,
@@ -171,14 +160,21 @@ def delete_dashboard_config(
 ):
     _teardown_dashboard_run(sensor, events_store)
     config_store_factory().clear_configs(mxid, stream_name)
-    # Re-exec the whole API process. Less drastic options (in-place
-    # pipeline rebuild, full Camera + dai.Device recreation, clearing
-    # cached VideoTracks/MediaRelays + closing WebRTC PCs) all leave
-    # the streaming-only mode degraded after NN mode. Only a clean
-    # process restart reliably restores full fps. Client must
-    # reconnect after ~3s.
-    threading.Thread(target=_restart_api_process, daemon=True).start()
-    return {"status": "restarting"}
+
+    # Tear down everything that holds a reference to the soon-to-be-replaced
+    # Camera / sensor objects. With VideoTrack.recv now honoring readyState,
+    # `track.stop()` here actually halts MediaRelay's __run_track loop —
+    # previously it kept spinning on the dead source forever, which was the
+    # root cause of the post-dashboard streaming lag.
+    webrtc_manager = webrtc_manager_factory()
+    await webrtc_manager.remove_all_pcs()
+    invalidate_video_track_camera(mxid)
+
+    # Recreate the Camera (close pipeline + dai.Device, drop the wrapper,
+    # rediscover, re-boot).
+    await anyio.to_thread.run_sync(camera_manager.restart_camera, mxid)
+
+    return {"status": "restarted"}
 
 
 @stream_router.get("/dashboard/config")
