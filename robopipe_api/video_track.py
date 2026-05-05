@@ -43,7 +43,10 @@ class VideoTrack(VideoStreamTrack):
             return self._codec
 
         # Frame size changed (or first frame) — (re)create the encoder.
-        codec = av.CodecContext.create("libx264", "w")
+        # libvpx (VP8) chosen over libx264 to avoid H.264 royalty exposure.
+        # aiortc only supports VP8 and H.264 for the pre-encoded pack()
+        # path; VP9 isn't available in this version.
+        codec = av.CodecContext.create("libvpx", "w")
         codec.width = frame.width
         codec.height = frame.height
         codec.pix_fmt = "yuv420p"
@@ -51,11 +54,11 @@ class VideoTrack(VideoStreamTrack):
         codec.time_base = VIDEO_TIME_BASE
         codec.bit_rate = DEFAULT_BIT_RATE
         codec.options = {
-            "tune": "zerolatency",
-            "preset": "ultrafast",
+            "deadline": "realtime",
+            "cpu-used": "8",  # 0..16, higher = faster + lower quality. 8 is a good edge default
             "g": "30",  # one keyframe per ~second so new subscribers attach quickly
+            "error-resilient": "1",
         }
-        codec.profile = "Baseline"
         self._codec = codec
         return codec
 
