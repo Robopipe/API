@@ -450,9 +450,19 @@ class TestCaseEvaluator:
         self._is_check = test_case.type == EvalTestCaseType.CHECK
         self._logic_evaluator = LogicTreeEvaluator(test_case, config)
 
+    @property
+    def is_check(self) -> bool:
+        return self._is_check
+
     def _is_violated(self, is_satisfied: bool) -> bool:
         """Apply CHECK/DEFECT inversion: CHECK is violated when NOT satisfied."""
         return not is_satisfied if self._is_check else is_satisfied
+
+    def limit_violating_detections(self, lr: LimitResult) -> list[BBoxDetection]:
+        """Detections to flag for a violated limit (mirrors evaluate())."""
+        if self._is_check:
+            return lr.non_satisfying or lr.all_targets
+        return lr.satisfying or lr.all_targets
 
     def is_violated(
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
@@ -461,15 +471,20 @@ class TestCaseEvaluator:
         result, fired, _ = self._logic_evaluator.evaluate(all_detections, crossed)
         return self._is_violated(result), fired
 
-    def evaluate(
+    def evaluate_with_limit_results(
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
-    ) -> list[EvaluationResult]:
-        """Evaluate and return per-limit EvaluationResults if the test case is violated."""
-        combined, _, limit_results = self._logic_evaluator.evaluate(
+    ) -> tuple[bool, bool, list[LimitResult]]:
+        """Returns (test_case_violated, fired, limit_results)."""
+        combined, fired, limit_results = self._logic_evaluator.evaluate(
             all_detections, crossed
         )
+        return self._is_violated(combined), fired, limit_results
 
-        if not self._is_violated(combined):
+    def build_evaluation_results(
+        self, violated: bool, limit_results: list[LimitResult]
+    ) -> list[EvaluationResult]:
+        """Convert LimitResults to EvaluationResults, applying CHECK/DEFECT semantics."""
+        if not violated:
             return []
 
         tc = self.test_case
@@ -481,10 +496,7 @@ class TestCaseEvaluator:
             # CHECK: non-satisfying detections failed the check
             # DEFECT: satisfying detections are the defects
             # Fall back to all_targets for COUNT (no per-detection split)
-            if self._is_check:
-                violating = lr.non_satisfying or lr.all_targets
-            else:
-                violating = lr.satisfying or lr.all_targets
+            violating = self.limit_violating_detections(lr)
 
             results.append(
                 EvaluationResult(
@@ -515,6 +527,15 @@ class TestCaseEvaluator:
             )
 
         return results
+
+    def evaluate(
+        self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
+    ) -> list[EvaluationResult]:
+        """Evaluate and return per-limit EvaluationResults if the test case is violated."""
+        violated, _, limit_results = self.evaluate_with_limit_results(
+            all_detections, crossed
+        )
+        return self.build_evaluation_results(violated, limit_results)
 
 
 # ---------------------------------------------------------------------------
@@ -550,6 +571,14 @@ class DashboardEvaluator:
         # Prevents bbox jitter near the entry edge (in/out/in flips for the
         # same physical object) from incrementing the counter multiple times.
         self._counted: dict[int, set[int]] = {}
+        # config_id -> tracker_id -> limit_id -> lock entry. Optimistic locks
+        # store {"verdict": "pass"} and suppress later violations of that
+        # (tracker, limit). Pessimistic locks store {"verdict": "fail", ...
+        # limit metadata} so the highlight can be re-emitted as a sticky
+        # synthetic violation on later frames where the live evaluator no
+        # longer flags the detection. Locks are write-once and survive zone
+        # exit; cleared only on reset(config_id).
+        self._lock_state: dict[int, dict[int, dict[str, dict]]] = {}
 
     def reset(self, config_id: int) -> None:
         """Clear all per-tracker state for a config (on dashboard start)."""
@@ -557,6 +586,7 @@ class DashboardEvaluator:
         self._samples.pop(config_id, None)
         self._valid_entries.pop(config_id, None)
         self._counted.pop(config_id, None)
+        self._lock_state.pop(config_id, None)
 
     def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
         total = samples["pass"] + samples["fail"]
@@ -639,9 +669,12 @@ class DashboardEvaluator:
         # target label). This keeps threshold metrics item-scoped — e.g. a
         # pallet defect is charged to the pallet, not to every crate riding
         # on top of it.
+        cfg_locks = self._lock_state.setdefault(config.id, {})
         if zr.in_zone and zr.in_zone_tracker_ids:
             for evaluator in tc_evaluators:
-                violated, fired = evaluator.is_violated(detections, zr.in_zone)
+                violated, fired, limit_results = (
+                    evaluator.evaluate_with_limit_results(detections, zr.in_zone)
+                )
                 if not fired:
                     continue
                 subject_ids = self._subject_label_ids(evaluator.test_case)
@@ -651,7 +684,9 @@ class DashboardEvaluator:
                 # can commit the event metadata on exit.
                 latest_results: list[EvaluationResult] | None = None
                 if violated:
-                    latest_results = evaluator.evaluate(detections, zr.in_zone)
+                    latest_results = evaluator.build_evaluation_results(
+                        violated, limit_results
+                    )
                 for i, det in enumerate(zr.in_zone):
                     if config.labels[det.label].id not in subject_ids:
                         continue
@@ -668,6 +703,55 @@ class DashboardEvaluator:
                         tc_samples["last_violation"] = latest_results
                     else:
                         tc_samples["pass"] += 1
+
+                # Per-limit, per-tracker lock update: write-once entries that
+                # mute (optimistic, locked-pass) or sticky (pessimistic,
+                # locked-fail) the live highlight for the rest of the
+                # tracker's life.
+                for lr in limit_results:
+                    if not lr.fired:
+                        continue
+                    limit_violated = (
+                        (not lr.is_satisfied)
+                        if evaluator.is_check
+                        else lr.is_satisfied
+                    )
+                    failing_ids: set[int] = set()
+                    if limit_violated:
+                        failing_ids = {
+                            id(d)
+                            for d in evaluator.limit_violating_detections(lr)
+                        }
+                    limit_subject_id = (
+                        lr.limit.targetParentLabel.id
+                        if lr.limit.targetParentLabel is not None
+                        else lr.limit.targetLabel.id
+                    )
+                    for i, det in enumerate(zr.in_zone):
+                        if config.labels[det.label].id != limit_subject_id:
+                            continue
+                        tid = zr.in_zone_tracker_ids[i]
+                        if tid not in valid_entries:
+                            continue
+                        tr_locks = cfg_locks.setdefault(tid, {})
+                        if lr.limit.id in tr_locks:
+                            continue
+                        is_failing = id(det) in failing_ids
+                        if config.optimistic and not is_failing:
+                            tr_locks[lr.limit.id] = {"verdict": "pass"}
+                        elif (not config.optimistic) and is_failing:
+                            tr_locks[lr.limit.id] = {
+                                "verdict": "fail",
+                                "test_case_id": evaluator.test_case.id,
+                                "test_case_name": evaluator.test_case.name,
+                                "limit_name": lr.limit.name,
+                                "severity": (
+                                    lr.limit.severity.value
+                                    if lr.limit.severity
+                                    else None
+                                ),
+                                "target_label_id": lr.limit.targetLabel.id,
+                            }
 
         # Commit on zone exit: reduce accumulated samples and record once.
         # Discard everything for trackers whose entry/exit didn't follow the
@@ -716,8 +800,82 @@ class DashboardEvaluator:
 
         # Live overlay: evaluate every visible detection regardless of zone
         # presence so the UI keeps highlighting violating items once spotted.
+        # Per-(tracker, limit) locks reshape the highlight: optimistic locks
+        # suppress later violations of a passed limit; pessimistic locks add
+        # sticky violations for limits that have already failed at least once.
+        det_to_tid: dict[int, int] = {}
+        tid_to_det: dict[int, BBoxDetection] = {}
+        for i, d in enumerate(detections):
+            tid = zr.tracking_ids[i]
+            if tid is None:
+                continue
+            det_to_tid[id(d)] = tid
+            tid_to_det[tid] = d
+
         results: list[EvaluationResult] = []
+        emitted_violations: set[tuple[int, str]] = set()
         for evaluator in tc_evaluators:
-            results.extend(evaluator.evaluate(detections, detections))
+            for ev in evaluator.evaluate(detections, detections):
+                if ev.violated_limit_id is None:
+                    results.append(ev)
+                    continue
+                if config.optimistic:
+                    filtered = []
+                    for d in ev.violating_detections:
+                        tid = det_to_tid.get(id(d))
+                        if tid is not None:
+                            entry = cfg_locks.get(tid, {}).get(ev.violated_limit_id)
+                            if entry is not None and entry["verdict"] == "pass":
+                                continue
+                        filtered.append(d)
+                    if not filtered:
+                        continue
+                    ev.violating_detections = filtered
+                results.append(ev)
+                for d in ev.violating_detections:
+                    tid = det_to_tid.get(id(d))
+                    if tid is not None:
+                        emitted_violations.add((tid, ev.violated_limit_id))
+
+        if not config.optimistic:
+            # Pessimistic sticky: re-emit each locked-fail (tracker, limit) on
+            # the tracker's current detection so the highlight persists across
+            # frames where the live evaluator no longer flags it.
+            sticky: dict[tuple[str, str], dict] = {}
+            for tid, limit_locks in cfg_locks.items():
+                det = tid_to_det.get(tid)
+                if det is None:
+                    continue
+                for limit_id, info in limit_locks.items():
+                    if info.get("verdict") != "fail":
+                        continue
+                    if (tid, limit_id) in emitted_violations:
+                        continue
+                    key = (info["test_case_id"], limit_id)
+                    entry = sticky.setdefault(
+                        key,
+                        {
+                            "test_case_name": info["test_case_name"],
+                            "limit_name": info["limit_name"],
+                            "severity": info["severity"],
+                            "target_label_id": info["target_label_id"],
+                            "dets": [],
+                        },
+                    )
+                    entry["dets"].append(det)
+            for (tc_id, limit_id), entry in sticky.items():
+                if entry["severity"] is None:
+                    continue
+                results.append(
+                    EvaluationResult(
+                        test_case_id=tc_id,
+                        test_case_name=entry["test_case_name"],
+                        violated_limit_id=limit_id,
+                        violated_limit_name=entry["limit_name"],
+                        violated_limit_severity=entry["severity"],
+                        violated_limit_target_label_id=entry["target_label_id"],
+                        violating_detections=entry["dets"],
+                    )
+                )
 
         return results, violation_event_ids, zr.tracking_ids, zr.display_ids
