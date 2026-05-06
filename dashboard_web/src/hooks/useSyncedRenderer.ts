@@ -5,6 +5,7 @@ import type {
   MultiLimitDisplayMode,
 } from "../types/dashboard";
 import type { DetectionViolation, NNDetection } from "../types/detections";
+import { pickBlockSize } from "../utils/decodeTimestampBurnin";
 import {
   isBBDetection,
   renderBBoxDetection,
@@ -113,6 +114,15 @@ export const useSyncedRenderer = ({
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
+        // Shift the canvas up by the burned-in timestamp stripe height
+        // so the parent's overflow:hidden clips it. Pixels are kept in
+        // the drawing buffer for snapshot/timestamp decoding. The extra
+        // 1px on top/height absorbs sub-pixel rounding during scaling
+        // so the stripe never bleeds back in.
+        const block = pickBlockSize(w);
+        const s = block / h;
+        canvas.style.top = `calc(${(-s / (1 - s)) * 100}% - 1px)`;
+        canvas.style.height = `calc(${(1 / (1 - s)) * 100}% + 1px)`;
       }
 
       const ctx = canvas.getContext("2d");

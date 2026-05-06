@@ -73,10 +73,7 @@ export const VideoStream = () => {
       }
     >
       <div className="relative bg-gray-950 rounded-md overflow-hidden aspect-square">
-        <canvas
-          ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full"
-        />
+        <canvas ref={canvasRef} className="absolute left-0 w-full" />
         {!isStreaming && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
             {error ? (
