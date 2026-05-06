@@ -347,7 +347,7 @@ class LimitEvaluator:
             limit=self.limit,
             satisfying=_dedupe(all_satisfying),
             non_satisfying=_dedupe(all_non_satisfying),
-            all_targets=violating_children + violating_parents,
+            all_targets=violating_parents or violating_children,
         )
 
 
