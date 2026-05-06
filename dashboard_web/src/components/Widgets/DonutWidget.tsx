@@ -15,6 +15,8 @@ export interface DonutWidgetProps {
   primaryLabel?: string;
   /** When false, the name label below the donut is hidden (used at very small sizes) */
   showName?: boolean;
+  /** Render a muted, paused state when the underlying test case is disabled */
+  disabled?: boolean;
 }
 
 export const DonutWidget = ({
@@ -26,6 +28,7 @@ export const DonutWidget = ({
   strokeWidth,
   primaryLabel,
   showName = true,
+  disabled = false,
 }: DonutWidgetProps) => {
   const stroke = strokeWidth ?? Math.max(4, Math.round(size * 0.086));
   const radius = (size - stroke) / 2;
@@ -40,13 +43,23 @@ export const DonutWidget = ({
   const failures = status?.failures ?? 0;
   const total = status?.total ?? 0;
   const passRate = status?.pass_rate ?? 1.0;
-  const zoneColor = status?.zone_color ?? defaultColor;
+  const zoneColor = disabled ? "#4b5563" : (status?.zone_color ?? defaultColor);
   const showWarning =
-    status !== null && status.total > 0 && !status.is_best_zone;
+    !disabled && status !== null && status.total > 0 && !status.is_best_zone;
 
-  const fillOffset = circumference * (1 - passRate);
+  const fillOffset = disabled ? 0 : circumference * (1 - passRate);
 
   const secondaryMetric = () => {
+    if (disabled) {
+      return (
+        <span
+          className="italic text-gray-500"
+          style={{ fontSize: secondaryFontSize }}
+        >
+          disabled
+        </span>
+      );
+    }
     if (displayMode === "pass_rate") {
       return (
         <span className="text-gray-400" style={{ fontSize: secondaryFontSize }}>
@@ -70,7 +83,10 @@ export const DonutWidget = ({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 max-w-full min-w-0" title={name}>
+    <div
+      className={`flex flex-col items-center gap-2 max-w-full min-w-0 ${disabled ? "opacity-60" : ""}`}
+      title={disabled ? `${name} (disabled)` : name}
+    >
       <div className="relative" style={{ width: size, height: size }}>
         <svg
           width={size}

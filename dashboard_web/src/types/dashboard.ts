@@ -19,6 +19,7 @@ export interface TestCase {
   id: string;
   name: string;
   severity: "ALERT" | "WARNING" | null;
+  enabled: boolean;
   thresholds: EvalThreshold[];
 }
 

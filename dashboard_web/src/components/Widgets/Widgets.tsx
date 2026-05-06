@@ -345,6 +345,7 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
                       defaultColor={getThresholdDefaultColor(tc)}
                       size={donutSize}
                       showName={showNameLabel}
+                      disabled={!tc.enabled}
                     />
                   )}
                   {editMode && (

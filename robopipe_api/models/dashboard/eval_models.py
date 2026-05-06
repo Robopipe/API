@@ -103,3 +103,4 @@ class EvalTestCase(BaseModel):
     limits: list[EvalLimit]
     logicNodes: list[EvalLogicNode] = []
     thresholds: list[EvalThreshold] = []
+    enabled: bool = True

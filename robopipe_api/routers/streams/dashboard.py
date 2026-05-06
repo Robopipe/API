@@ -77,6 +77,7 @@ def serve_dashboard(
                     "id": tc.id,
                     "name": tc.name,
                     "severity": tc.severity,
+                    "enabled": tc.enabled,
                     "thresholds": [t.model_dump() for t in tc.thresholds],
                 }
                 for tc in sensor.dashboard_config.testCases

@@ -27,7 +27,6 @@ from ..models.dashboard.eval_models import (
 )
 from ..models.detection.bbox_detection import BBoxDetection
 
-
 # ---------------------------------------------------------------------------
 # Result dataclasses
 # ---------------------------------------------------------------------------
@@ -363,7 +362,9 @@ class LogicTreeEvaluator:
         self.test_case = test_case
         self.config = config
         self.limit_evaluators: dict[str, LimitEvaluator] = {
-            limit.id: LimitEvaluator(limit, config) for limit in test_case.limits
+            limit.id: LimitEvaluator(limit, config)
+            for limit in test_case.limits
+            if limit.enabled
         }
 
     def evaluate(
@@ -400,17 +401,28 @@ class LogicTreeEvaluator:
             # Operand: LIMIT or GROUP
             if node.type == EvalLogicNodeType.LIMIT:
                 if node.id not in self.limit_evaluators:
-                    value, node_fired = False, False
-                else:
-                    lr = self.limit_evaluators[node.id].evaluate(
-                        all_detections, crossed
-                    )
-                    collected.append(lr)
-                    value, node_fired = lr.is_satisfied, lr.fired
+                    # Disabled or missing limit: drop the node from the tree
+                    # entirely. Discard any pending operator/NOT so they don't
+                    # latch onto the next operand. Avoids the AND/OR identity
+                    # bias that would otherwise skew DEFECT verdicts.
+                    pending_op = None
+                    negate_next = False
+                    continue
+                lr = self.limit_evaluators[node.id].evaluate(
+                    all_detections, crossed
+                )
+                collected.append(lr)
+                value, node_fired = lr.is_satisfied, lr.fired
             else:  # GROUP
                 value, node_fired, child_results = self._evaluate_nodes(
                     node.children or [], all_detections, crossed
                 )
+                if not child_results and not node_fired:
+                    # Group resolved to nothing (all children disabled): drop
+                    # like a disabled limit.
+                    pending_op = None
+                    negate_next = False
+                    continue
                 collected.extend(child_results)
 
             fired = fired or node_fired
@@ -512,8 +524,11 @@ class TestCaseEvaluator:
                 )
             )
 
-        # If no individual limit produced a result, still record the test case violation
-        if not results:
+        # If no individual limit produced a result, still record the test case
+        # violation — but only if at least one enabled limit actually fired.
+        # Without this gate, an "all-disabled" or trivially-satisfied logic
+        # tree would emit a synthetic violation every frame for DEFECT.
+        if not results and any(lr.fired for lr in limit_results):
             results.append(
                 EvaluationResult(
                     test_case_id=tc.id,
@@ -661,7 +676,10 @@ class DashboardEvaluator:
                 label = config.labels[label_int]
                 events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
 
-        tc_evaluators = [TestCaseEvaluator(tc, config) for tc in config.testCases]
+        tc_evaluators = [
+            TestCaseEvaluator(tc, config) for tc in config.testCases if tc.enabled
+        ]
+        enabled_tc_ids = {e.test_case.id for e in tc_evaluators}
         cfg_samples = self._samples.setdefault(config.id, {})
 
         # Per-frame sampling: attribute the test case verdict only to the
@@ -672,8 +690,8 @@ class DashboardEvaluator:
         cfg_locks = self._lock_state.setdefault(config.id, {})
         if zr.in_zone and zr.in_zone_tracker_ids:
             for evaluator in tc_evaluators:
-                violated, fired, limit_results = (
-                    evaluator.evaluate_with_limit_results(detections, zr.in_zone)
+                violated, fired, limit_results = evaluator.evaluate_with_limit_results(
+                    detections, zr.in_zone
                 )
                 if not fired:
                     continue
@@ -712,15 +730,12 @@ class DashboardEvaluator:
                     if not lr.fired:
                         continue
                     limit_violated = (
-                        (not lr.is_satisfied)
-                        if evaluator.is_check
-                        else lr.is_satisfied
+                        (not lr.is_satisfied) if evaluator.is_check else lr.is_satisfied
                     )
                     failing_ids: set[int] = set()
                     if limit_violated:
                         failing_ids = {
-                            id(d)
-                            for d in evaluator.limit_violating_detections(lr)
+                            id(d) for d in evaluator.limit_violating_detections(lr)
                         }
                     limit_subject_id = (
                         lr.limit.targetParentLabel.id
@@ -848,6 +863,8 @@ class DashboardEvaluator:
                     continue
                 for limit_id, info in limit_locks.items():
                     if info.get("verdict") != "fail":
+                        continue
+                    if info["test_case_id"] not in enabled_tc_ids:
                         continue
                     if (tid, limit_id) in emitted_violations:
                         continue
