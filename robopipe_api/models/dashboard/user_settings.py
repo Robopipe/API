@@ -30,7 +30,7 @@ class DashboardUserSettings(BaseModel):
     displayMode: DetectionDisplayMode = "all"
     multiLimitMode: MultiLimitDisplayMode = "highest"
     hiddenLabelIds: list[int] = []
-    zoneVisible: bool = True
+    zoneVisible: bool = False
     selectedLabelId: int | None = None
     widgetConfig: WidgetConfig = Field(default_factory=WidgetConfig)
     timerLabelDisplay: TimerLabelDisplay = "project_name"
