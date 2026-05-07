@@ -594,6 +594,12 @@ class DashboardEvaluator:
         # longer flags the detection. Locks are write-once and survive zone
         # exit; cleared only on reset(config_id).
         self._lock_state: dict[int, dict[int, dict[str, dict]]] = {}
+        # config_id -> set of tracker_ids that have completed a successful
+        # evaluation commit (valid entry + correct exit). Re-entries of these
+        # trackers are ignored so a path reversal that takes the same physical
+        # object through the zone twice does not produce two evaluation
+        # events. Cleared only on reset(config_id), matching _counted.
+        self._committed: dict[int, set[int]] = {}
 
     def reset(self, config_id: int) -> None:
         """Clear all per-tracker state for a config (on dashboard start)."""
@@ -602,6 +608,7 @@ class DashboardEvaluator:
         self._valid_entries.pop(config_id, None)
         self._counted.pop(config_id, None)
         self._lock_state.pop(config_id, None)
+        self._committed.pop(config_id, None)
 
     def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
         total = samples["pass"] + samples["fail"]
@@ -648,11 +655,16 @@ class DashboardEvaluator:
         expected_out = expected_exit_side(config.zoneDirection)
         valid_entries = self._valid_entries.setdefault(config.id, set())
         counted = self._counted.setdefault(config.id, set())
+        committed = self._committed.setdefault(config.id, set())
 
         # Record trackers whose entry matched the configured direction. These
         # are the only ones eligible for the direction-aware counter and for
-        # an evaluation commit on exit.
+        # an evaluation commit on exit. Trackers that already completed a
+        # successful commit are excluded — re-entry of the same Kalman track
+        # must not produce a second evaluation.
         for tid, side in zr.entry_sides.items():
+            if tid in committed:
+                continue
             if side == expected_in:
                 valid_entries.add(tid)
 
@@ -781,6 +793,7 @@ class DashboardEvaluator:
                 continue
             if zr.exit_sides.get(tid) != expected_out:
                 continue
+            committed.add(tid)
             for tc_id, s in tr_samples.items():
                 tc = tc_by_id.get(tc_id)
                 if tc is None:
