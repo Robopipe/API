@@ -600,6 +600,18 @@ class DashboardEvaluator:
         # object through the zone twice does not produce two evaluation
         # events. Cleared only on reset(config_id), matching _counted.
         self._committed: dict[int, set[int]] = {}
+        # config_id -> set of tracker_ids that have ever validly entered the
+        # zone (entry side matched zoneDirection). Persistent gate for the
+        # live-overlay violation emission: trackers not in this set never get
+        # alerts/warnings, before or after their zone dwell. Cleared only on
+        # reset(config_id).
+        self._entered_validly: dict[int, set[int]] = {}
+        # config_id -> tracker_id -> limit_id -> fail-lock metadata captured
+        # during dwell in optimistic mode. At clean exit, promoted into
+        # _lock_state as fail-locks (when no pass-lock exists) so the sticky
+        # re-emission loop keeps the highlight after the tracker has left the
+        # zone. Discarded on any other kind of exit and on reset.
+        self._pending_fails: dict[int, dict[int, dict[str, dict]]] = {}
 
     def reset(self, config_id: int) -> None:
         """Clear all per-tracker state for a config (on dashboard start)."""
@@ -609,6 +621,8 @@ class DashboardEvaluator:
         self._counted.pop(config_id, None)
         self._lock_state.pop(config_id, None)
         self._committed.pop(config_id, None)
+        self._entered_validly.pop(config_id, None)
+        self._pending_fails.pop(config_id, None)
 
     def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
         total = samples["pass"] + samples["fail"]
@@ -656,6 +670,8 @@ class DashboardEvaluator:
         valid_entries = self._valid_entries.setdefault(config.id, set())
         counted = self._counted.setdefault(config.id, set())
         committed = self._committed.setdefault(config.id, set())
+        entered_validly = self._entered_validly.setdefault(config.id, set())
+        cfg_pending = self._pending_fails.setdefault(config.id, {})
 
         # Record trackers whose entry matched the configured direction. These
         # are the only ones eligible for the direction-aware counter and for
@@ -667,6 +683,7 @@ class DashboardEvaluator:
                 continue
             if side == expected_in:
                 valid_entries.add(tid)
+                entered_validly.add(tid)
 
         if config.countMode == DashboardCountMode.ON_ZONE_ENTER:
             # Counter ticks the first frame a tracker crosses into the zone
@@ -779,21 +796,63 @@ class DashboardEvaluator:
                                 ),
                                 "target_label_id": lr.limit.targetLabel.id,
                             }
+                        elif config.optimistic and is_failing:
+                            # Optimistic mode: capture fail metadata as pending.
+                            # On clean exit (no pass occurred during dwell) it's
+                            # promoted to a fail-lock so the sticky loop keeps
+                            # the highlight after the tracker leaves the zone.
+                            # Write-once via setdefault — first failing frame
+                            # wins; verdict at exit is "no pass ever", so any
+                            # captured metadata is sufficient.
+                            cfg_pending.setdefault(tid, {}).setdefault(
+                                lr.limit.id,
+                                {
+                                    "verdict": "fail",
+                                    "test_case_id": evaluator.test_case.id,
+                                    "test_case_name": evaluator.test_case.name,
+                                    "limit_name": lr.limit.name,
+                                    "severity": (
+                                        lr.limit.severity.value
+                                        if lr.limit.severity
+                                        else None
+                                    ),
+                                    "target_label_id": lr.limit.targetLabel.id,
+                                },
+                            )
 
         # Commit on zone exit: reduce accumulated samples and record once.
         # Discard everything for trackers whose entry/exit didn't follow the
         # configured zoneDirection (wrong-flow exit, expired ghosts, etc.).
+        # Wrong-direction or expired exits also clear any sticky fail-locks
+        # so the UI doesn't keep flagging an "incomplete run" — matches the
+        # threshold/event-recording behavior, which discards those samples.
         violation_event_ids: list[int] = []
         tc_by_id = {e.test_case.id: e.test_case for e in tc_evaluators}
         for tid in zr.exited_tracker_ids:
             tr_samples = cfg_samples.pop(tid, None)
+            tr_pending = cfg_pending.pop(tid, None)
             entry_ok = tid in valid_entries
             valid_entries.discard(tid)
-            if tr_samples is None or not entry_ok:
+            clean_exit = entry_ok and zr.exit_sides.get(tid) == expected_out
+            if not clean_exit:
+                # Discard everything for trackers that didn't complete a valid
+                # traversal: pessimistic fail-locks written during dwell are
+                # cleared (pending fails already popped above), and the tracker
+                # is removed from entered_validly so the live overlay also
+                # stops emitting until it validly re-enters the zone.
+                cfg_locks.pop(tid, None)
+                entered_validly.discard(tid)
                 continue
-            if zr.exit_sides.get(tid) != expected_out:
+            if tr_samples is None:
                 continue
             committed.add(tid)
+            # Optimistic: promote pending fails into permanent fail-locks for
+            # limits that never passed during dwell. setdefault ensures we
+            # never overwrite a pass-lock that was written on a passing frame.
+            if tr_pending:
+                tr_locks = cfg_locks.setdefault(tid, {})
+                for limit_id, info in tr_pending.items():
+                    tr_locks.setdefault(limit_id, info)
             for tc_id, s in tr_samples.items():
                 tc = tc_by_id.get(tc_id)
                 if tc is None:
@@ -826,11 +885,12 @@ class DashboardEvaluator:
                     )
                     violation_event_ids.append(event_id)
 
-        # Live overlay: evaluate every visible detection regardless of zone
-        # presence so the UI keeps highlighting violating items once spotted.
-        # Per-(tracker, limit) locks reshape the highlight: optimistic locks
-        # suppress later violations of a passed limit; pessimistic locks add
-        # sticky violations for limits that have already failed at least once.
+        # Live overlay: evaluate every visible detection, then gate emission
+        # on validated zone entry so trackers that haven't (or won't ever)
+        # validly enter the zone never produce alerts. Per-(tracker, limit)
+        # locks then reshape the highlight: optimistic pass-locks suppress
+        # later violations of a passed limit; fail-locks add sticky violations
+        # for limits that have already failed.
         det_to_tid: dict[int, int] = {}
         tid_to_det: dict[int, BBoxDetection] = {}
         for i, d in enumerate(detections):
@@ -847,9 +907,18 @@ class DashboardEvaluator:
                 if ev.violated_limit_id is None:
                     results.append(ev)
                     continue
+                # Gate: only keep violating detections whose tracker has ever
+                # validly entered the zone. Drops the result if nothing remains.
+                gated = [
+                    d
+                    for d in ev.violating_detections
+                    if det_to_tid.get(id(d)) in entered_validly
+                ]
+                if not gated:
+                    continue
                 if config.optimistic:
                     filtered = []
-                    for d in ev.violating_detections:
+                    for d in gated:
                         tid = det_to_tid.get(id(d))
                         if tid is not None:
                             entry = cfg_locks.get(tid, {}).get(ev.violated_limit_id)
@@ -859,53 +928,57 @@ class DashboardEvaluator:
                     if not filtered:
                         continue
                     ev.violating_detections = filtered
+                else:
+                    ev.violating_detections = gated
                 results.append(ev)
                 for d in ev.violating_detections:
                     tid = det_to_tid.get(id(d))
                     if tid is not None:
                         emitted_violations.add((tid, ev.violated_limit_id))
 
-        if not config.optimistic:
-            # Pessimistic sticky: re-emit each locked-fail (tracker, limit) on
-            # the tracker's current detection so the highlight persists across
-            # frames where the live evaluator no longer flags it.
-            sticky: dict[tuple[str, str], dict] = {}
-            for tid, limit_locks in cfg_locks.items():
-                det = tid_to_det.get(tid)
-                if det is None:
+        # Sticky fail re-emission: for any locked-fail (tracker, limit) that
+        # the live evaluator didn't already flag, re-emit a synthetic
+        # violation on the tracker's current detection. Runs in both modes:
+        # pessimistic locks are written during dwell; optimistic locks are
+        # promoted from pending on clean zone exit. Pass-locks (verdict=pass)
+        # are filtered below and never re-emit.
+        sticky: dict[tuple[str, str], dict] = {}
+        for tid, limit_locks in cfg_locks.items():
+            det = tid_to_det.get(tid)
+            if det is None:
+                continue
+            for limit_id, info in limit_locks.items():
+                if info.get("verdict") != "fail":
                     continue
-                for limit_id, info in limit_locks.items():
-                    if info.get("verdict") != "fail":
-                        continue
-                    if info["test_case_id"] not in enabled_tc_ids:
-                        continue
-                    if (tid, limit_id) in emitted_violations:
-                        continue
-                    key = (info["test_case_id"], limit_id)
-                    entry = sticky.setdefault(
-                        key,
-                        {
-                            "test_case_name": info["test_case_name"],
-                            "limit_name": info["limit_name"],
-                            "severity": info["severity"],
-                            "target_label_id": info["target_label_id"],
-                            "dets": [],
-                        },
-                    )
-                    entry["dets"].append(det)
-            for (tc_id, limit_id), entry in sticky.items():
-                if entry["severity"] is None:
+                if info["test_case_id"] not in enabled_tc_ids:
                     continue
-                results.append(
-                    EvaluationResult(
-                        test_case_id=tc_id,
-                        test_case_name=entry["test_case_name"],
-                        violated_limit_id=limit_id,
-                        violated_limit_name=entry["limit_name"],
-                        violated_limit_severity=entry["severity"],
-                        violated_limit_target_label_id=entry["target_label_id"],
-                        violating_detections=entry["dets"],
-                    )
+                if (tid, limit_id) in emitted_violations:
+                    continue
+                key = (info["test_case_id"], limit_id)
+                entry = sticky.setdefault(
+                    key,
+                    {
+                        "test_case_name": info["test_case_name"],
+                        "limit_name": info["limit_name"],
+                        "severity": info["severity"],
+                        "target_label_id": info["target_label_id"],
+                        "dets": [],
+                    },
                 )
+                entry["dets"].append(det)
+        for (tc_id, limit_id), entry in sticky.items():
+            if entry["severity"] is None:
+                continue
+            results.append(
+                EvaluationResult(
+                    test_case_id=tc_id,
+                    test_case_name=entry["test_case_name"],
+                    violated_limit_id=limit_id,
+                    violated_limit_name=entry["limit_name"],
+                    violated_limit_severity=entry["severity"],
+                    violated_limit_target_label_id=entry["target_label_id"],
+                    violating_detections=entry["dets"],
+                )
+            )
 
         return results, violation_event_ids, zr.tracking_ids, zr.display_ids
