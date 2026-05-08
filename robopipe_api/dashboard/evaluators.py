@@ -448,6 +448,65 @@ class LogicTreeEvaluator:
             else (True, fired, collected)
         )
 
+    def combine_verdicts(self, verdicts: dict[str, bool]) -> bool | None:
+        """Walk the logic tree using pre-reduced per-limit verdicts.
+
+        verdicts: limit_id -> reduced is_satisfied. Limits absent from the dict
+        are dropped from the tree (same drop semantics as disabled or missing
+        limits in `_evaluate_nodes`).
+
+        Returns the combined satisfaction, or None if no applicable limits
+        remain (all dropped).
+        """
+        if not self.test_case.logicNodes:
+            return None
+        return self._combine_nodes(self.test_case.logicNodes, verdicts)
+
+    def _combine_nodes(
+        self, nodes: list[EvalLogicNode], verdicts: dict[str, bool]
+    ) -> bool | None:
+        result: bool | None = None
+        pending_op: EvalLogicOperatorValue | None = None
+        negate_next = False
+
+        for node in nodes:
+            if node.type == EvalLogicNodeType.OPERATOR:
+                if node.operatorValue == EvalLogicOperatorValue.NOT:
+                    negate_next = True
+                else:
+                    pending_op = node.operatorValue
+                continue
+
+            if node.type == EvalLogicNodeType.LIMIT:
+                if node.id not in verdicts:
+                    pending_op = None
+                    negate_next = False
+                    continue
+                value = verdicts[node.id]
+            else:  # GROUP
+                value = self._combine_nodes(node.children or [], verdicts)
+                if value is None:
+                    pending_op = None
+                    negate_next = False
+                    continue
+
+            if negate_next:
+                value = not value
+                negate_next = False
+
+            if result is None:
+                result = value
+            elif pending_op == EvalLogicOperatorValue.AND:
+                result = result and value
+            elif pending_op == EvalLogicOperatorValue.OR:
+                result = result or value
+            else:
+                result = result and value
+
+            pending_op = None
+
+        return result
+
 
 # ---------------------------------------------------------------------------
 # Test case evaluator
@@ -576,7 +635,14 @@ class DashboardEvaluator:
     ) -> None:
         self._tracker = zone_tracker
         self._threshold_tracker = threshold_tracker
-        # config_id -> tracker_id -> test_case_id -> sample accumulator
+        # config_id -> tracker_id -> test_case_id -> {
+        #   "limits": {limit_id: {"pass": int, "fail": int}},
+        #   "last_violation": list[EvaluationResult] | None,
+        # }
+        # Per-limit pass/fail counts are reduced independently at commit, then
+        # combined via the test case's logic tree. This lets a limit that
+        # passed on one frame and another that passed on a different frame
+        # both count as "passed" for an AND-combined optimistic test case.
         self._samples: dict[int, dict[int, dict[str, dict]]] = {}
         # config_id -> set of tracker_ids whose entry side matched the
         # configured zoneDirection. Only these trackers accumulate samples
@@ -743,13 +809,20 @@ class DashboardEvaluator:
                     tr_samples = cfg_samples.setdefault(tid, {})
                     tc_samples = tr_samples.setdefault(
                         evaluator.test_case.id,
-                        {"pass": 0, "fail": 0, "last_violation": None},
+                        {"limits": {}, "last_violation": None},
                     )
                     if violated:
-                        tc_samples["fail"] += 1
                         tc_samples["last_violation"] = latest_results
-                    else:
-                        tc_samples["pass"] += 1
+                    for lr in limit_results:
+                        if not lr.fired:
+                            continue
+                        l_samples = tc_samples["limits"].setdefault(
+                            lr.limit.id, {"pass": 0, "fail": 0}
+                        )
+                        if lr.is_satisfied:
+                            l_samples["pass"] += 1
+                        else:
+                            l_samples["fail"] += 1
 
                 # Per-limit, per-tracker lock update: write-once entries that
                 # mute (optimistic, locked-pass) or sticky (pessimistic,
@@ -853,13 +926,33 @@ class DashboardEvaluator:
                 tr_locks = cfg_locks.setdefault(tid, {})
                 for limit_id, info in tr_pending.items():
                     tr_locks.setdefault(limit_id, info)
-            for tc_id, s in tr_samples.items():
+            for tc_id, tc_data in tr_samples.items():
                 tc = tc_by_id.get(tc_id)
                 if tc is None:
                     continue
-                passed = self._reduce_verdict(s, config.optimistic)
-                if passed is None:
+                matching_eval = next(
+                    (e for e in tc_evaluators if e.test_case.id == tc_id), None
+                )
+                if matching_eval is None:
                     continue
+
+                # Reduce each limit's per-frame samples into a single verdict,
+                # then combine via the test case's logic tree. Limits that
+                # never fired are dropped from the tree, mirroring the live
+                # evaluator's disabled-limit handling.
+                verdicts: dict[str, bool] = {}
+                for limit_id, l_samples in tc_data["limits"].items():
+                    v = self._reduce_verdict(l_samples, config.optimistic)
+                    if v is not None:
+                        verdicts[limit_id] = v
+                if not verdicts:
+                    continue
+
+                combined = matching_eval._logic_evaluator.combine_verdicts(verdicts)
+                if combined is None:
+                    continue
+
+                passed = not matching_eval._is_violated(combined)
                 self._threshold_tracker.record(config.id, tc_id, passed=passed)
 
                 if passed:
@@ -868,7 +961,7 @@ class DashboardEvaluator:
                     )
                     continue
 
-                last_violation = s.get("last_violation") or []
+                last_violation = tc_data.get("last_violation") or []
                 if last_violation:
                     for r in last_violation:
                         event_id = events_store.save_event(
