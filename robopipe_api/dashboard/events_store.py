@@ -87,26 +87,58 @@ class EventsStore:
         session_id: int,
         test_case_id: str,
         test_case_name: str,
-        failed_limit_id: str | None,
-        failed_limit_name: str | None,
+        passed: bool,
+        violated_limits: list[dict] | None = None,
     ) -> int:
+        """Persist a single test-case verdict at zone-exit commit.
+
+        Inserts one row into dashboard_evaluation_event for the test case
+        plus one row into dashboard_evaluation_event_violated_limit per
+        violating item. Each item dict has keys:
+            limit_id          — UUID of the violated limit
+            limit_name        — human-readable limit name
+            display_id        — per-label sequence number shown on the
+                                dashboard overlay for the violating item
+                                (matches what the user sees on the saved
+                                picture). None for global violations like
+                                COUNT with no specific subject.
+            parent_display_id — display_id of the containing parent (or
+                                None when the limit has no parent label
+                                or the violating item *is* the parent)
+
+        Multiple rows for the same (event, limit) describe different items
+        that each violated the limit. Child rows are only meaningful when
+        passed is False.
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO dashboard_evaluation_event
-                    (dashboard_run_session_id, test_case_id, test_case_name,
-                     failed_limit_id, failed_limit_name)
-                VALUES (?, ?, ?, ?, ?)
+                    (dashboard_run_session_id, test_case_id, test_case_name, passed)
+                VALUES (?, ?, ?, ?)
                 """,
-                (
-                    session_id,
-                    test_case_id,
-                    test_case_name,
-                    failed_limit_id,
-                    failed_limit_name,
-                ),
+                (session_id, test_case_id, test_case_name, 1 if passed else 0),
             )
-            return cursor.lastrowid
+            event_id = cursor.lastrowid
+            if violated_limits:
+                conn.executemany(
+                    """
+                    INSERT INTO dashboard_evaluation_event_violated_limit
+                        (event_id, limit_id, limit_name, display_id, parent_display_id)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            event_id,
+                            v["limit_id"],
+                            v["limit_name"],
+                            v.get("display_id"),
+                            v.get("parent_display_id"),
+                        )
+                        for v in violated_limits
+                    ],
+                )
+            return event_id
 
     def update_event_picture(self, event_ids: list[int], picture_url: str) -> None:
         if not event_ids:

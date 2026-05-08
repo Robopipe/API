@@ -742,12 +742,19 @@ class DashboardEvaluator:
         config: DashboardConfig,
         detections: list[BBoxDetection],
         dashboard_run_session_id: int,
-    ) -> tuple[list[EvaluationResult], list[int], list[int | None], list[int | None]]:
+    ) -> tuple[
+        list[EvaluationResult],
+        list[dict],
+        list[int | None],
+        list[int | None],
+    ]:
         """Evaluate test cases and return per-frame overlay results.
 
         Returns a tuple of:
         - list of EvaluationResult for the live per-frame overlay
-        - list of violation event IDs created at exit-commit this frame
+        - list of {"event_id", "tracker_id"} dicts for violations committed at
+          exit this frame (frontend uses tracker_id to pick the buffered
+          in-zone frame for each event's picture)
         - tracking IDs parallel to the input detections list
         - display IDs parallel to the input detections list (per-label)
         """
@@ -814,13 +821,30 @@ class DashboardEvaluator:
                 subject_ids = self._subject_label_ids(evaluator.test_case)
                 if not subject_ids:
                     continue
-                # Snapshot per-limit results only for violation frames so we
-                # can commit the event metadata on exit.
-                latest_results: list[EvaluationResult] | None = None
-                if violated:
-                    latest_results = evaluator.build_evaluation_results(
-                        violated, limit_results
-                    )
+                # Pre-compute lookups shared across this evaluator's subject
+                # iteration. tid_to_display_id and in_zone_tid_by_det_id
+                # are reused both for the per-subject violation snapshot
+                # below and for resolving parent display IDs. Display IDs
+                # (per-label sequence numbers visible on the captured
+                # picture) are persisted, not Kalman tracker IDs.
+                latest_results: list[EvaluationResult] = (
+                    evaluator.build_evaluation_results(violated, limit_results)
+                    if violated
+                    else []
+                )
+                in_zone_tid_by_det_id: dict[int, int] = {
+                    id(zr.in_zone[i]): zr.in_zone_tracker_ids[i]
+                    for i in range(len(zr.in_zone))
+                }
+                tid_to_display_id: dict[int, int] = {}
+                for di in range(len(zr.tracking_ids)):
+                    tid_at = zr.tracking_ids[di]
+                    did_at = zr.display_ids[di]
+                    if tid_at is not None and did_at is not None:
+                        tid_to_display_id[tid_at] = did_at
+                limit_defs = {l.id: l for l in evaluator.test_case.limits}
+                lr_by_id = {lr.limit.id: lr for lr in limit_results}
+
                 # Pre-compute per-limit subject id and a per-subject verdict
                 # function. Sample voting and lock decisions both attribute
                 # results to an individual subject (the parent for parent-label
@@ -850,7 +874,96 @@ class DashboardEvaluator:
                         {"limits": {}, "last_violation": None},
                     )
                     if violated:
-                        tc_samples["last_violation"] = latest_results
+                        # Build a snapshot of violations attributable to
+                        # THIS subject only — for parent-label limits that
+                        # means children inside this parent's bbox (or the
+                        # parent itself for parent-only violations like
+                        # parent-label COUNT); for non-parent limits it
+                        # means the subject is one of the violating items.
+                        # Without this filter, every subject in the zone
+                        # would be tagged with violations from siblings,
+                        # so a single zone-exit event would carry rows
+                        # belonging to other parents.
+                        subj_did = tid_to_display_id.get(tid)
+                        subj_snapshot: list[dict] = []
+                        for r in latest_results:
+                            if r.violated_limit_id is None:
+                                continue
+                            limit_def = limit_defs.get(r.violated_limit_id)
+                            lr = lr_by_id.get(r.violated_limit_id)
+                            if limit_def is None or lr is None:
+                                continue
+                            parent_label_id = (
+                                limit_def.targetParentLabel.id
+                                if limit_def.targetParentLabel is not None
+                                else None
+                            )
+                            items: list[tuple[int | None, int | None]] = []
+                            if parent_label_id is not None:
+                                # Parent-label: this subject must itself be
+                                # a parent of this limit, and must be the
+                                # specific parent that failed.
+                                if det_label_id != parent_label_id:
+                                    continue
+                                if lr.parent_verdicts is None:
+                                    subject_violated = evaluator._is_violated(
+                                        lr.is_satisfied
+                                    )
+                                else:
+                                    subject_violated = evaluator._is_violated(
+                                        lr.parent_verdicts.get(id(det), True)
+                                    )
+                                if not subject_violated:
+                                    continue
+                                # Attribute violating items belonging to
+                                # this parent only.
+                                for d in r.violating_detections:
+                                    if id(d) is id(det) or id(d) == id(det):
+                                        items.append((subj_did, None))
+                                    elif (
+                                        config.labels[d.label].id
+                                        != parent_label_id
+                                        and is_within_bbox(d.coords, det.coords)
+                                    ):
+                                        d_tid = in_zone_tid_by_det_id.get(id(d))
+                                        d_did = (
+                                            tid_to_display_id.get(d_tid)
+                                            if d_tid is not None
+                                            else None
+                                        )
+                                        items.append((d_did, subj_did))
+                                if not items:
+                                    # Parent failed but no specific items
+                                    # were tagged — record the parent itself.
+                                    items.append((subj_did, None))
+                            else:
+                                # Non-parent limit: subject's label must
+                                # match the limit's target label, and the
+                                # subject itself must be in the violating
+                                # detections (or the violation is synthetic
+                                # with no specific items).
+                                if det_label_id != limit_def.targetLabel.id:
+                                    continue
+                                violating_ids = {
+                                    id(d) for d in r.violating_detections
+                                }
+                                if not r.violating_detections:
+                                    items.append((subj_did, None))
+                                elif id(det) in violating_ids:
+                                    items.append((subj_did, None))
+                                else:
+                                    continue
+                            if items:
+                                subj_snapshot.append(
+                                    {
+                                        "limit_id": r.violated_limit_id,
+                                        "limit_name": r.violated_limit_name
+                                        or "",
+                                        "items": items,
+                                    }
+                                )
+                        if subj_snapshot:
+                            tc_samples["last_violation"] = subj_snapshot
                     for lr in limit_results:
                         if not lr.fired:
                             continue
@@ -948,7 +1061,7 @@ class DashboardEvaluator:
         # Wrong-direction or expired exits also clear any sticky fail-locks
         # so the UI doesn't keep flagging an "incomplete run" — matches the
         # threshold/event-recording behavior, which discards those samples.
-        violation_event_ids: list[int] = []
+        violation_events: list[dict] = []
         tc_by_id = {e.test_case.id: e.test_case for e in tc_evaluators}
         for tid in zr.exited_tracker_ids:
             tr_samples = cfg_samples.pop(tid, None)
@@ -1013,28 +1126,48 @@ class DashboardEvaluator:
                 passed = not matching_eval._is_violated(combined)
                 self._threshold_tracker.record(config.id, tc_id, passed=passed)
 
-                if passed:
-                    events_store.save_event(
-                        dashboard_run_session_id, tc_id, tc.name, None, None
-                    )
-                    continue
+                # One event row per (commit, test case) carrying the
+                # passed/violated verdict. When violated, the per-item
+                # breakdown from `last_violation` lands in the child
+                # dashboard_evaluation_event_violated_limit table — one
+                # row per (limit, violating item, parent), deduplicated.
+                # Display IDs (per-label sequence numbers visible on the
+                # captured picture) are stored, not Kalman tracker IDs.
+                violated_limits: list[dict] = []
+                if not passed:
+                    last_violation = tc_data.get("last_violation") or []
+                    seen_keys: set[
+                        tuple[str, int | None, int | None]
+                    ] = set()
+                    for entry in last_violation:
+                        limit_id = entry["limit_id"]
+                        limit_name = entry["limit_name"]
+                        for display_id, parent_display_id in entry["items"]:
+                            key = (limit_id, display_id, parent_display_id)
+                            if key in seen_keys:
+                                continue
+                            seen_keys.add(key)
+                            violated_limits.append(
+                                {
+                                    "limit_id": limit_id,
+                                    "limit_name": limit_name,
+                                    "display_id": display_id,
+                                    "parent_display_id": parent_display_id,
+                                }
+                            )
 
-                last_violation = tc_data.get("last_violation") or []
-                if last_violation:
-                    for r in last_violation:
-                        event_id = events_store.save_event(
-                            dashboard_run_session_id,
-                            tc_id,
-                            tc.name,
-                            r.violated_limit_id,
-                            r.violated_limit_name,
-                        )
-                        violation_event_ids.append(event_id)
-                else:
-                    event_id = events_store.save_event(
-                        dashboard_run_session_id, tc_id, tc.name, None, None
+                event_id = events_store.save_event(
+                    dashboard_run_session_id,
+                    tc_id,
+                    tc.name,
+                    passed,
+                    violated_limits or None,
+                )
+
+                if not passed:
+                    violation_events.append(
+                        {"event_id": event_id, "tracker_id": tid}
                     )
-                    violation_event_ids.append(event_id)
 
         # Live overlay: evaluate every visible detection, then gate emission
         # on validated zone entry so trackers that haven't (or won't ever)
@@ -1132,4 +1265,4 @@ class DashboardEvaluator:
                 )
             )
 
-        return results, violation_event_ids, zr.tracking_ids, zr.display_ids
+        return results, violation_events, zr.tracking_ids, zr.display_ids

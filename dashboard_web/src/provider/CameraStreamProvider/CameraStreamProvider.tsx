@@ -33,7 +33,10 @@ const ICE_SERVERS: RTCIceServer[] = [
 const ICE_GATHERING_TIMEOUT_MS = 5000;
 const DETECTIONS_RECONNECT_DELAY_MS = 3000;
 const DETECTIONS_MAX_RECONNECT_ATTEMPTS = 10;
-const VIOLATION_CAPTURE_COOLDOWN_MS = 5000;
+// Cap on per-tracker buffered violation frames. Anything beyond this is
+// stale state from trackers that never produced a commit (wrong-direction
+// exits, etc.). Eviction is LRU on insertion order.
+const VIOLATION_FRAME_BUFFER_CAP = 50;
 
 export interface CameraStreamProviderProps {
   children: ReactNode;
@@ -62,7 +65,15 @@ export const CameraStreamProvider = ({
   const syncedSubscribersRef = useRef<Set<(s: SyncedFrame) => void>>(new Set());
   const matcherRef = useRef<FrameMatcher | null>(null);
   const displayCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const lastViolationCaptureRef = useRef<number>(0);
+  // tracker_id -> closest-to-zone-center in-zone violation frame seen so
+  // far. Each entry stores the rendered blob along with the bbox-center's
+  // distance to zoneCenter at the moment of capture; new in-zone frames
+  // overwrite the entry only when their distance is smaller. Consumed at
+  // commit (zone exit), so the saved picture is the moment the object
+  // was best-framed within the zone, not the last frame before exit.
+  const violationFrameBufferRef = useRef<
+    Map<number, { blob: Blob; distance: number }>
+  >(new Map());
 
   const subscribeDetections = useCallback(
     (cb: (d: NNDetections) => void) => {
@@ -87,6 +98,32 @@ export const CameraStreamProvider = ({
   const setDisplayCanvas = useCallback((el: HTMLCanvasElement | null) => {
     displayCanvasRef.current = el;
   }, []);
+
+  const bufferViolationFrame = useCallback(
+    (
+      entries: { trackerId: number; distance: number }[],
+      frame: Blob,
+    ) => {
+      if (entries.length === 0) return;
+      const buf = violationFrameBufferRef.current;
+      for (const { trackerId, distance } of entries) {
+        const existing = buf.get(trackerId);
+        // Keep whichever frame is closer to the zone center. Equal
+        // distances keep the existing entry (earlier frame wins ties).
+        if (existing !== undefined && existing.distance <= distance) {
+          continue;
+        }
+        if (existing !== undefined) buf.delete(trackerId);
+        buf.set(trackerId, { blob: frame, distance });
+      }
+      while (buf.size > VIOLATION_FRAME_BUFFER_CAP) {
+        const oldest = buf.keys().next().value;
+        if (oldest === undefined) break;
+        buf.delete(oldest);
+      }
+    },
+    [],
+  );
 
   // --- WebRTC ---------------------------------------------------------
   useEffect(() => {
@@ -369,34 +406,87 @@ export const CameraStreamProvider = ({
       }
     };
 
-    const captureViolationPicture = async (eventIds: number[]) => {
-      const now = Date.now();
-      if (now - lastViolationCaptureRef.current < VIOLATION_CAPTURE_COOLDOWN_MS)
-        return;
+    const snapshotDisplayCanvas = (): Promise<Blob | null> => {
       const display = displayCanvasRef.current;
-      if (!display || !display.width || !display.height) return;
+      if (!display || !display.width || !display.height)
+        return Promise.resolve(null);
+      return new Promise((resolve) =>
+        display.toBlob(resolve, "image/jpeg", 0.85),
+      );
+    };
 
-      const dataUrl = display.toDataURL("image/jpeg", 0.85);
-      const byteString = atob(dataUrl.split(",")[1]);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
+    const uploadViolationPictures = async (
+      events: { event_id: number; tracker_id: number }[],
+    ) => {
+      // Group event IDs by tracker_id: each tracker shares one buffered frame
+      // for all of its violations on this commit.
+      const byTracker = new Map<number, number[]>();
+      for (const ev of events) {
+        let list = byTracker.get(ev.tracker_id);
+        if (!list) {
+          list = [];
+          byTracker.set(ev.tracker_id, list);
+        }
+        list.push(ev.event_id);
       }
-      const blob = new Blob([ab], { type: "image/jpeg" });
-      lastViolationCaptureRef.current = now;
 
-      const formData = new FormData();
-      formData.append("picture", blob, "violation.jpg");
-      formData.append("event_ids", JSON.stringify(eventIds));
-      try {
-        await fetch(`${apiBase}/dashboard/events/picture`, {
-          method: "POST",
-          body: formData,
-          signal: AbortSignal.timeout(10000),
-        });
-      } catch {
-        // best effort
+      const buf = violationFrameBufferRef.current;
+      console.log(
+        "[violation-picture] commit received",
+        events,
+        "buffered_trackers=",
+        Array.from(buf.keys()),
+      );
+      for (const [tid, eventIds] of byTracker) {
+        const entry = buf.get(tid);
+        let blob: Blob | null | undefined = entry?.blob;
+        const usedBuffered = blob !== undefined;
+        buf.delete(tid);
+        if (!blob) {
+          // No in-zone snapshot was buffered (e.g. tracker never appeared
+          // with a live violation flag while in the zone). Fall back to the
+          // current display so the event still gets a picture.
+          blob = await snapshotDisplayCanvas();
+        }
+        if (!blob) {
+          console.warn(
+            "[violation-picture] no blob for tracker",
+            tid,
+            "events=",
+            eventIds,
+            "displayCanvas=",
+            displayCanvasRef.current,
+          );
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append("picture", blob, "violation.jpg");
+        formData.append("event_ids", JSON.stringify(eventIds));
+        try {
+          const resp = await fetch(`${apiBase}/dashboard/events/picture`, {
+            method: "POST",
+            body: formData,
+            signal: AbortSignal.timeout(10000),
+          });
+          console.log(
+            "[violation-picture] upload",
+            resp.status,
+            "tracker=",
+            tid,
+            "events=",
+            eventIds,
+            "buffered=",
+            usedBuffered,
+          );
+        } catch (err) {
+          console.warn(
+            "[violation-picture] upload failed",
+            err,
+            "tracker=",
+            tid,
+          );
+        }
       }
     };
 
@@ -477,8 +567,13 @@ export const CameraStreamProvider = ({
             // close the original so we don't leak GPU memory.
             parsed.maskBitmap?.close?.();
 
-            if (parsed.violation_event_ids?.length) {
-              void captureViolationPicture(parsed.violation_event_ids);
+            // Frame buffering for violations is owned by the synced
+            // renderer post-paint (see useSyncedRenderer): it has direct
+            // access to the freshly-painted canvas for each matched frame
+            // and pushes blobs to bufferViolationFrame. Here we only react
+            // to commits.
+            if (parsed.violation_events?.length) {
+              void uploadViolationPictures(parsed.violation_events);
             }
           } catch {
             // ignore malformed messages
@@ -534,6 +629,7 @@ export const CameraStreamProvider = ({
     subscribeDetections,
     subscribeSyncedFrames,
     setDisplayCanvas,
+    bufferViolationFrame,
   };
 
   return (
