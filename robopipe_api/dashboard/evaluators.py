@@ -871,11 +871,28 @@ class DashboardEvaluator:
                 # Per-limit, per-tracker lock update: write-once entries that
                 # mute (optimistic, locked-pass) or sticky (pessimistic,
                 # locked-fail) the live highlight for the rest of the
-                # tracker's life.
+                # tracker's life. Lock keying mirrors what the live overlay
+                # actually highlights — a detection is "failing" only when
+                # its own id appears in the limit's violating detections. For
+                # AREA/positional with parent-label this means parents are
+                # never marked failing (the live overlay flags children, not
+                # the parent), so the sticky loop won't extend the highlight
+                # onto the parent after exit. Per-parent satisfaction is used
+                # for sample voting only.
                 for lr in limit_results:
                     if not lr.fired:
                         continue
                     limit_subject_id = limit_meta[lr.limit.id]
+                    limit_violated = (
+                        (not lr.is_satisfied)
+                        if evaluator.is_check
+                        else lr.is_satisfied
+                    )
+                    failing_ids: set[int] = set()
+                    if limit_violated:
+                        failing_ids = {
+                            id(d) for d in evaluator.limit_violating_detections(lr)
+                        }
                     for i, det in enumerate(zr.in_zone):
                         if config.labels[det.label].id != limit_subject_id:
                             continue
@@ -885,16 +902,7 @@ class DashboardEvaluator:
                         tr_locks = cfg_locks.setdefault(tid, {})
                         if lr.limit.id in tr_locks:
                             continue
-                        # Per-subject failure: derived from the same per-parent
-                        # verdict the sample loop uses, then mapped through
-                        # CHECK/DEFECT semantics. Aligning the two paths is
-                        # what closes the contamination bug.
-                        individually_satisfied = self._subject_satisfied(lr, det)
-                        is_failing = (
-                            (not individually_satisfied)
-                            if evaluator.is_check
-                            else individually_satisfied
-                        )
+                        is_failing = id(det) in failing_ids
                         if config.optimistic and not is_failing:
                             tr_locks[lr.limit.id] = {"verdict": "pass"}
                         elif (not config.optimistic) and is_failing:
