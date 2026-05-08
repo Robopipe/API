@@ -648,10 +648,10 @@ class DashboardEvaluator:
         # configured zoneDirection. Only these trackers accumulate samples
         # and are eligible for commit on exit.
         self._valid_entries: dict[int, set[int]] = {}
-        # config_id -> set of tracker_ids already counted by ON_ZONE_ENTER.
-        # Prevents bbox jitter near the entry edge (in/out/in flips for the
-        # same physical object) from incrementing the counter multiple times.
-        self._counted: dict[int, set[int]] = {}
+        # config_id -> tracker_id -> (label_id, label_name). Captured during
+        # dwell so the ON_ZONE_ENTER counter can fire on clean exit (where
+        # only the tracker_id is available). Write-once via setdefault.
+        self._tracker_labels: dict[int, dict[int, tuple[int, str]]] = {}
         # config_id -> tracker_id -> limit_id -> lock entry. Optimistic locks
         # store {"verdict": "pass"} and suppress later violations of that
         # (tracker, limit). Pessimistic locks store {"verdict": "fail", ...
@@ -664,7 +664,7 @@ class DashboardEvaluator:
         # evaluation commit (valid entry + correct exit). Re-entries of these
         # trackers are ignored so a path reversal that takes the same physical
         # object through the zone twice does not produce two evaluation
-        # events. Cleared only on reset(config_id), matching _counted.
+        # events. Cleared only on reset(config_id).
         self._committed: dict[int, set[int]] = {}
         # config_id -> set of tracker_ids that have ever validly entered the
         # zone (entry side matched zoneDirection). Persistent gate for the
@@ -684,7 +684,7 @@ class DashboardEvaluator:
         self._tracker.reset(config_id)
         self._samples.pop(config_id, None)
         self._valid_entries.pop(config_id, None)
-        self._counted.pop(config_id, None)
+        self._tracker_labels.pop(config_id, None)
         self._lock_state.pop(config_id, None)
         self._committed.pop(config_id, None)
         self._entered_validly.pop(config_id, None)
@@ -734,7 +734,7 @@ class DashboardEvaluator:
         expected_in = expected_entry_side(config.zoneDirection)
         expected_out = expected_exit_side(config.zoneDirection)
         valid_entries = self._valid_entries.setdefault(config.id, set())
-        counted = self._counted.setdefault(config.id, set())
+        cfg_tracker_labels = self._tracker_labels.setdefault(config.id, {})
         committed = self._committed.setdefault(config.id, set())
         entered_validly = self._entered_validly.setdefault(config.id, set())
         cfg_pending = self._pending_fails.setdefault(config.id, {})
@@ -751,20 +751,18 @@ class DashboardEvaluator:
                 valid_entries.add(tid)
                 entered_validly.add(tid)
 
-        if config.countMode == DashboardCountMode.ON_ZONE_ENTER:
-            # Counter ticks the first frame a tracker crosses into the zone
-            # from the direction's expected entry side. Each tracker_id is
-            # counted at most once per session — bbox jitter that flips a
-            # tracker out and back in across the entry edge must not double
-            # increment.
-            for i in zr.just_entered_indices:
-                tid = zr.in_zone_tracker_ids[i]
-                if tid not in valid_entries or tid in counted:
-                    continue
-                counted.add(tid)
-                label = config.labels[zr.in_zone[i].label]
-                events_store.inc_counter(dashboard_run_session_id, label.id, label.name)
-        else:  # ON_CONFIRM
+        # ON_ZONE_ENTER counts at exit-commit (below) so the running counter
+        # and test-case widgets advance together for the same item. Capture
+        # each valid-entry tracker's label here while we still have a
+        # detection in hand; the exit branch only sees a tracker_id.
+        for i, det in enumerate(zr.in_zone):
+            tid = zr.in_zone_tracker_ids[i]
+            if tid not in valid_entries:
+                continue
+            label = config.labels[det.label]
+            cfg_tracker_labels.setdefault(tid, (label.id, label.name))
+
+        if config.countMode == DashboardCountMode.ON_CONFIRM:
             # Counter ticks the frame a tracker is confirmed by Kalman,
             # regardless of zone presence.
             for _display_id, label_int in zr.just_confirmed:
@@ -904,6 +902,7 @@ class DashboardEvaluator:
         for tid in zr.exited_tracker_ids:
             tr_samples = cfg_samples.pop(tid, None)
             tr_pending = cfg_pending.pop(tid, None)
+            tr_label = cfg_tracker_labels.pop(tid, None)
             entry_ok = tid in valid_entries
             valid_entries.discard(tid)
             clean_exit = entry_ok and zr.exit_sides.get(tid) == expected_out
@@ -916,6 +915,14 @@ class DashboardEvaluator:
                 cfg_locks.pop(tid, None)
                 entered_validly.discard(tid)
                 continue
+            if (
+                config.countMode == DashboardCountMode.ON_ZONE_ENTER
+                and tr_label is not None
+            ):
+                label_id, label_name = tr_label
+                events_store.inc_counter(
+                    dashboard_run_session_id, label_id, label_name
+                )
             if tr_samples is None:
                 continue
             committed.add(tid)

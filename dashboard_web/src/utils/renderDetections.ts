@@ -280,7 +280,6 @@ export const renderZone = (
   const hi = Math.min(1, center + thickness / 2);
 
   ctx.save();
-  ctx.fillStyle = "rgba(255, 0, 0, 0.12)";
   ctx.strokeStyle = "#ff0000";
   ctx.lineWidth = 2;
   ctx.setLineDash([10, 5]);
@@ -292,7 +291,6 @@ export const renderZone = (
   if (isXAxis) {
     const xLo = lo * width;
     const xHi = hi * width;
-    ctx.fillRect(xLo, 0, xHi - xLo, height);
     ctx.beginPath();
     ctx.moveTo(xLo, 0);
     ctx.lineTo(xLo, height);
@@ -302,7 +300,6 @@ export const renderZone = (
   } else {
     const yLo = lo * height;
     const yHi = hi * height;
-    ctx.fillRect(0, yLo, width, yHi - yLo);
     ctx.beginPath();
     ctx.moveTo(0, yLo);
     ctx.lineTo(width, yLo);
