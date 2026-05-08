@@ -1,6 +1,6 @@
 # (Required) App Identifier
 identifier = "io.robopipe.camera_api"
-app_version = "0.5.14"
+app_version = "0.5.16"
 # (Required) App Entrypoint
 entrypoint = ["bash", "-c", "cd /app && python3 -m robopipe_api"]
 

@@ -118,7 +118,7 @@ async def get_sensor_detections(
             now = time.monotonic()
             # Always emit frames carrying just-fired violations so QC
             # alerts aren't delayed by the throttle.
-            has_violation_event = bool(result.get("violation_event_ids"))
+            has_violation_event = bool(result.get("violation_events"))
             if not has_violation_event and now - last_send_t[0] < min_interval:
                 raise ProducerSkipMessage()
             last_send_t[0] = now
