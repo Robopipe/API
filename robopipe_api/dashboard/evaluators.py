@@ -42,6 +42,13 @@ class LimitResult:
     satisfying: list[BBoxDetection]
     non_satisfying: list[BBoxDetection]
     all_targets: list[BBoxDetection]
+    # Per-subject satisfaction for parent-label limits: id(parent_detection) ->
+    # whether this parent's group passed the limit independently. None for
+    # non-parent limits (where every subject shares the aggregate verdict).
+    # Used by sample voting and the per-tracker lock decision so a passing
+    # parent doesn't accumulate fail samples just because another in-zone
+    # parent failed.
+    parent_verdicts: dict[int, bool] | None = None
 
 
 @dataclass
@@ -326,6 +333,7 @@ class LimitEvaluator:
         all_non_satisfying: list[BBoxDetection] = []
         violating_parents: list[BBoxDetection] = []
         violating_children: list[BBoxDetection] = []
+        parent_verdicts: dict[int, bool] = {}
 
         for p in parents:
             children = [t for t in all_labeled if is_within_bbox(t.coords, p.coords)]
@@ -334,6 +342,7 @@ class LimitEvaluator:
             overall_fired = overall_fired or fired
             all_satisfying.extend(sat)
             all_non_satisfying.extend(nsat)
+            parent_verdicts[id(p)] = value
 
             if not value:
                 overall_satisfied = False
@@ -347,6 +356,7 @@ class LimitEvaluator:
             satisfying=_dedupe(all_satisfying),
             non_satisfying=_dedupe(all_non_satisfying),
             all_targets=violating_parents or violating_children,
+            parent_verdicts=parent_verdicts,
         )
 
 
@@ -699,6 +709,19 @@ class DashboardEvaluator:
         return samples["fail"] == 0
 
     @staticmethod
+    def _subject_satisfied(lr: LimitResult, det: BBoxDetection) -> bool:
+        """Per-subject satisfaction. For parent-label limits, returns the
+        individual parent's verdict; for non-parent limits, the aggregate.
+
+        Default True for a parent missing from parent_verdicts (subject not
+        evaluated this frame) so we never fabricate a fail vote for a subject
+        the limit didn't actually rule on.
+        """
+        if lr.parent_verdicts is not None:
+            return lr.parent_verdicts.get(id(det), True)
+        return lr.is_satisfied
+
+    @staticmethod
     def _subject_label_ids(test_case: EvalTestCase) -> set[int]:
         """Label IDs whose trackers accumulate samples for this test case.
 
@@ -798,8 +821,25 @@ class DashboardEvaluator:
                     latest_results = evaluator.build_evaluation_results(
                         violated, limit_results
                     )
+                # Pre-compute per-limit subject id and a per-subject verdict
+                # function. Sample voting and lock decisions both attribute
+                # results to an individual subject (the parent for parent-label
+                # limits, else any target). Using the aggregate `lr.is_satisfied`
+                # would let one parent's failure contaminate another's samples
+                # when both share the zone simultaneously.
+                limit_meta: dict[str, int] = {}
+                for lr in limit_results:
+                    if not lr.fired:
+                        continue
+                    limit_meta[lr.limit.id] = (
+                        lr.limit.targetParentLabel.id
+                        if lr.limit.targetParentLabel is not None
+                        else lr.limit.targetLabel.id
+                    )
+
                 for i, det in enumerate(zr.in_zone):
-                    if config.labels[det.label].id not in subject_ids:
+                    det_label_id = config.labels[det.label].id
+                    if det_label_id not in subject_ids:
                         continue
                     tid = zr.in_zone_tracker_ids[i]
                     if tid not in valid_entries:
@@ -814,10 +854,16 @@ class DashboardEvaluator:
                     for lr in limit_results:
                         if not lr.fired:
                             continue
+                        # Skip limits whose subject doesn't match this
+                        # detection's label — otherwise a parent of one label
+                        # would accumulate verdicts for a limit it isn't a
+                        # subject of.
+                        if det_label_id != limit_meta[lr.limit.id]:
+                            continue
                         l_samples = tc_samples["limits"].setdefault(
                             lr.limit.id, {"pass": 0, "fail": 0}
                         )
-                        if lr.is_satisfied:
+                        if self._subject_satisfied(lr, det):
                             l_samples["pass"] += 1
                         else:
                             l_samples["fail"] += 1
@@ -829,19 +875,7 @@ class DashboardEvaluator:
                 for lr in limit_results:
                     if not lr.fired:
                         continue
-                    limit_violated = (
-                        (not lr.is_satisfied) if evaluator.is_check else lr.is_satisfied
-                    )
-                    failing_ids: set[int] = set()
-                    if limit_violated:
-                        failing_ids = {
-                            id(d) for d in evaluator.limit_violating_detections(lr)
-                        }
-                    limit_subject_id = (
-                        lr.limit.targetParentLabel.id
-                        if lr.limit.targetParentLabel is not None
-                        else lr.limit.targetLabel.id
-                    )
+                    limit_subject_id = limit_meta[lr.limit.id]
                     for i, det in enumerate(zr.in_zone):
                         if config.labels[det.label].id != limit_subject_id:
                             continue
@@ -851,7 +885,16 @@ class DashboardEvaluator:
                         tr_locks = cfg_locks.setdefault(tid, {})
                         if lr.limit.id in tr_locks:
                             continue
-                        is_failing = id(det) in failing_ids
+                        # Per-subject failure: derived from the same per-parent
+                        # verdict the sample loop uses, then mapped through
+                        # CHECK/DEFECT semantics. Aligning the two paths is
+                        # what closes the contamination bug.
+                        individually_satisfied = self._subject_satisfied(lr, det)
+                        is_failing = (
+                            (not individually_satisfied)
+                            if evaluator.is_check
+                            else individually_satisfied
+                        )
                         if config.optimistic and not is_failing:
                             tr_locks[lr.limit.id] = {"verdict": "pass"}
                         elif (not config.optimistic) and is_failing:
