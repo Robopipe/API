@@ -161,6 +161,7 @@ class ZoneTracker:
         tracking_ids: list[int | None] = [None] * len(detections)
         display_ids: list[int | None] = [None] * len(detections)
         just_confirmed: list[tuple[int, int]] = []
+        just_confirmed_tids: set[int] = set()
 
         # Matched: update track and inherit ID if confirmed
         for ti, di in matches:
@@ -172,6 +173,7 @@ class ZoneTracker:
                         config.id, track.label
                     )
                     just_confirmed.append((track.display_id, track.label))
+                    just_confirmed_tids.add(track.tracking_id)
                 tracking_ids[di] = track.tracking_id
                 display_ids[di] = track.display_id
 
@@ -213,6 +215,7 @@ class ZoneTracker:
         exited_tracker_ids: list[int] = []
         entry_sides: dict[int, str] = {}
         exit_sides: dict[int, str] = {}
+        expected_in_side = expected_entry_side(direction)
 
         # Matched tracks: use measurement
         for ti, di in matches:
@@ -236,10 +239,20 @@ class ZoneTracker:
                     side = _side_for_coord(prev[1], zone_lo, zone_hi)
                     if side is not None:
                         entry_sides[tid] = side
+            elif was_in and now_in and tid in just_confirmed_tids:
+                # Track confirmed this frame while already in-zone — it sat
+                # unconfirmed inside the zone for ≥1 frame before clearing
+                # the debounce gate, so the entry transition was never
+                # observed. Presume the entry side was the configured
+                # expected_in so the evaluator's direction filter accepts
+                # the eventual clean exit; the exit-side gate still drops
+                # mis-traversals.
+                entry_sides[tid] = expected_in_side
 
-        # Brand-new tracks: only consider entries if already confirmed this frame.
-        # No prior state exists, so the entry side is unknown — leave it out
-        # of entry_sides so the evaluator's direction filter discards them.
+        # Brand-new tracks: confirmed-this-frame in-zone tracks (typically
+        # resurrected after a Kalman ghost expiry under crowding) get
+        # expected_in as their presumed entry side, mirroring the matched-
+        # track presumption above.
         for idx, di in enumerate(unmatched_dets):
             track = new_tracks[idx]
             if track.tracking_id is None:
@@ -249,6 +262,7 @@ class ZoneTracker:
             curr_state[tid] = (now_in, axis_coords[di])
             if now_in and _is_confirmed(track, debounce_frames):
                 just_entered_tracker_ids.add(tid)
+                entry_sides[tid] = expected_in_side
 
         # Surviving ghosts: carry over their last-known state (neither entry nor exit)
         for track in surviving_ghosts:

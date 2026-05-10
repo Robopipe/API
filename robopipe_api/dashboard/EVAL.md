@@ -103,6 +103,11 @@ expires while still marked in-zone).
 - **Live overlay** (`dashboard_detections` + per-detection `violations`)
   still reflects the current-frame evaluation of in-zone detections so the
   UI highlights violating objects in real time.
+- **Presumed entries**: a tracker first observed inside the zone (brand-new
+  tracklet born in-zone, or matched tracker that confirmed this frame
+  while already in-zone) is presumed to have entered from the configured
+  direction's expected side, so it is eligible for both counter and commit
+  on a clean exit. The exit-side gate still discards wrong-way traversals.
 
 ## CHECK vs DEFECT
 
