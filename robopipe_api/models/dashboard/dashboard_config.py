@@ -37,6 +37,17 @@ class DashboardConfig(BaseModel):
     debounceFrames: int = 5
     maxMissingFrames: int = 5
     maxMatchDistance: float = 0.2
+    iouFloor: float = Field(default=0.1, ge=0.0, le=1.0)
+    iouCostWeight: float = Field(default=9.4877, ge=0.0)
+    mahalanobisGate: float = Field(default=9.4877, ge=0.0)
+    ghostGateGrowth: float = Field(default=0.5, ge=0.0)
+    processNoisePos: float = Field(default=0.01, gt=0.0)
+    processNoiseSize: float = Field(default=0.001, gt=0.0)
+    processNoiseVel: float = Field(default=0.001, gt=0.0)
+    measurementNoisePos: float = Field(default=0.02, gt=0.0)
+    measurementNoiseSize: float = Field(default=0.01, gt=0.0)
+    initialVarPos: float = Field(default=0.01, gt=0.0)
+    initialVarVel: float = Field(default=1.0, gt=0.0)
     testCases: list[EvalTestCase] = []
     thresholds: list[EvalThreshold] = []
     labels: list[Label] = []
@@ -48,3 +59,14 @@ class DashboardConfigUpdate(BaseModel):
     debounceFrames: int | None = Field(None, ge=1, le=100)
     maxMissingFrames: int | None = Field(None, ge=0, le=100)
     maxMatchDistance: float | None = Field(None, ge=0.0, le=1.0)
+    iouFloor: float | None = Field(None, ge=0.0, le=1.0)
+    iouCostWeight: float | None = Field(None, ge=0.0)
+    mahalanobisGate: float | None = Field(None, ge=0.0)
+    ghostGateGrowth: float | None = Field(None, ge=0.0)
+    processNoisePos: float | None = Field(None, gt=0.0)
+    processNoiseSize: float | None = Field(None, gt=0.0)
+    processNoiseVel: float | None = Field(None, gt=0.0)
+    measurementNoisePos: float | None = Field(None, gt=0.0)
+    measurementNoiseSize: float | None = Field(None, gt=0.0)
+    initialVarPos: float | None = Field(None, gt=0.0)
+    initialVarVel: float | None = Field(None, gt=0.0)

@@ -5,12 +5,32 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .geometry import bbox_center, bbox_dimensions
-from .kalman_tracker import KalmanBoxTracker, associate_detections_to_tracks
+from .kalman_tracker import (
+    KalmanBoxTracker,
+    KalmanParams,
+    associate_detections_to_tracks,
+)
 from ..models.dashboard.dashboard_config import (
     DashboardConfig,
     DashboardZoneDirection,
 )
 from ..models.detection.bbox_detection import BBoxDetection
+
+
+def _params_from_config(config: DashboardConfig) -> KalmanParams:
+    return KalmanParams(
+        iou_floor=config.iouFloor,
+        iou_cost_weight=config.iouCostWeight,
+        mahalanobis_gate=config.mahalanobisGate,
+        ghost_gate_growth=config.ghostGateGrowth,
+        process_noise_pos=config.processNoisePos,
+        process_noise_size=config.processNoiseSize,
+        process_noise_vel=config.processNoiseVel,
+        measurement_noise_pos=config.measurementNoisePos,
+        measurement_noise_size=config.measurementNoiseSize,
+        initial_var_pos=config.initialVarPos,
+        initial_var_vel=config.initialVarVel,
+    )
 
 
 def _is_confirmed(track: KalmanBoxTracker, debounce_frames: int) -> bool:
@@ -126,16 +146,15 @@ class ZoneTracker:
         - tracking_ids: parallel to the input ``detections`` list; ``None``
           when a detection is not yet confirmed.
         """
-        detections.sort(
-            key=lambda d: bbox_center(d.coords)[0], reverse=True
-        )  # right-to-left for better matching of new detections
         existing_tracks = self._tracks.get(config.id, [])
         prev_state = self._prev_state.get(config.id, {})
         zone_lo, zone_hi = self._zone_range(config)
         direction = config.zoneDirection
+        params = _params_from_config(config)
 
         # Build measurements from current detections
         measurements: list[np.ndarray] = []
+        det_bboxes: list[tuple[float, float, float, float]] = []
         labels: list[int] = []
         in_zone_flags: list[bool] = []
         axis_coords: list[float] = []
@@ -144,6 +163,7 @@ class ZoneTracker:
             cx, cy = bbox_center(det.coords)
             w, h = bbox_dimensions(det.coords)
             measurements.append(np.array([cx, cy, w, h], dtype=np.float64))
+            det_bboxes.append(det.coords)
             labels.append(det.label)
             in_zone_flags.append(self._is_within_zone(det.coords, config))
             axis_coords.append(_zone_axis_coord(det.coords, direction))
@@ -152,7 +172,10 @@ class ZoneTracker:
         matches, unmatched_tracks, unmatched_dets = associate_detections_to_tracks(
             existing_tracks,
             measurements,
+            det_bboxes,
             labels,
+            params=params,
+            debounce_frames=config.debounceFrames,
             max_match_distance=config.maxMatchDistance,
         )
 
@@ -181,7 +204,7 @@ class ZoneTracker:
         new_tracks: list[KalmanBoxTracker] = []
         for di in unmatched_dets:
             tid = self._allocate_id(config.id)
-            new_track = KalmanBoxTracker(measurements[di], tid, labels[di])
+            new_track = KalmanBoxTracker(measurements[di], tid, labels[di], params)
             new_tracks.append(new_track)
             if _is_confirmed(new_track, debounce_frames):
                 new_track.display_id = self._allocate_display_id(
