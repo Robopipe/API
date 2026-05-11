@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Container, type ContainerProps, GearIcon } from "../../ui";
+import { Container, type ContainerProps, GearIcon, SaveIcon } from "../../ui";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useAppState } from "../../provider";
 import { getUserSettings, updateUserSettings } from "../../api/userSettings";
@@ -293,10 +293,17 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
           </div>
           <button
             onClick={toggleEditMode}
-            className={`text-gray-400 hover:text-white transition-colors ${editMode ? "text-white" : ""}`}
-            title="Configure widgets"
+            className={`flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors ${editMode ? "text-white" : ""}`}
+            title={editMode ? "Save widget configuration" : "Configure widgets"}
           >
-            <GearIcon />
+            {editMode ? (
+              <>
+                <span className="text-base font-medium">Save</span>
+                <SaveIcon />
+              </>
+            ) : (
+              <GearIcon />
+            )}
           </button>
         </div>
 
@@ -329,10 +336,11 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
                   key={index}
                   className="relative flex flex-col items-center max-w-full max-h-full"
                 >
-                  {editMode && (
+                  {editMode && showWidgetContent && (
                     <button
                       onClick={() => removeFromSlot(index)}
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white text-xs leading-none flex items-center justify-center transition-colors z-10"
+                      className="absolute w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white text-xs leading-none flex items-center justify-center transition-colors z-10"
+                      style={{ top: -4, left: `calc(50% + ${donutSize / 2 - 6}px)` }}
                     >
                       &times;
                     </button>
