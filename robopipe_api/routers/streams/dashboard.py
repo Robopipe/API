@@ -11,6 +11,7 @@ from robopipe_api.dashboard.config_store import config_store_factory
 from robopipe_api.dashboard.dashboard_handler import (
     _threshold_tracker,
     apply_tuning_overrides,
+    compute_settings_unlock,
     reset_zone_tracking,
 )
 from robopipe_api.dashboard.events_store import events_store_factory
@@ -73,7 +74,7 @@ def serve_dashboard(
             "configId": sensor.dashboard_config.id,
             "name": sensor.dashboard_config.name,
             "projectName": sensor.dashboard_config.projectName,
-            "apiBase": str(request.url).removesuffix("/dashboard"),
+            "apiBase": f"{request.url.scheme}://{request.url.netloc}{request.url.path.removesuffix('/dashboard')}",
             "mxid": mxid,
             "streamName": stream_name,
             "labels": [label.model_dump() for label in sensor.dashboard_config.labels],
@@ -102,6 +103,7 @@ def serve_dashboard(
             "runningSince": running_since,
             "hasMultipleConfigs": has_multiple,
             "userSettings": user_settings.model_dump(),
+            "settingsUnlock": compute_settings_unlock(mxid, stream_name),
         }
         script_tag = soup.new_tag("script")
         script_tag.string = f"""
