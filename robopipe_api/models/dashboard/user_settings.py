@@ -30,7 +30,30 @@ class DashboardUserSettings(BaseModel):
     displayMode: DetectionDisplayMode = "all"
     multiLimitMode: MultiLimitDisplayMode = "highest"
     hiddenLabelIds: list[int] = []
-    zoneVisible: bool = True
+    zoneVisible: bool = False
     selectedLabelId: int | None = None
     widgetConfig: WidgetConfig = Field(default_factory=WidgetConfig)
     timerLabelDisplay: TimerLabelDisplay = "project_name"
+
+    def pruned(
+        self, test_case_ids: set[str], label_ids: set[int]
+    ) -> "DashboardUserSettings":
+        slots = [
+            slot if (slot is None or slot.id in test_case_ids) else None
+            for slot in self.widgetConfig.slots
+        ]
+        return self.model_copy(
+            update={
+                "widgetConfig": self.widgetConfig.model_copy(
+                    update={"slots": slots}
+                ),
+                "hiddenLabelIds": [
+                    lid for lid in self.hiddenLabelIds if lid in label_ids
+                ],
+                "selectedLabelId": (
+                    self.selectedLabelId
+                    if self.selectedLabelId in label_ids
+                    else None
+                ),
+            }
+        )

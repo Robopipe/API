@@ -35,7 +35,7 @@ const appState = createContext<AppState>({
   setMultiLimitMode: noop,
   hiddenLabelIds: new Set(),
   toggleLabelVisibility: noop,
-  zoneVisible: true,
+  zoneVisible: false,
   setZoneVisible: noop,
   selectedLabelId: null,
   setSelectedLabelId: noop,

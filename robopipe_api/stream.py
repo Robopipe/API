@@ -40,7 +40,7 @@ class StreamService:
 
         if key not in self.subscribers:
             self.subscribers[key] = []
-            self.encoders[key] = VideoEncoder(camera.sensors[key[1]])
+            self.encoders[key] = VideoEncoder(camera, sensor_name)
 
         self.subscribers[key].append((handler, on_close))
         await handler.send(self.encoders[key].init_fragment)

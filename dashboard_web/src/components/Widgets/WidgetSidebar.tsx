@@ -38,6 +38,7 @@ export const WidgetSidebar = ({
               name={tc.name}
               status={thresholdStatus?.[tc.id] ?? null}
               defaultColor={getThresholdDefaultColor(tc)}
+              disabled={!tc.enabled}
             />
           </button>
         ))}

@@ -61,12 +61,15 @@ export const MasterWidget = ({
     );
   }
 
+  const masterSize = size && size > 0 ? size : 200;
+
   return (
     <div className="relative flex flex-col items-center mb-4 shrink-0">
       {editMode && (
         <button
           onClick={onToggleVisible}
-          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white text-xs leading-none flex items-center justify-center transition-colors z-10"
+          className="absolute w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white text-xs leading-none flex items-center justify-center transition-colors z-10"
+          style={{ top: -4, left: `calc(50% + ${masterSize / 2 - 6}px)` }}
         >
           &times;
         </button>
@@ -76,7 +79,7 @@ export const MasterWidget = ({
         status={status}
         displayMode="pass_rate"
         defaultColor={getMasterDefaultColor()}
-        size={size && size > 0 ? size : 200}
+        size={masterSize}
         primaryLabel={primaryLabel}
       />
       {editMode && (

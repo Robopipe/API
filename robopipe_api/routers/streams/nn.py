@@ -99,6 +99,7 @@ async def get_sensor_detections(
 
         detections = sensor.get_nn_detections()
         seq = detections.getSequenceNum()
+        ts_us = int(detections.getTimestampDevice().total_seconds() * 1_000_000)
         parsed_detections = parse_detections(
             detections, mask_max_dim=nn_config.mask_max_dim
         )
@@ -109,6 +110,7 @@ async def get_sensor_detections(
             sensor.dashboard_config, parsed_detections, sensor.dashboard_run_session_id
         )
         result["seq"] = seq
+        result["ts_us"] = ts_us
 
         throttle_hz = nn_config.throttle_hz
         if throttle_hz and throttle_hz > 0:
@@ -116,7 +118,7 @@ async def get_sensor_detections(
             now = time.monotonic()
             # Always emit frames carrying just-fired violations so QC
             # alerts aren't delayed by the throttle.
-            has_violation_event = bool(result.get("violation_event_ids"))
+            has_violation_event = bool(result.get("violation_events"))
             if not has_violation_event and now - last_send_t[0] < min_interval:
                 raise ProducerSkipMessage()
             last_send_t[0] = now

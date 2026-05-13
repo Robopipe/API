@@ -36,6 +36,8 @@ class ThresholdTracker:
         result: dict[str, dict] = {}
 
         for tc in test_cases:
+            if not tc.enabled:
+                continue
             if not tc.thresholds:
                 continue
 

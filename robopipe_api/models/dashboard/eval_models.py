@@ -61,6 +61,7 @@ class EvalLimit(BaseModel):
     targetLabel: Label
     targetParentLabel: Label | None = None
     severity: EvalSeverity | None = None
+    enabled: bool = True
     limitItems: list[EvalLimitItem] = []
 
 
@@ -102,3 +103,4 @@ class EvalTestCase(BaseModel):
     limits: list[EvalLimit]
     logicNodes: list[EvalLogicNode] = []
     thresholds: list[EvalThreshold] = []
+    enabled: bool = True

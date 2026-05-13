@@ -50,6 +50,17 @@ class DashboardConfigStore:
         meta_path = stream_dir / f"{config_id}.json"
         meta_path.write_text(json.dumps(metadata, default=str))
 
+        # Prune any stored user settings to drop references to test cases
+        # or labels that no longer exist in the new dashboard config.
+        user_path = self._user_settings_path(mxid, stream_name, config_id)
+        if user_path.exists():
+            existing = DashboardUserSettings.model_validate_json(user_path.read_text())
+            pruned = existing.pruned(
+                test_case_ids={tc.id for tc in dashboard_config.testCases},
+                label_ids={label.id for label in dashboard_config.labels},
+            )
+            user_path.write_text(pruned.model_dump_json())
+
         return StoredDashboardConfig(
             config_id=config_id,
             config_name=dashboard_config.name,
@@ -65,6 +76,8 @@ class DashboardConfigStore:
 
         configs = []
         for meta_file in sorted(stream_dir.glob("*.json")):
+            if meta_file.name.endswith(".user.json"):
+                continue
             metadata = json.loads(meta_file.read_text())
             dc = metadata["dashboard_config"]
             configs.append(
@@ -109,12 +122,17 @@ class DashboardConfigStore:
 
     def clear_configs(self, mxid: str, stream_name: str) -> None:
         stream_dir = self._stream_dir(mxid, stream_name)
-        if stream_dir.exists():
-            shutil.rmtree(stream_dir)
+        if not stream_dir.exists():
+            return
+        for path in stream_dir.iterdir():
+            if path.is_file() and path.name.endswith(".user.json"):
+                continue
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
 
-    def _user_settings_path(
-        self, mxid: str, stream_name: str, config_id: int
-    ) -> Path:
+    def _user_settings_path(self, mxid: str, stream_name: str, config_id: int) -> Path:
         return self._stream_dir(mxid, stream_name) / f"{config_id}.user.json"
 
     def load_user_settings(
