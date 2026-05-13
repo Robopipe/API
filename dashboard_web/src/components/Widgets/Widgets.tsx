@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Container, type ContainerProps, GearIcon, SaveIcon } from "../../ui";
 import { useElementSize } from "../../hooks/useElementSize";
-import { useAppState } from "../../provider";
+import { useAppState, useSettingsUnlocked } from "../../provider";
 import { getUserSettings, updateUserSettings } from "../../api/userSettings";
 import type { MasterDisplayMode, WidgetConfig, WidgetDisplayMode } from "../../types";
 import { DisplayModeSelector } from "./DisplayModeSelector";
@@ -141,6 +141,7 @@ export type WidgetsProps = ContainerProps;
 
 export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const { running } = useAppState();
+  const settingsUnlocked = useSettingsUnlocked();
   const { thresholdStatus, masterStatus } = useThresholdStatus(running);
   const [widgetSlots, setWidgetSlots] = useState<WidgetConfig>(() => {
     const cfg = getUserSettings().widgetConfig;
@@ -291,20 +292,22 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
               />
             )}
           </div>
-          <button
-            onClick={toggleEditMode}
-            className={`flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors ${editMode ? "text-white" : ""}`}
-            title={editMode ? "Save widget configuration" : "Configure widgets"}
-          >
-            {editMode ? (
-              <>
-                <span className="text-base font-medium">Save</span>
-                <SaveIcon />
-              </>
-            ) : (
-              <GearIcon />
-            )}
-          </button>
+          {settingsUnlocked && (
+            <button
+              onClick={toggleEditMode}
+              className={`flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors ${editMode ? "text-white" : ""}`}
+              title={editMode ? "Save widget configuration" : "Configure widgets"}
+            >
+              {editMode ? (
+                <>
+                  <span className="text-base font-medium">Save</span>
+                  <SaveIcon />
+                </>
+              ) : (
+                <GearIcon />
+              )}
+            </button>
+          )}
         </div>
 
         {/* Master evaluation widget */}

@@ -1,3 +1,5 @@
+import hashlib
+
 from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.dashboard.user_settings import (
     TUNING_OVERRIDE_FIELDS,
@@ -13,6 +15,13 @@ from .events_store import events_store_factory
 _zone_tracker = ZoneTracker()
 _threshold_tracker = ThresholdTracker()
 _dashboard_evaluator = DashboardEvaluator(_zone_tracker, _threshold_tracker)
+
+# Mirror in Studio: apps/web/src/modules/run/utils/dashboardUnlock.ts
+def compute_settings_unlock(mxid: str, stream_name: str) -> str:
+    """Deterministic token both Studio and the camera derive from public
+    deployment identifiers. Acts as a casual lock that hides settings UI from
+    users who reach the dashboard without going through Studio."""
+    return hashlib.sha256(f"{mxid}:{stream_name}".encode()).hexdigest()[:16]
 
 
 def apply_tuning_overrides(

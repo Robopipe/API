@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useWakeLock } from "../../hooks/useWakeLock";
-import { useAppState } from "../../provider";
+import { useAppState, useSettingsUnlocked } from "../../provider";
 import { GearIcon, WakeLockIcon } from "../../ui";
 import { ModelSwitcher } from "./ModelSwitcher";
 import { SettingsModal } from "./SettingsModal";
@@ -28,6 +28,7 @@ export type HeaderProps = object;
 
 export const Header = () => {
   const { running, toggleRunning, runningSince } = useAppState();
+  const settingsUnlocked = useSettingsUnlocked();
   const wakeLock = useWakeLock();
   const [elapsed, setElapsed] = useState("00:00:00");
   const [labelDisplay, setLabelDisplay] = useState<TimerLabelDisplay>(
@@ -121,17 +122,21 @@ export const Header = () => {
         )}
       </div>
       <ModelSwitcher />
-      <button
-        className="p-3 rounded-xl transition-colors bg-white/5 text-gray-400 hover:text-white"
-        onClick={() => setSettingsOpen(true)}
-        title="Dashboard Settings"
-      >
-        <GearIcon size={20} />
-      </button>
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+      {settingsUnlocked && (
+        <>
+          <button
+            className="p-3 rounded-xl transition-colors bg-white/5 text-gray-400 hover:text-white"
+            onClick={() => setSettingsOpen(true)}
+            title="Dashboard Settings"
+          >
+            <GearIcon size={20} />
+          </button>
+          <SettingsModal
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+          />
+        </>
+      )}
       {wakeLock.supported && (
         <button
           className={

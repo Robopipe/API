@@ -80,6 +80,7 @@ export interface DashboardConfig {
   runningSince: string | null;
   hasMultipleConfigs: boolean;
   userSettings: UserSettings;
+  settingsUnlock: string;
 }
 
 export interface StoredConfigSummary {
