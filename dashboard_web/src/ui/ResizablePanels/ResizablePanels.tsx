@@ -9,6 +9,8 @@ export interface ResizablePanelsProps {
   right: React.ReactNode;
   /** Initial width of the left panel in percent (default: 40) */
   defaultLeftPct?: number;
+  /** Called with the final left-panel percentage when the user finishes a drag. */
+  onCommit?: (leftPct: number) => void;
   /** Additional className for the outer container */
   className?: string;
 }
@@ -17,17 +19,20 @@ export const ResizablePanels = ({
   left,
   right,
   defaultLeftPct = 40,
+  onCommit,
   className = "",
 }: ResizablePanelsProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [leftPct, setLeftPct] = useState(defaultLeftPct);
+  const leftPctRef = useRef(defaultLeftPct);
   const dragging = useRef(false);
 
   const endDrag = useCallback(() => {
     if (!dragging.current) return;
     dragging.current = false;
     document.body.classList.remove("is-resizing-panels");
-  }, []);
+    onCommit?.(leftPctRef.current);
+  }, [onCommit]);
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -41,7 +46,12 @@ export const ResizablePanels = ({
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = (x / rect.width) * 100;
-    setLeftPct(Math.min(100 - MIN_PANEL_PCT, Math.max(MIN_PANEL_PCT, pct)));
+    const clamped = Math.min(
+      100 - MIN_PANEL_PCT,
+      Math.max(MIN_PANEL_PCT, pct),
+    );
+    leftPctRef.current = clamped;
+    setLeftPct(clamped);
   }, []);
 
   const onPointerUp = useCallback(

@@ -54,6 +54,7 @@ class DashboardUserSettings(BaseModel):
     selectedLabelId: int | None = None
     widgetConfig: WidgetConfig = Field(default_factory=WidgetConfig)
     timerLabelDisplay: TimerLabelDisplay = "project_name"
+    videoPanelWidthPct: float | None = Field(None, ge=0.0, le=100.0)
 
     # Tuning overrides — when set, override the corresponding field on
     # DashboardConfig at runtime. Persisted alongside the user's display

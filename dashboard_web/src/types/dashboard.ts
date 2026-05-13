@@ -53,6 +53,7 @@ export interface UserSettings {
   selectedLabelId: number | null;
   widgetConfig: WidgetConfig;
   timerLabelDisplay: TimerLabelDisplay;
+  videoPanelWidthPct?: number;
 }
 
 export interface DashboardConfig {
