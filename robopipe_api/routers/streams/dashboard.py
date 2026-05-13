@@ -26,6 +26,7 @@ from ..common import (
     SensorDep,
     StreamName,
     SyncTaskDep,
+    CameraManagerDep,
 )
 from . import JpegResponse, stream_router
 from .nn import _load_model_blob_from_path
@@ -155,11 +156,13 @@ def delete_dashboard_config(
     mxid: Mxid,
     stream_name: StreamName,
     events_store: EventsStoreDep,
+    camera_manager: CameraManagerDep,
 ):
     _teardown_dashboard_run(sensor, events_store)
     sensor.dashboard_config = None
     config_store_factory().clear_configs(mxid, stream_name)
     camera.delete_nn(stream_name)
+    camera_manager.restart_camera(mxid)
 
 
 @stream_router.get("/dashboard/config")
