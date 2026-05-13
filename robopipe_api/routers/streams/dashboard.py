@@ -10,13 +10,17 @@ from fastapi.responses import HTMLResponse, Response
 from robopipe_api.dashboard.config_store import config_store_factory
 from robopipe_api.dashboard.dashboard_handler import (
     _threshold_tracker,
+    apply_tuning_overrides,
     reset_zone_tracking,
 )
 from robopipe_api.dashboard.events_store import events_store_factory
 
 from ...models.dashboard.dashboard_config import DashboardConfigUpdate
 from ...models.dashboard.detection_event import DetectionEvent
-from ...models.dashboard.user_settings import DashboardUserSettings
+from ...models.dashboard.user_settings import (
+    TUNING_OVERRIDE_FIELDS,
+    DashboardUserSettings,
+)
 from ...paths import get_data_dir
 from ..common import (
     CameraDep,
@@ -143,6 +147,9 @@ async def set_dashboard_config(
     camera.deploy_nn(stream_name, blob, first_nn_config)
     sensor = camera.sensors.get(stream_name)  # Refresh after deploy
     sensor.dashboard_config = first_config
+    # Apply persisted tuning overrides on top of the deployed config.
+    user_settings = store.load_user_settings(mxid, stream_name, first_config.id)
+    sensor._dashboard_config = apply_tuning_overrides(first_config, user_settings)
 
     return {
         "dashboard_url": f"/cameras/{mxid}/streams/{stream_name}/dashboard",
@@ -184,6 +191,8 @@ def get_dashboard_config_params(sensor: SensorDep):
 
 @stream_router.patch("/dashboard/config")
 def update_dashboard_config(
+    mxid: Mxid,
+    stream_name: StreamName,
     sensor: SensorDep,
     update: DashboardConfigUpdate,
 ):
@@ -193,9 +202,18 @@ def update_dashboard_config(
             detail="No dashboard configured for this stream",
         )
 
-    updated = sensor.dashboard_config.model_copy(
-        update=update.model_dump(exclude_unset=True)
-    )
+    store = config_store_factory()
+    config_id = sensor.dashboard_config.id
+
+    settings = store.load_user_settings(mxid, stream_name, config_id)
+    settings = settings.model_copy(update=update.model_dump(exclude_unset=True))
+    store.save_user_settings(mxid, stream_name, config_id, settings)
+
+    # Re-apply overlay onto the stored base so tuning changes don't compound.
+    stored = store.get_config(mxid, stream_name, config_id)
+    base = stored.dashboard_config if stored else sensor.dashboard_config
+    updated = apply_tuning_overrides(base, settings)
+
     # Assign directly to bypass the property setter which resets
     # _dashboard_run_session_id and _active_config_id
     sensor._dashboard_config = updated
@@ -237,10 +255,15 @@ def update_dashboard_user_settings(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No dashboard configured for this stream",
         )
-    config_store_factory().save_user_settings(
-        mxid, stream_name, sensor.dashboard_config.id, settings
-    )
-    return settings
+    store = config_store_factory()
+    config_id = sensor.dashboard_config.id
+    # Preserve tuning overrides — those are owned by PATCH /dashboard/config
+    # and not part of this endpoint's request shape on the client.
+    existing = store.load_user_settings(mxid, stream_name, config_id)
+    preserved = {field: getattr(existing, field) for field in TUNING_OVERRIDE_FIELDS}
+    merged = settings.model_copy(update=preserved)
+    store.save_user_settings(mxid, stream_name, config_id, merged)
+    return merged
 
 
 @stream_router.get("/dashboard/configs")
@@ -292,6 +315,11 @@ def switch_dashboard_config(
     # Refresh sensor reference after pipeline restart
     sensor = camera.sensors.get(stream_name)
     sensor.dashboard_config = stored.dashboard_config
+    # Apply persisted tuning overrides on top of the activated config.
+    user_settings = store.load_user_settings(mxid, stream_name, config_id)
+    sensor._dashboard_config = apply_tuning_overrides(
+        stored.dashboard_config, user_settings
+    )
 
     return {"switched_to": config_id, "config_name": stored.config_name}
 

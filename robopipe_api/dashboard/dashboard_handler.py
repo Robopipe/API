@@ -1,4 +1,8 @@
 from ..models.dashboard.dashboard_config import DashboardConfig
+from ..models.dashboard.user_settings import (
+    TUNING_OVERRIDE_FIELDS,
+    DashboardUserSettings,
+)
 from ..models.detection.bbox_detection import BBoxDetection
 from ..models.detection.detection import BaseNNDetections
 from .evaluators import DashboardEvaluator, EvaluationResult
@@ -9,6 +13,26 @@ from .events_store import events_store_factory
 _zone_tracker = ZoneTracker()
 _threshold_tracker = ThresholdTracker()
 _dashboard_evaluator = DashboardEvaluator(_zone_tracker, _threshold_tracker)
+
+
+def apply_tuning_overrides(
+    config: DashboardConfig, user_settings: DashboardUserSettings
+) -> DashboardConfig:
+    """Return a copy of `config` with user tuning overrides applied.
+
+    Optional fields (None on user_settings) leave the config's default in place.
+    `labelConfidenceThresholds` is always taken from user_settings since its
+    "no override" state is an empty dict.
+    """
+    overrides: dict[str, object] = {}
+    for field in TUNING_OVERRIDE_FIELDS:
+        value = getattr(user_settings, field)
+        if field == "labelConfidenceThresholds":
+            overrides[field] = value
+            continue
+        if value is not None:
+            overrides[field] = value
+    return config.model_copy(update=overrides) if overrides else config
 
 
 def _annotate_detections(
