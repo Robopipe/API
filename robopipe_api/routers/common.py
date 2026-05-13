@@ -58,15 +58,15 @@ def get_stream_service(camera_manager: CameraManagerDep):
 StreamServiceDep = Annotated[StreamService, Depends(get_stream_service)]
 
 
-def get_video_track(sensor: SensorDep):
-    return video_track_factory(sensor)
+def get_video_track(camera: CameraDep, stream_name: StreamName):
+    return video_track_factory(camera, stream_name)
 
 
 VideoTrackDep = Annotated[VideoTrack, Depends(get_video_track)]
 
 
-def get_video_relay(sensor: SensorDep):
-    return media_relay_factory(sensor)
+def get_video_relay(camera: CameraDep, stream_name: StreamName):
+    return media_relay_factory(camera, stream_name)
 
 
 VideoRelayDep = Annotated[MediaRelay, Depends(get_video_relay)]

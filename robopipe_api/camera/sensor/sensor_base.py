@@ -17,6 +17,7 @@ from ...models.nn_config import NNConfig
 from ...models.sahi_config import SAHIConfig
 from ...utils.detections_parser import parse_detections
 from ...utils.image import img_frame_to_video_frame
+from ...utils.timestamp_burnin import burn_timestamp
 from ...ws_relay import ProducerTerminated
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from ..sahi import Tile, remap_tile_detections, nms_merge
@@ -113,18 +114,67 @@ class SensorBase(ABC):
         return still_queue.getAll()[-1]
 
     def get_video_frame(self) -> av.VideoFrame:
+        # video_queue = self.output_queues[PipelineQueueType.VIDEO]
+
+        # # Drain to the freshest frame. When the WebRTC encoder pulls
+        # # slower than the NN passthrough produces (high-resolution bbox
+        # # models, constrained bandwidth), the queue would otherwise back
+        # # up — encoder ships oldest frames first, latency between video
+        # # and the matching detection grows unboundedly until matching
+        # # breaks.
+        # img_frame: dai.ImgFrame | None = None
+        # while True:
+        #     next_frame = video_queue.tryGet()
+        #     if next_frame is None:
+        #         break
+        #     img_frame = next_frame
+
+        # if img_frame is not None:
+        #     self.on_frame(img_frame)
+        #     ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
+        #     self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+        #     # self._publish_video_seq(img_frame.getSequenceNum())
+        # elif self.last_frame is None:
+        #     img_frame = video_queue.get()
+        #     self.on_frame(img_frame)
+        #     ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
+        #     self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+        #     # self._publish_video_seq(img_frame.getSequenceNum())
+
+        # return self.last_frame
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
-        img_frame: dai.ImgFrame | None = video_queue.tryGet()
+        try:
+            img_frame: dai.ImgFrame | None = video_queue.tryGet()
+        except Exception as e:
+            # The dai.Device backing this queue was closed (pipeline restart).
+            # Surface as RuntimeError so consumers tear down rather than loop
+            # on the cached `last_frame`.
+            raise RuntimeError("video queue closed") from e
 
         if img_frame:
             self.on_frame(img_frame)
-            self.last_frame = img_frame_to_video_frame(img_frame)
+            ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
+            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
         elif self.last_frame is None:
-            img_frame = video_queue.get()
+            try:
+                img_frame = video_queue.get()
+            except Exception as e:
+                raise RuntimeError("video queue closed") from e
             self.on_frame(img_frame)
-            self.last_frame = img_frame_to_video_frame(img_frame)
+            ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
+            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
 
         return self.last_frame
+
+    def _publish_video_seq(self, seq: int) -> None:
+        """Notify any waiters that a video frame with this seq has been
+        dispatched to the encoder. Used by `get_nn_detections` to hold the
+        detection broadcast until the matching frame is on its way out, so
+        client-side ts matching doesn't drift."""
+        with self._video_seq_cond:
+            if seq > self._video_seq:
+                self._video_seq = seq
+                self._video_seq_cond.notify_all()
 
     def get_nn_frame(self):
         try:
@@ -175,9 +225,13 @@ class SensorBase(ABC):
                 raise TimeoutError("NN queue get() timed out")
 
         # Wait until the video track has dispatched the frame that
-        # corresponds to this detection, so both leave the server
-        # at approximately the same time.
-        # det_seq = detections.getSequenceNum()
+        # corresponds to this detection, so both leave the server at
+        # approximately the same time. Without this, the WebRTC encoder
+        # and the WS detection producer can land on different NN cycles
+        # — their ts values diverge and the client matcher breaks.
+        # The 0.5 s timeout keeps detection-only consumers (no video)
+        # from blocking forever.
+        det_seq = detections.getSequenceNum()
         # with self._video_seq_cond:
         #     self._video_seq_cond.wait_for(
         #         lambda: self._video_seq >= det_seq,
@@ -207,9 +261,7 @@ class SensorBase(ABC):
             self._sahi_tile_cache[self._sahi_tile_index] = remapped
 
         # Advance to next tile and reconfigure ImageManip crop
-        self._sahi_tile_index = (
-            (self._sahi_tile_index + 1) % len(self._sahi_tiles)
-        )
+        self._sahi_tile_index = (self._sahi_tile_index + 1) % len(self._sahi_tiles)
         next_tile = self._sahi_tiles[self._sahi_tile_index]
         cfg = dai.ImageManipConfig()
         crop_rect = dai.Rect(

@@ -27,6 +27,12 @@ class Camera:
         # NNType.YOLO: CameraNNYoloConfig,
         # NNType.MobileNet: CameraNNMobileNetConfig,
     }
+    # Delay between Device close and the next Device open. Gives the on-device
+    # kernel time to reap the previous depthai-device firmware's msm_cvp /
+    # cam_sync / synx resources before the new firmware boot; without it,
+    # rapid close/open cycles occasionally SIGABRT the firmware (RVC4 CVP
+    # debugfs collision).
+    DEVICE_REOPEN_SETTLE_MS = 500
 
     def __init__(self, mxid: str, name: str, pipeline: Pipeline | None = None):
         # Pre-set attributes that close()/__del__ touch so a failure in
@@ -111,12 +117,8 @@ class Camera:
                     isinstance(self.pipeline, NNPipeline)
                     and sensor_name in self.pipeline.sahi_tile_queue
                 ):
-                    sensor._sahi_tile_queue = self.pipeline.sahi_tile_queue[
-                        sensor_name
-                    ]
-                    sensor._sahi_manip_cfg = self.pipeline.sahi_manip_cfg[
-                        sensor_name
-                    ]
+                    sensor._sahi_tile_queue = self.pipeline.sahi_tile_queue[sensor_name]
+                    sensor._sahi_manip_cfg = self.pipeline.sahi_manip_cfg[sensor_name]
                     sensor._sahi_tiles = self.pipeline.sahi_tiles[sensor_name]
                     sensor._sahi_config = self.pipeline.sahi_configs[sensor_name]
                     sensor._sahi_model_input_size = (
@@ -163,6 +165,8 @@ class Camera:
     def open(self, pipeline: Pipeline | None = None):
         if self.camera_handle is not None:
             raise CameraException("Camera is already open")
+        if self.DEVICE_REOPEN_SETTLE_MS > 0:
+            time.sleep(self.DEVICE_REOPEN_SETTLE_MS / 1000)
         self.camera_handle = dai.Device(self.boot_name)
 
         if pipeline is not None or self.pipeline is not None:
