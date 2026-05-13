@@ -1,13 +1,18 @@
 import depthai as dai
 
+import time
 from functools import lru_cache
 
 from ..error import CameraNotFoundException
+from ..log import logger
 from .camera import Camera
 from .pipeline.nn_pipeline import NNPipeline
 
 
 class CameraManager:
+    RESTART_RELOAD_RETRIES = 5
+    RESTART_RELOAD_TIMEOUT_BASE = 1.0
+
     cameras: dict[str, Camera] = {}
 
     def __init__(self):
@@ -59,6 +64,30 @@ class CameraManager:
         self.cameras[mxid].cleanup_replay_videos()
         self.cameras[mxid].close()
         del self.cameras[mxid]
+
+    def restart_camera(self, mxid: str):
+        if mxid not in self.cameras:
+            raise CameraNotFoundException()
+
+        try:
+            self.shutdown_camera(mxid)
+        except Exception as e:
+            logger.warning(
+                f"restart_camera({mxid}): shutdown raised, continuing: {e}"
+            )
+            self.cameras.pop(mxid, None)
+
+        timeout = self.RESTART_RELOAD_TIMEOUT_BASE
+        for _ in range(self.RESTART_RELOAD_RETRIES):
+            self.reload_cameras()
+            if mxid in self.cameras:
+                break
+            time.sleep(timeout)
+            timeout *= 2
+        else:
+            raise CameraNotFoundException()
+
+        self.boot_camera(mxid)
 
 
 @lru_cache(maxsize=1)
