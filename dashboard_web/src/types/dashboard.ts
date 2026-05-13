@@ -53,6 +53,7 @@ export interface UserSettings {
   selectedLabelId: number | null;
   widgetConfig: WidgetConfig;
   timerLabelDisplay: TimerLabelDisplay;
+  videoPanelWidthPct?: number;
 }
 
 export interface DashboardConfig {
@@ -71,6 +72,7 @@ export interface DashboardConfig {
   optimistic: boolean;
   remoteBackendUrl?: string;
   confidenceThreshold: number;
+  labelConfidenceThresholds: Record<number, number>;
   debounceFrames: number;
   maxMissingFrames: number;
   maxMatchDistance: number;

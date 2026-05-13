@@ -194,11 +194,14 @@ export const useSyncedRenderer = ({
       }
 
       for (const detection of synced.detections.detections) {
-        if (
-          detection.confidence < window.DASHBOARD_CONFIG.confidenceThreshold
-        )
-          continue;
         const detectionLabel = labels[detection.label];
+        const threshold =
+          (detectionLabel &&
+            window.DASHBOARD_CONFIG.labelConfidenceThresholds?.[
+              detectionLabel.id
+            ]) ??
+          window.DASHBOARD_CONFIG.confidenceThreshold;
+        if (detection.confidence < threshold) continue;
         if (detectionLabel && opts.hiddenLabelIds?.has(detectionLabel.id))
           continue;
         const prepared = prepareDetectionForRender(
