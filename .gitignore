@@ -192,5 +192,6 @@ pip-selfcheck.json
 
 robopipe_api/static/dashboard
 *.oakapp
+crashdumps/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,venv
