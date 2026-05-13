@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAppState } from "../../provider";
 import type {
   DetectionDisplayMode,
@@ -5,6 +6,29 @@ import type {
 } from "../../types";
 
 const labels = window.DASHBOARD_CONFIG.labels;
+
+const initialLabelThresholdDrafts = (): Record<number, string> => {
+  const stored = window.DASHBOARD_CONFIG.labelConfidenceThresholds || {};
+  const drafts: Record<number, string> = {};
+  for (const [key, value] of Object.entries(stored)) {
+    drafts[Number(key)] = String(value);
+  }
+  return drafts;
+};
+
+const buildThresholdMap = (
+  drafts: Record<number, string>,
+): Record<number, number> => {
+  const next: Record<number, number> = {};
+  for (const [key, raw] of Object.entries(drafts)) {
+    const trimmed = raw.trim();
+    if (trimmed === "") continue;
+    const parsed = Number(trimmed);
+    if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) continue;
+    next[Number(key)] = parsed;
+  }
+  return next;
+};
 
 const displayModeOptions: { value: DetectionDisplayMode; label: string }[] = [
   { value: "all", label: "All" },
@@ -71,6 +95,60 @@ export const DisplayTab = () => {
     setZoneVisible,
   } = useAppState();
 
+  const [labelThresholdDrafts, setLabelThresholdDrafts] = useState<
+    Record<number, string>
+  >(initialLabelThresholdDrafts);
+
+  const setLabelThresholdDraft = (labelId: number, raw: string) => {
+    setLabelThresholdDrafts((prev) => ({ ...prev, [labelId]: raw }));
+  };
+
+  const commitLabelThreshold = async (labelId: number) => {
+    const raw = (labelThresholdDrafts[labelId] ?? "").trim();
+    if (raw !== "") {
+      const parsed = Number(raw);
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) {
+        const stored = window.DASHBOARD_CONFIG.labelConfidenceThresholds || {};
+        const fallback = stored[labelId];
+        setLabelThresholdDrafts((prev) => ({
+          ...prev,
+          [labelId]: fallback !== undefined ? String(fallback) : "",
+        }));
+        return;
+      }
+    }
+
+    const next = buildThresholdMap({
+      ...labelThresholdDrafts,
+      [labelId]: raw,
+    });
+    const current = window.DASHBOARD_CONFIG.labelConfidenceThresholds || {};
+    if (JSON.stringify(current) === JSON.stringify(next)) return;
+
+    try {
+      const response = await fetch(
+        `${window.DASHBOARD_CONFIG.apiBase}/dashboard/config`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ labelConfidenceThresholds: next }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const body = await response.json();
+      window.DASHBOARD_CONFIG.labelConfidenceThresholds =
+        body.labelConfidenceThresholds ?? next;
+    } catch (err) {
+      console.error("Failed to save per-label confidence threshold", err);
+    }
+  };
+
+  const globalThresholdPlaceholder = String(
+    window.DASHBOARD_CONFIG.confidenceThreshold,
+  );
+
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-2">
@@ -78,7 +156,8 @@ export const DisplayTab = () => {
           Labels
         </h3>
         <p className="text-xs text-gray-500 mb-1">
-          Eye: toggle visibility. Row: pick counted label.
+          Eye: toggle visibility. Row: pick counted label. Number: per-label
+          confidence threshold (blank uses global).
         </p>
         {labels.map((label) => {
           const isVisible = !hiddenLabelIds.has(label.id);
@@ -108,6 +187,25 @@ export const DisplayTab = () => {
                 />
                 <span className="truncate">{label.name}</span>
               </button>
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                placeholder={globalThresholdPlaceholder}
+                value={labelThresholdDrafts[label.id] ?? ""}
+                onChange={(e) =>
+                  setLabelThresholdDraft(label.id, e.target.value)
+                }
+                onBlur={() => commitLabelThreshold(label.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                className="w-20 shrink-0 px-2 py-2 bg-gray-800 border border-gray-600 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+                title="Per-label confidence threshold (blank = use global)"
+              />
             </div>
           );
         })}

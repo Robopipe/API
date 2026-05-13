@@ -71,6 +71,7 @@ export interface DashboardConfig {
   optimistic: boolean;
   remoteBackendUrl?: string;
   confidenceThreshold: number;
+  labelConfidenceThresholds: Record<number, number>;
   debounceFrames: number;
   maxMissingFrames: number;
   maxMatchDistance: number;

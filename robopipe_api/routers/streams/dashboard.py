@@ -90,6 +90,7 @@ def serve_dashboard(
             "thresholds": [t.model_dump() for t in sensor.dashboard_config.thresholds],
             "remoteBackendUrl": sensor.dashboard_config.remoteBackendUrl,
             "confidenceThreshold": sensor.dashboard_config.confidenceThreshold,
+            "labelConfidenceThresholds": sensor.dashboard_config.labelConfidenceThresholds,
             "debounceFrames": sensor.dashboard_config.debounceFrames,
             "maxMissingFrames": sensor.dashboard_config.maxMissingFrames,
             "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
@@ -174,6 +175,7 @@ def get_dashboard_config_params(sensor: SensorDep):
         )
     return {
         "confidenceThreshold": sensor.dashboard_config.confidenceThreshold,
+        "labelConfidenceThresholds": sensor.dashboard_config.labelConfidenceThresholds,
         "debounceFrames": sensor.dashboard_config.debounceFrames,
         "maxMissingFrames": sensor.dashboard_config.maxMissingFrames,
         "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
@@ -200,6 +202,7 @@ def update_dashboard_config(
 
     return {
         "confidenceThreshold": updated.confidenceThreshold,
+        "labelConfidenceThresholds": updated.labelConfidenceThresholds,
         "debounceFrames": updated.debounceFrames,
         "maxMissingFrames": updated.maxMissingFrames,
         "maxMatchDistance": updated.maxMatchDistance,

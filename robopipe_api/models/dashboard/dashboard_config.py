@@ -1,12 +1,25 @@
 from enum import Enum
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 
 from .eval_threshold import EvalThreshold
 
 from ..base_model import BaseModel
 from .eval_models import EvalTestCase
 from .label import Label
+
+
+def _validate_label_confidence_thresholds(
+    value: dict[int, float] | None,
+) -> dict[int, float] | None:
+    if value is None:
+        return value
+    for label_id, threshold in value.items():
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError(
+                f"threshold for label {label_id} must be between 0.0 and 1.0"
+            )
+    return value
 
 
 class DashboardZoneDirection(str, Enum):
@@ -34,6 +47,7 @@ class DashboardConfig(BaseModel):
     countMode: DashboardCountMode = DashboardCountMode.ON_ZONE_ENTER
     optimistic: bool = True
     confidenceThreshold: float = 0.5
+    labelConfidenceThresholds: dict[int, float] = Field(default_factory=dict)
     debounceFrames: int = 5
     maxMissingFrames: int = 5
     maxMatchDistance: float = 0.2
@@ -53,9 +67,14 @@ class DashboardConfig(BaseModel):
     labels: list[Label] = []
     remoteBackendUrl: str | None = None
 
+    _validate_label_thresholds = field_validator("labelConfidenceThresholds")(
+        _validate_label_confidence_thresholds
+    )
+
 
 class DashboardConfigUpdate(BaseModel):
     confidenceThreshold: float | None = Field(None, ge=0.0, le=1.0)
+    labelConfidenceThresholds: dict[int, float] | None = None
     debounceFrames: int | None = Field(None, ge=1, le=100)
     maxMissingFrames: int | None = Field(None, ge=0, le=100)
     maxMatchDistance: float | None = Field(None, ge=0.0, le=1.0)
@@ -70,3 +89,7 @@ class DashboardConfigUpdate(BaseModel):
     measurementNoiseSize: float | None = Field(None, gt=0.0)
     initialVarPos: float | None = Field(None, gt=0.0)
     initialVarVel: float | None = Field(None, gt=0.0)
+
+    _validate_label_thresholds = field_validator("labelConfidenceThresholds")(
+        _validate_label_confidence_thresholds
+    )

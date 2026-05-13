@@ -46,10 +46,12 @@ def handle_detections(
     if dashboard_config is None or dashboard_run_session_id is None:
         return result
 
+    overrides = dashboard_config.labelConfidenceThresholds
+    global_threshold = dashboard_config.confidenceThreshold
     filtered = [
         d
         for d in detections.detections
-        if d.confidence >= dashboard_config.confidenceThreshold
+        if d.confidence >= overrides.get(d.label, global_threshold)
     ]
 
     evaluation_results, violation_events, tracking_ids, display_ids = (
