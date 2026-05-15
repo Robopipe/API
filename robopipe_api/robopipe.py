@@ -16,12 +16,13 @@ from .camera.camera_manager import camera_manager_factory
 from .controller.config import EvokConfig, HWDict, create_devices
 from .controller.devices import Devices, RUN, OWBUS, TCPBUS, SERIALBUS, MODBUS_SLAVE
 from .dashboard.events_store import events_store_factory
+from .dashboard.reports_store import reports_store_factory
 from .dashboard.sync_task import sync_task_factory
 from .error import (
     CameraNotFoundException,
     SensorNotFoundException,
 )
-from .routers import cameras, controller, streams
+from .routers import cameras, controller, reports, streams
 from .discovery import DEFAULT_API_PORT, discovery_manager_factory
 from .stream import stream_service_factory
 from .webrtc_manager import webrtc_manager_factory
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
 
     events_store = events_store_factory()
     events_store.init()
+    reports_store_factory().reset_stuck_reports()
     sync_task = sync_task_factory()
 
     discovery_manager = discovery_manager_factory()
@@ -124,6 +126,7 @@ if os.getenv("GITHUB_ACTIONS") is not None:
 
 app.include_router(cameras.router)
 app.include_router(streams.router)
+app.include_router(reports.router)
 controller.register_device_endpoints(controller.DEVICE_ENDPOINTS)
 app.include_router(controller.router)
 
