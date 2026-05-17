@@ -50,6 +50,35 @@ class ReportsStore:
             ).fetchone()
             return row is not None
 
+    def dashboard_has_sessions_in_range(
+        self,
+        dashboard_config_id: int,
+        filter_start: datetime | None,
+        filter_end: datetime | None,
+    ) -> bool:
+        start_str = _to_sqlite_timestamp(filter_start)
+        end_str = _to_sqlite_timestamp(filter_end)
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM dashboard_run_session s
+                WHERE s.dashboard_config_id = ?
+                    AND s.end_time IS NOT NULL
+                    AND (? IS NULL OR s.start_time >= ?)
+                    AND (? IS NULL OR s.start_time <= ?)
+                LIMIT 1
+                """,
+                (
+                    dashboard_config_id,
+                    start_str,
+                    start_str,
+                    end_str,
+                    end_str,
+                ),
+            ).fetchone()
+            return row is not None
+
     def create_report(
         self,
         dashboard_config_id: int,

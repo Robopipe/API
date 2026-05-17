@@ -3,6 +3,7 @@ import io
 import logging
 import uuid
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -56,6 +57,17 @@ def _format_defect(violated: dict) -> str:
 
 def _format_defects_cell(violated_limits: list[dict]) -> str:
     return "; ".join(_format_defect(v) for v in violated_limits)
+
+
+def _to_utc(dt: datetime) -> datetime:
+    """Normalize a datetime to tz-aware UTC.
+
+    Naive values are treated as UTC, matching `_to_sqlite_timestamp` in
+    reports_store.py, so endpoint validation and DB filtering agree.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _summary_from_row(row: dict) -> DashboardReportSummary:
@@ -158,14 +170,39 @@ def create_report(
     store: ReportsStoreDep,
     body: Annotated[CreateReportRequest | None, Body()] = None,
 ) -> DashboardReportSummary:
-    if not store.dashboard_has_sessions(dashboard_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No sessions found for dashboard {dashboard_id}",
-        )
-
     filter_start = body.start if body else None
     filter_end = body.end if body else None
+
+    now = datetime.now(timezone.utc)
+    if filter_start is not None and _to_utc(filter_start) > now:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start cannot be in the future",
+        )
+    if filter_end is not None and _to_utc(filter_end) > now:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="end cannot be in the future",
+        )
+
+    if (
+        filter_start is not None
+        and filter_end is not None
+        and _to_utc(filter_start) > _to_utc(filter_end)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start must be before or equal to end",
+        )
+
+    if not store.dashboard_has_sessions_in_range(
+        dashboard_id, filter_start, filter_end
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No data found for the selected range",
+        )
+
     report_id = store.create_report(dashboard_id, filter_start, filter_end)
 
     background_tasks.add_task(_generate_report, report_id, dashboard_id)
