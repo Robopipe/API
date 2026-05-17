@@ -176,6 +176,7 @@ class ReportsStore:
                     s.end_time AS session_end,
                     e.id AS event_id,
                     e.test_case_name AS test_case_name,
+                    e.timestamp AS event_timestamp,
                     e.picture_url AS picture_url
                 FROM dashboard_run_session s
                 LEFT JOIN dashboard_evaluation_event e
@@ -226,6 +227,7 @@ class ReportsStore:
                     "session_start": row["session_start"],
                     "session_end": row["session_end"],
                     "event_id": event_id,
+                    "event_timestamp": row["event_timestamp"],
                     "test_case_name": row["test_case_name"],
                     "picture_url": row["picture_url"],
                     "violated_limits": violated_by_event.get(event_id, []) if event_id is not None else [],

@@ -40,6 +40,7 @@ CSV_HEADER = [
     "Session Start",
     "Session End",
     "Test Case",
+    "Timestamp",
     "Defects",
     "Picture",
 ]
@@ -129,6 +130,7 @@ def _generate_report(report_id: int, dashboard_config_id: int) -> None:
                     row["session_start"],
                     row["session_end"],
                     row["test_case_name"] or "",
+                    row["event_timestamp"] or "",
                     _format_defects_cell(row["violated_limits"]),
                     picture_cell,
                 ]
