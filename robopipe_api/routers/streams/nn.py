@@ -105,9 +105,15 @@ async def get_sensor_detections(
         )
         # handle_detections() runs every tick: it updates zone tracking,
         # threshold accumulators and the events store. Throttling skips
-        # only the network broadcast, not the evaluation.
+        # only the network broadcast, not the evaluation. The cached
+        # `last_frame` (driven by the WebRTC encoder's pulls) is handed
+        # off so the commit branch can render the violation picture at
+        # zone exit without an extra queue read.
         result = handle_detections(
-            sensor.dashboard_config, parsed_detections, sensor.dashboard_run_session_id
+            sensor.dashboard_config,
+            parsed_detections,
+            sensor.dashboard_run_session_id,
+            video_frame=sensor.last_frame,
         )
         result["seq"] = seq
         result["ts_us"] = ts_us
@@ -116,10 +122,7 @@ async def get_sensor_detections(
         if throttle_hz and throttle_hz > 0:
             min_interval = 1.0 / throttle_hz
             now = time.monotonic()
-            # Always emit frames carrying just-fired violations so QC
-            # alerts aren't delayed by the throttle.
-            has_violation_event = bool(result.get("violation_events"))
-            if not has_violation_event and now - last_send_t[0] < min_interval:
+            if now - last_send_t[0] < min_interval:
                 raise ProducerSkipMessage()
             last_send_t[0] = now
 
