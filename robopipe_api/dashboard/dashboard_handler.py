@@ -1,5 +1,7 @@
 import hashlib
 
+import av
+
 from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.dashboard.user_settings import (
     TUNING_OVERRIDE_FIELDS,
@@ -72,8 +74,15 @@ def handle_detections(
     dashboard_config: DashboardConfig | None,
     detections: BaseNNDetections,
     dashboard_run_session_id: int | None,
+    video_frame: av.VideoFrame | None = None,
 ) -> dict:
-    """Evaluate dashboard test cases against detections and return enriched result."""
+    """Evaluate dashboard test cases against detections and return enriched result.
+
+    `video_frame` is forwarded to the evaluator so the commit branch can
+    render the violation picture server-side at zone exit. When None (no
+    frame available — e.g. WebRTC isn't connected yet), the evaluation still
+    runs and events are saved without a picture.
+    """
     result = detections.model_dump()
 
     if dashboard_config is None or dashboard_run_session_id is None:
@@ -87,10 +96,8 @@ def handle_detections(
         if d.confidence >= overrides.get(d.label, global_threshold)
     ]
 
-    evaluation_results, violation_events, tracking_ids, display_ids = (
-        _dashboard_evaluator.evaluate(
-            dashboard_config, filtered, dashboard_run_session_id
-        )
+    evaluation_results, tracking_ids, display_ids = _dashboard_evaluator.evaluate(
+        dashboard_config, filtered, dashboard_run_session_id, video_frame=video_frame
     )
 
     # Build after evaluate — line crossing sorts filtered in-place for stable ID assignment
@@ -128,9 +135,6 @@ def handle_detections(
     )
     events_store = events_store_factory()
     result["counters"] = events_store.get_counters(dashboard_run_session_id)
-
-    if violation_events:
-        result["violation_events"] = violation_events
 
     return result
 

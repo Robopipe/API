@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+import uuid
 from dataclasses import dataclass
+
+import av
 
 from .events_store import events_store_factory
 from .geometry import (
@@ -9,6 +13,7 @@ from .geometry import (
     is_within_bbox,
     value_within_limits,
 )
+from .picture_renderer import Highlight, HighlightRole, render_violation_picture
 from .threshold_tracker import ThresholdTracker
 from .zone_tracker import ZoneTracker, expected_entry_side, expected_exit_side
 
@@ -26,6 +31,9 @@ from ..models.dashboard.eval_models import (
     EvalTestCaseType,
 )
 from ..models.detection.bbox_detection import BBoxDetection
+from ..paths import get_data_dir
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Result dataclasses
@@ -700,6 +708,97 @@ class DashboardEvaluator:
         self._entered_validly.pop(config_id, None)
         self._pending_fails.pop(config_id, None)
 
+    @staticmethod
+    def _build_highlights(
+        violated_limits: list[dict],
+        limit_defs_by_id: dict[str, EvalLimit],
+        display_lookup: dict[tuple[int, int], tuple[float, float, float, float]],
+    ) -> list[Highlight]:
+        """Map each violated_limit row to the bbox(es) it references.
+
+        Mirrors the (display_id, parent_display_id) shape produced upstream:
+          - parent_display_id is None + limit has a parent label: the parent
+            itself failed — draw blue.
+          - parent_display_id is None + limit has no parent label: non-parent
+            subject — draw red.
+          - parent_display_id is not None: hierarchical violation — child draws
+            red, parent draws blue.
+
+        display_ids absent from `display_lookup` (item off-camera at commit)
+        are skipped silently; the picture then highlights whatever is still
+        visible from the recorded rows.
+        """
+        out: list[Highlight] = []
+        for row in violated_limits:
+            limit_def = limit_defs_by_id.get(row["limit_id"])
+            if limit_def is None:
+                continue
+            child_did = row.get("display_id")
+            parent_did = row.get("parent_display_id")
+
+            if parent_did is None:
+                if child_did is None:
+                    continue
+                if limit_def.targetParentLabel is not None:
+                    # Parent itself failed (parent-label limit).
+                    label_id = limit_def.targetParentLabel.id
+                    role: HighlightRole = "parent"
+                else:
+                    label_id = limit_def.targetLabel.id
+                    role = "child"
+                coords = display_lookup.get((label_id, child_did))
+                if coords is not None:
+                    out.append(
+                        Highlight(role=role, display_id=child_did, coords=coords)
+                    )
+            else:
+                if child_did is not None:
+                    child_coords = display_lookup.get(
+                        (limit_def.targetLabel.id, child_did)
+                    )
+                    if child_coords is not None:
+                        out.append(
+                            Highlight(
+                                role="child",
+                                display_id=child_did,
+                                coords=child_coords,
+                            )
+                        )
+                if limit_def.targetParentLabel is not None:
+                    parent_coords = display_lookup.get(
+                        (limit_def.targetParentLabel.id, parent_did)
+                    )
+                    if parent_coords is not None:
+                        out.append(
+                            Highlight(
+                                role="parent",
+                                display_id=parent_did,
+                                coords=parent_coords,
+                            )
+                        )
+        return out
+
+    @staticmethod
+    def _render_and_save_picture(
+        video_frame: av.VideoFrame, highlights: list[Highlight]
+    ) -> str | None:
+        """Render `highlights` onto `video_frame` and write JPEG to disk.
+
+        Returns the relative ``event_pictures/<uuid>.jpg`` path on success or
+        None on any failure (corrupt frame, encode error, IO error) — the
+        event is still saved in that case, just without a picture.
+        """
+        try:
+            jpeg_bytes = render_violation_picture(video_frame, highlights)
+            pictures_dir = get_data_dir() / "event_pictures"
+            pictures_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"{uuid.uuid4().hex}.jpg"
+            (pictures_dir / filename).write_bytes(jpeg_bytes)
+            return f"event_pictures/{filename}"
+        except Exception:
+            logger.exception("Failed to render violation picture")
+            return None
+
     def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
         total = samples["pass"] + samples["fail"]
         if total == 0:
@@ -742,9 +841,9 @@ class DashboardEvaluator:
         config: DashboardConfig,
         detections: list[BBoxDetection],
         dashboard_run_session_id: int,
+        video_frame: av.VideoFrame | None = None,
     ) -> tuple[
         list[EvaluationResult],
-        list[dict],
         list[int | None],
         list[int | None],
     ]:
@@ -752,11 +851,12 @@ class DashboardEvaluator:
 
         Returns a tuple of:
         - list of EvaluationResult for the live per-frame overlay
-        - list of {"event_id", "tracker_id"} dicts for violations committed at
-          exit this frame (frontend uses tracker_id to pick the buffered
-          in-zone frame for each event's picture)
         - tracking IDs parallel to the input detections list
         - display IDs parallel to the input detections list (per-label)
+
+        `video_frame` is the latest camera frame; if provided, the commit
+        branch renders a violation picture onto a copy and writes it to
+        ``event_pictures/`` before persisting the event.
         """
         events_store = events_store_factory()
         zr = self._tracker.find_in_zone_detections(detections, config)
@@ -1061,8 +1161,27 @@ class DashboardEvaluator:
         # Wrong-direction or expired exits also clear any sticky fail-locks
         # so the UI doesn't keep flagging an "incomplete run" — matches the
         # threshold/event-recording behavior, which discards those samples.
-        violation_events: list[dict] = []
         tc_by_id = {e.test_case.id: e.test_case for e in tc_evaluators}
+
+        # (label_id, display_id) -> normalized coords of the matching detection
+        # in the current frame. Used at commit to look up bboxes for the
+        # violating items recorded in violated_limits, so the saved picture
+        # highlights exactly those rows and nothing else. Items already off
+        # camera at commit are absent from this map and silently skipped.
+        display_lookup: dict[tuple[int, int], tuple[float, float, float, float]] = {}
+        for i, det_i in enumerate(detections):
+            did_i = zr.display_ids[i]
+            if did_i is None:
+                continue
+            label_id_i = config.labels[det_i.label].id
+            display_lookup[(label_id_i, did_i)] = det_i.coords
+
+        # limit_id -> EvalLimit, for resolving targetLabel/targetParentLabel
+        # of each violated row at commit. Built once per evaluate() call.
+        limit_defs_by_id: dict[str, EvalLimit] = {}
+        for tc in config.testCases:
+            for limit in tc.limits:
+                limit_defs_by_id[limit.id] = limit
         for tid in zr.exited_tracker_ids:
             tr_samples = cfg_samples.pop(tid, None)
             tr_pending = cfg_pending.pop(tid, None)
@@ -1156,18 +1275,24 @@ class DashboardEvaluator:
                                 }
                             )
 
-                event_id = events_store.save_event(
+                picture_url: str | None = None
+                if not passed and violated_limits and video_frame is not None:
+                    highlights = self._build_highlights(
+                        violated_limits, limit_defs_by_id, display_lookup
+                    )
+                    if highlights:
+                        picture_url = self._render_and_save_picture(
+                            video_frame, highlights
+                        )
+
+                events_store.save_event(
                     dashboard_run_session_id,
                     tc_id,
                     tc.name,
                     passed,
                     violated_limits or None,
+                    picture_url,
                 )
-
-                if not passed:
-                    violation_events.append(
-                        {"event_id": event_id, "tracker_id": tid}
-                    )
 
         # Live overlay: evaluate every visible detection, then gate emission
         # on validated zone entry so trackers that haven't (or won't ever)
@@ -1265,4 +1390,4 @@ class DashboardEvaluator:
                 )
             )
 
-        return results, violation_events, zr.tracking_ids, zr.display_ids
+        return results, zr.tracking_ids, zr.display_ids

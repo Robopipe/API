@@ -58,13 +58,6 @@ export type NNDetections = {
   mask_width?: number;
   mask_height?: number;
   dashboard_detections?: DashboardDetection[];
-  /**
-   * Violations committed at zone-exit on this frame. Each entry pairs the
-   * persisted event id with the tracker id whose dwell produced it, so the
-   * client can attach an in-zone snapshot captured during dwell rather than
-   * the post-exit frame the WS message was paired with.
-   */
-  violation_events?: { event_id: number; tracker_id: number }[];
   threshold_status?: ThresholdStatus;
   master_threshold_status?: ThresholdTestCaseStatus;
   counters?: Record<string, number>;

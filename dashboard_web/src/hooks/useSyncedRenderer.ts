@@ -14,37 +14,6 @@ import {
   renderZone,
 } from "../utils/renderDetections";
 
-const VIOLATION_SNAPSHOT_QUALITY = 0.85;
-
-const X_AXIS_DIRECTIONS = new Set(["LEFT_TO_RIGHT", "RIGHT_TO_LEFT"]);
-
-/**
- * Signed distance of the bbox center from the configured zone center,
- * measured along the zone's axis. Returns null when the bbox center is
- * outside the zone — the caller treats that as "don't buffer this frame"
- * so post-exit sticky-violation frames don't get considered for the
- * picture.
- *
- * Used to pick the *closest-to-center* in-zone frame as the saved
- * picture: each new in-zone frame replaces the buffered blob only if its
- * absolute distance to zoneCenter is smaller than the buffered distance.
- */
-function inZoneDistance(
-  coords: [number, number, number, number],
-  direction: string,
-  center: number,
-  thickness: number,
-): number | null {
-  const cx = (coords[0] + coords[2]) / 2;
-  const cy = (coords[1] + coords[3]) / 2;
-  const half = thickness / 2;
-  const lo = Math.max(0, center - half);
-  const hi = Math.min(1, center + half);
-  const coord = X_AXIS_DIRECTIONS.has(direction) ? cx : cy;
-  if (coord < lo || coord > hi) return null;
-  return Math.abs(coord - center);
-}
-
 export interface UseSyncedRendererOptions {
   enabled?: boolean;
   displayMode?: DetectionDisplayMode;
@@ -105,8 +74,7 @@ export const useSyncedRenderer = ({
 }: UseSyncedRendererOptions): UseSyncedRendererReturn => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
-  const { subscribeSyncedFrames, setDisplayCanvas, bufferViolationFrame } =
-    useCameraStream();
+  const { subscribeSyncedFrames } = useCameraStream();
 
   // Keep latest options in a ref so the subscriber callback always sees
   // current values without resubscribing every render.
@@ -122,13 +90,6 @@ export const useSyncedRenderer = ({
     hiddenLabelIds,
     zoneVisible,
   };
-
-  // Expose the canvas to the provider so it can snapshot it for
-  // violation pictures.
-  useEffect(() => {
-    setDisplayCanvas(canvasRef.current);
-    return () => setDisplayCanvas(null);
-  }, [setDisplayCanvas]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -226,53 +187,12 @@ export const useSyncedRenderer = ({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(offscreen, 0, 0);
 
-      // Snapshot the just-painted matched frame for any tracker the live
-      // overlay is flagging as violating *and* whose bbox center is still
-      // inside the configured zone. Each entry carries the tracker's
-      // distance from zoneCenter so the provider can keep the
-      // closest-to-center frame across the dwell — that's the moment the
-      // object is best framed for the saved picture, while still also
-      // implicitly excluding post-exit sticky-violation frames (the
-      // distance is null once the bbox center crosses the zone boundary).
-      const dashCfg = window.DASHBOARD_CONFIG;
-      const violatingEntries: { trackerId: number; distance: number }[] = [];
-      for (const detection of synced.detections.detections) {
-        if (
-          !isBBDetection(detection) ||
-          detection.tracking_id === undefined ||
-          !detection.violations ||
-          detection.violations.length === 0
-        ) {
-          continue;
-        }
-        const distance = inZoneDistance(
-          detection.coords,
-          dashCfg.zoneDirection,
-          dashCfg.zoneCenter,
-          dashCfg.zoneThickness,
-        );
-        if (distance === null) continue;
-        violatingEntries.push({
-          trackerId: detection.tracking_id,
-          distance,
-        });
-      }
-      if (violatingEntries.length > 0) {
-        canvas.toBlob(
-          (blob) => {
-            if (blob) bufferViolationFrame(violatingEntries, blob);
-          },
-          "image/jpeg",
-          VIOLATION_SNAPSHOT_QUALITY,
-        );
-      }
-
       synced.bitmap.close();
       synced.detections.maskBitmap?.close?.();
     });
 
     return unsubscribe;
-  }, [enabled, subscribeSyncedFrames, bufferViolationFrame]);
+  }, [enabled, subscribeSyncedFrames]);
 
   return { canvasRef };
 };

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import anyio.to_thread
 from bs4 import BeautifulSoup
-from fastapi import Form, HTTPException, Request, UploadFile, status
+from fastapi import HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, Response
 
 from robopipe_api.dashboard.config_store import config_store_factory
@@ -403,35 +403,6 @@ async def cache_detection_events(
         )
     )
     sync_task.notify_new_events()
-
-
-@stream_router.post("/dashboard/events/picture", status_code=status.HTTP_201_CREATED)
-async def upload_event_picture(
-    picture: UploadFile,
-    event_ids: str = Form(...),
-    sensor: SensorDep = None,
-    events_store: EventsStoreDep = None,
-):
-    if sensor.dashboard_config is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No dashboard configured for this stream",
-        )
-
-    parsed_ids: list[int] = json.loads(event_ids)
-    picture_bytes = await picture.read()
-
-    pictures_dir = get_data_dir() / "event_pictures"
-    pictures_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = f"{uuid.uuid4().hex}.jpg"
-    file_path = pictures_dir / filename
-    file_path.write_bytes(picture_bytes)
-
-    picture_url = f"event_pictures/{filename}"
-    events_store.update_event_picture(parsed_ids, picture_url)
-
-    return {"picture_url": picture_url}
 
 
 @stream_router.get(
