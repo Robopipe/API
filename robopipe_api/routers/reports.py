@@ -132,7 +132,7 @@ def _generate_report(report_id: int, dashboard_config_id: int) -> None:
                     row["session_end"],
                     row["event_timestamp"] or "",
                     row["test_case_name"] or "",
-                    "True" if row["passed"] else "False",
+                    "True" if (len(row["violated_limits"]) <= 0) else "False",
                     _format_defects_cell(row["violated_limits"]),
                     picture_cell,
                 ]

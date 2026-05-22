@@ -779,6 +779,36 @@ class DashboardEvaluator:
         return out
 
     @staticmethod
+    def _build_tc_parent_highlights(
+        test_case: EvalTestCase,
+        exit_label_id: int | None,
+        exit_display_id: int | None,
+        display_lookup: dict[tuple[int, int], tuple[float, float, float, float]],
+    ) -> list[Highlight]:
+        """Blue box for the single parent currently exiting the zone, IFF its
+        label is the ``targetParentLabel`` of an enabled limit in `test_case`
+        and the tracker is still visible in the commit frame. Other parents
+        sharing the frame are intentionally not highlighted — the picture is
+        about the object whose verdict is being committed, not every parent
+        that happens to be on camera.
+        """
+        if exit_label_id is None or exit_display_id is None:
+            return []
+        parent_label_ids: set[int] = {
+            limit.targetParentLabel.id
+            for limit in test_case.limits
+            if limit.enabled and limit.targetParentLabel is not None
+        }
+        if exit_label_id not in parent_label_ids:
+            return []
+        coords = display_lookup.get((exit_label_id, exit_display_id))
+        if coords is None:
+            return []
+        return [
+            Highlight(role="parent", display_id=exit_display_id, coords=coords)
+        ]
+
+    @staticmethod
     def _render_and_save_picture(
         video_frame: av.VideoFrame, highlights: list[Highlight]
     ) -> str | None:
@@ -1207,6 +1237,16 @@ class DashboardEvaluator:
             label_id_i = config.labels[det_i.label].id
             display_lookup[(label_id_i, did_i)] = det_i.coords
 
+        # tracker_id -> display_id for the commit frame. Used to resolve the
+        # exiting tracker's display_id when rendering a passing-event picture
+        # so we highlight only that one parent, not every parent in frame.
+        commit_tid_to_did: dict[int, int] = {}
+        for di_idx in range(len(zr.tracking_ids)):
+            t_at = zr.tracking_ids[di_idx]
+            d_at = zr.display_ids[di_idx]
+            if t_at is not None and d_at is not None:
+                commit_tid_to_did[t_at] = d_at
+
         # limit_id -> EvalLimit, for resolving targetLabel/targetParentLabel
         # of each violated row at commit. Built once per evaluate() call.
         limit_defs_by_id: dict[str, EvalLimit] = {}
@@ -1321,6 +1361,20 @@ class DashboardEvaluator:
                         picture_url = self._render_and_save_picture(
                             video_frame, highlights
                         )
+                elif passed and video_frame is not None:
+                    # Passing-event picture: blue box only on the parent that
+                    # is exiting the zone (when its label matches a TC parent
+                    # limit). Other parents in frame are intentionally not
+                    # highlighted. An empty highlight list still produces an
+                    # unhighlighted frame, matching the spec.
+                    exit_label_id = tr_label[0] if tr_label is not None else None
+                    exit_did = commit_tid_to_did.get(tid)
+                    parent_highlights = self._build_tc_parent_highlights(
+                        tc, exit_label_id, exit_did, display_lookup
+                    )
+                    picture_url = self._render_and_save_picture(
+                        video_frame, parent_highlights
+                    )
 
                 events_store.save_event(
                     dashboard_run_session_id,

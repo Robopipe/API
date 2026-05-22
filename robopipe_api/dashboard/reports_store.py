@@ -34,13 +34,11 @@ class ReportsStore:
         clients polling forever.
         """
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 UPDATE dashboard_report
                 SET status = 'failed', error = 'Interrupted by server restart'
                 WHERE status IN ('pending', 'running')
-                """
-            )
+                """)
 
     def dashboard_has_sessions(self, dashboard_config_id: int) -> bool:
         with sqlite3.connect(self.db_path) as conn:
@@ -196,7 +194,11 @@ class ReportsStore:
                 ),
             ).fetchall()
 
-            event_ids = [row["event_id"] for row in session_event_rows if row["event_id"] is not None]
+            event_ids = [
+                row["event_id"]
+                for row in session_event_rows
+                if row["event_id"] is not None
+            ]
             violated_by_event: dict[int, list[dict]] = {}
             if event_ids:
                 placeholders = ",".join("?" for _ in event_ids)
@@ -230,7 +232,11 @@ class ReportsStore:
                     "event_timestamp": row["event_timestamp"],
                     "test_case_name": row["test_case_name"],
                     "picture_url": row["picture_url"],
-                    "violated_limits": violated_by_event.get(event_id, []) if event_id is not None else [],
+                    "violated_limits": (
+                        violated_by_event.get(event_id, [])
+                        if event_id is not None
+                        else []
+                    ),
                 }
             )
         return result
