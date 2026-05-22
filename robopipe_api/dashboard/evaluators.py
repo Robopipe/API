@@ -922,19 +922,24 @@ class DashboardEvaluator:
                 if not subject_ids:
                     continue
                 # Pre-compute lookups shared across this evaluator's subject
-                # iteration. tid_to_display_id and in_zone_tid_by_det_id
+                # iteration. tid_to_display_id and det_tid_by_det_id
                 # are reused both for the per-subject violation snapshot
                 # below and for resolving parent display IDs. Display IDs
                 # (per-label sequence numbers visible on the captured
                 # picture) are persisted, not Kalman tracker IDs.
+                # det_tid_by_det_id covers all confirmed detections in the
+                # frame (not just in-zone) so children whose bbox is inside
+                # a violating parent but whose center falls outside the
+                # zone still resolve to their tracker ID.
                 latest_results: list[EvaluationResult] = (
                     evaluator.build_evaluation_results(violated, limit_results)
                     if violated
                     else []
                 )
-                in_zone_tid_by_det_id: dict[int, int] = {
-                    id(zr.in_zone[i]): zr.in_zone_tracker_ids[i]
-                    for i in range(len(zr.in_zone))
+                det_tid_by_det_id: dict[int, int] = {
+                    id(detections[i]): zr.tracking_ids[i]
+                    for i in range(len(detections))
+                    if zr.tracking_ids[i] is not None
                 }
                 tid_to_display_id: dict[int, int] = {}
                 for di in range(len(zr.tracking_ids)):
@@ -971,7 +976,11 @@ class DashboardEvaluator:
                     tr_samples = cfg_samples.setdefault(tid, {})
                     tc_samples = tr_samples.setdefault(
                         evaluator.test_case.id,
-                        {"limits": {}, "last_violation": None},
+                        {
+                            "limits": {},
+                            "last_violation": None,
+                            "last_violation_coords": None,
+                        },
                     )
                     if violated:
                         # Build a snapshot of violations attributable to
@@ -986,6 +995,15 @@ class DashboardEvaluator:
                         # belonging to other parents.
                         subj_did = tid_to_display_id.get(tid)
                         subj_snapshot: list[dict] = []
+                        # (label_id, display_id) -> coords captured at this
+                        # violation moment. Used at commit as a fallback when
+                        # the commit-frame's display_lookup is missing the
+                        # detection (small/flickery items often miss a single
+                        # NN frame, so without this the highlight is dropped
+                        # silently even though the violation row is recorded).
+                        subj_coords_map: dict[
+                            tuple[int, int], tuple[float, float, float, float]
+                        ] = {}
                         for r in latest_results:
                             if r.violated_limit_id is None:
                                 continue
@@ -1017,6 +1035,10 @@ class DashboardEvaluator:
                                     continue
                                 # Attribute violating items belonging to
                                 # this parent only.
+                                if subj_did is not None:
+                                    subj_coords_map[
+                                        (parent_label_id, subj_did)
+                                    ] = det.coords
                                 for d in r.violating_detections:
                                     if id(d) is id(det) or id(d) == id(det):
                                         items.append((subj_did, None))
@@ -1025,13 +1047,17 @@ class DashboardEvaluator:
                                         != parent_label_id
                                         and is_within_bbox(d.coords, det.coords)
                                     ):
-                                        d_tid = in_zone_tid_by_det_id.get(id(d))
+                                        d_tid = det_tid_by_det_id.get(id(d))
                                         d_did = (
                                             tid_to_display_id.get(d_tid)
                                             if d_tid is not None
                                             else None
                                         )
                                         items.append((d_did, subj_did))
+                                        if d_did is not None:
+                                            subj_coords_map[
+                                                (limit_def.targetLabel.id, d_did)
+                                            ] = d.coords
                                 if not items:
                                     # Parent failed but no specific items
                                     # were tagged — record the parent itself.
@@ -1053,6 +1079,10 @@ class DashboardEvaluator:
                                     items.append((subj_did, None))
                                 else:
                                     continue
+                                if subj_did is not None:
+                                    subj_coords_map[
+                                        (limit_def.targetLabel.id, subj_did)
+                                    ] = det.coords
                             if items:
                                 subj_snapshot.append(
                                     {
@@ -1064,6 +1094,7 @@ class DashboardEvaluator:
                                 )
                         if subj_snapshot:
                             tc_samples["last_violation"] = subj_snapshot
+                            tc_samples["last_violation_coords"] = subj_coords_map
                     for lr in limit_results:
                         if not lr.fired:
                             continue
@@ -1277,8 +1308,14 @@ class DashboardEvaluator:
 
                 picture_url: str | None = None
                 if not passed and violated_limits and video_frame is not None:
+                    # Merge violation-time coords as fallback: commit-frame
+                    # coords (display_lookup) win when present, but items
+                    # the NN missed on the commit frame still resolve via
+                    # the snapshot captured during dwell.
+                    fallback_coords = tc_data.get("last_violation_coords") or {}
+                    merged_lookup = {**fallback_coords, **display_lookup}
                     highlights = self._build_highlights(
-                        violated_limits, limit_defs_by_id, display_lookup
+                        violated_limits, limit_defs_by_id, merged_lookup
                     )
                     if highlights:
                         picture_url = self._render_and_save_picture(
