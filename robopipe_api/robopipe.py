@@ -15,6 +15,7 @@ from pathlib import Path
 from .camera.camera_manager import camera_manager_factory
 from .controller.config import EvokConfig, HWDict, create_devices
 from .controller.devices import Devices, RUN, OWBUS, TCPBUS, SERIALBUS, MODBUS_SLAVE
+from .dashboard.cleanup_task import cleanup_task_factory
 from .dashboard.events_store import events_store_factory
 from .dashboard.reports_store import reports_store_factory
 from .dashboard.sync_task import sync_task_factory
@@ -48,12 +49,14 @@ async def lifespan(app: FastAPI):
     events_store.init()
     reports_store_factory().reset_stuck_reports()
     sync_task = sync_task_factory()
+    cleanup_task = cleanup_task_factory()
 
     discovery_manager = discovery_manager_factory()
     await discovery_manager.start()
 
     async with anyio.create_task_group() as tg:
         tg.start_soon(sync_task.run)
+        tg.start_soon(cleanup_task.run)
         tg.start_soon(discovery_manager.run_udp)
 
         if controller_config_path is not None and os.path.exists(controller_config_path):
