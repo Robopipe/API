@@ -809,6 +809,53 @@ class DashboardEvaluator:
         ]
 
     @staticmethod
+    def _build_tc_child_highlights(
+        test_case: EvalTestCase,
+        exit_label_id: int | None,
+        exit_coords: tuple[float, float, float, float] | None,
+        detections: list[BBoxDetection],
+        display_ids: list[int | None],
+        label_id_by_idx: dict[int, int],
+    ) -> list[Highlight]:
+        """Red boxes for every relevant child of the exiting parent that is
+        visible in the commit frame, regardless of whether it violated a limit.
+
+        A "relevant child" is a detection whose label is the ``targetLabel`` of
+        some enabled limit in ``test_case`` where that limit's
+        ``targetParentLabel`` matches the exiting parent's label, and whose
+        bbox center falls inside the parent's bbox. Children that violated
+        during dwell but are no longer on camera are not rescued here — those
+        are still picked up by the failing-branch ``last_violation_coords``
+        fallback. Non-hierarchical test cases (no limit with a
+        ``targetParentLabel``) produce an empty list.
+        """
+        if exit_label_id is None or exit_coords is None:
+            return []
+        relevant_child_label_ids: set[int] = {
+            limit.targetLabel.id
+            for limit in test_case.limits
+            if limit.enabled
+            and limit.targetParentLabel is not None
+            and limit.targetParentLabel.id == exit_label_id
+        }
+        if not relevant_child_label_ids:
+            return []
+        out: list[Highlight] = []
+        for i, det in enumerate(detections):
+            did = display_ids[i]
+            if did is None:
+                continue
+            label_id = label_id_by_idx.get(det.label)
+            if label_id is None or label_id not in relevant_child_label_ids:
+                continue
+            if not is_within_bbox(det.coords, exit_coords):
+                continue
+            out.append(
+                Highlight(role="child", display_id=did, coords=det.coords)
+            )
+        return out
+
+    @staticmethod
     def _render_and_save_picture(
         video_frame: av.VideoFrame, highlights: list[Highlight]
     ) -> str | None:
@@ -1224,6 +1271,13 @@ class DashboardEvaluator:
         # threshold/event-recording behavior, which discards those samples.
         tc_by_id = {e.test_case.id: e.test_case for e in tc_evaluators}
 
+        # detection.label is an index into config.labels; build a flat
+        # idx -> label_id map once so the commit-frame loops (display_lookup
+        # and the relevant-children walk) don't keep dereferencing it.
+        label_id_by_idx: dict[int, int] = {
+            i: lbl.id for i, lbl in enumerate(config.labels)
+        }
+
         # (label_id, display_id) -> normalized coords of the matching detection
         # in the current frame. Used at commit to look up bboxes for the
         # violating items recorded in violated_limits, so the saved picture
@@ -1234,7 +1288,7 @@ class DashboardEvaluator:
             did_i = zr.display_ids[i]
             if did_i is None:
                 continue
-            label_id_i = config.labels[det_i.label].id
+            label_id_i = label_id_by_idx[det_i.label]
             display_lookup[(label_id_i, did_i)] = det_i.coords
 
         # tracker_id -> display_id for the commit frame. Used to resolve the
@@ -1347,34 +1401,53 @@ class DashboardEvaluator:
                             )
 
                 picture_url: str | None = None
-                if not passed and violated_limits and video_frame is not None:
-                    # Merge violation-time coords as fallback: commit-frame
-                    # coords (display_lookup) win when present, but items
-                    # the NN missed on the commit frame still resolve via
-                    # the snapshot captured during dwell.
-                    fallback_coords = tc_data.get("last_violation_coords") or {}
-                    merged_lookup = {**fallback_coords, **display_lookup}
-                    highlights = self._build_highlights(
-                        violated_limits, limit_defs_by_id, merged_lookup
-                    )
-                    if highlights:
-                        picture_url = self._render_and_save_picture(
-                            video_frame, highlights
-                        )
-                elif passed and video_frame is not None:
-                    # Passing-event picture: blue box only on the parent that
-                    # is exiting the zone (when its label matches a TC parent
-                    # limit). Other parents in frame are intentionally not
-                    # highlighted. An empty highlight list still produces an
-                    # unhighlighted frame, matching the spec.
+                if video_frame is not None:
                     exit_label_id = tr_label[0] if tr_label is not None else None
                     exit_did = commit_tid_to_did.get(tid)
-                    parent_highlights = self._build_tc_parent_highlights(
-                        tc, exit_label_id, exit_did, display_lookup
+                    exit_coords = (
+                        display_lookup.get((exit_label_id, exit_did))
+                        if exit_label_id is not None and exit_did is not None
+                        else None
                     )
-                    picture_url = self._render_and_save_picture(
-                        video_frame, parent_highlights
+                    # Red boxes for every relevant child of the exiting parent
+                    # in the commit frame — drawn on both passing and failing
+                    # pictures so the photo always shows what was actually
+                    # being evaluated, not just the parent (passing) or just
+                    # the rule-breakers (failing).
+                    child_highlights = self._build_tc_child_highlights(
+                        tc,
+                        exit_label_id,
+                        exit_coords,
+                        detections,
+                        zr.display_ids,
+                        label_id_by_idx,
                     )
+                    if not passed and violated_limits:
+                        # Merge violation-time coords as fallback: commit-frame
+                        # coords (display_lookup) win when present, but items
+                        # the NN missed on the commit frame still resolve via
+                        # the snapshot captured during dwell.
+                        fallback_coords = tc_data.get("last_violation_coords") or {}
+                        merged_lookup = {**fallback_coords, **display_lookup}
+                        violation_highlights = self._build_highlights(
+                            violated_limits, limit_defs_by_id, merged_lookup
+                        )
+                        highlights = violation_highlights + child_highlights
+                        if highlights:
+                            picture_url = self._render_and_save_picture(
+                                video_frame, highlights
+                            )
+                    elif passed:
+                        # Passing-event picture: blue box on the exiting parent
+                        # (when its label matches a TC parent limit) plus the
+                        # relevant children inside it. Other parents in frame
+                        # are intentionally not highlighted.
+                        parent_highlights = self._build_tc_parent_highlights(
+                            tc, exit_label_id, exit_did, display_lookup
+                        )
+                        picture_url = self._render_and_save_picture(
+                            video_frame, parent_highlights + child_highlights
+                        )
 
                 events_store.save_event(
                     dashboard_run_session_id,
