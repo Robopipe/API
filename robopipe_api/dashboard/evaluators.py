@@ -57,6 +57,12 @@ class LimitResult:
     # parent doesn't accumulate fail samples just because another in-zone
     # parent failed.
     parent_verdicts: dict[int, bool] | None = None
+    # Symmetric to violating_parents/violating_children for the
+    # parent-label branch: parents whose group satisfied the limit, and
+    # all their children. Lets the test-case layer treat satisfying
+    # parents as the "defective unit" under DEFECT semantics.
+    satisfying_parents: list[BBoxDetection] | None = None
+    satisfying_children: list[BBoxDetection] | None = None
 
 
 @dataclass
@@ -87,6 +93,21 @@ def _dedupe(detections: list[BBoxDetection]) -> list[BBoxDetection]:
             seen.add(id(d))
             result.append(d)
     return result
+
+
+def _aggregate_limit_value(lr: "LimitResult", tc_type: EvalTestCaseType) -> bool:
+    """Reduce a LimitResult to a single 'satisfied' boolean under the test
+    case's type semantics.
+
+    For parent-label limits each parent is evaluated independently. CHECK's
+    natural aggregate is AND (every parent must pass) — already what
+    `lr.is_satisfied` carries. DEFECT's natural aggregate is OR (any
+    defective parent = defect found); without this override, one clean
+    sibling parent would suppress the violation for all the defective ones.
+    """
+    if tc_type == EvalTestCaseType.DEFECT and lr.parent_verdicts:
+        return any(lr.parent_verdicts.values())
+    return lr.is_satisfied
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +362,8 @@ class LimitEvaluator:
         all_non_satisfying: list[BBoxDetection] = []
         violating_parents: list[BBoxDetection] = []
         violating_children: list[BBoxDetection] = []
+        satisfying_parents: list[BBoxDetection] = []
+        satisfying_children: list[BBoxDetection] = []
         parent_verdicts: dict[int, bool] = {}
 
         for p in parents:
@@ -356,6 +379,9 @@ class LimitEvaluator:
                 overall_satisfied = False
                 violating_parents.append(p)
                 violating_children.extend(children)
+            else:
+                satisfying_parents.append(p)
+                satisfying_children.extend(children)
 
         return LimitResult(
             is_satisfied=overall_satisfied,
@@ -365,6 +391,8 @@ class LimitEvaluator:
             non_satisfying=_dedupe(all_non_satisfying),
             all_targets=violating_parents or violating_children,
             parent_verdicts=parent_verdicts,
+            satisfying_parents=satisfying_parents,
+            satisfying_children=_dedupe(satisfying_children),
         )
 
 
@@ -430,7 +458,8 @@ class LogicTreeEvaluator:
                     all_detections, crossed
                 )
                 collected.append(lr)
-                value, node_fired = lr.is_satisfied, lr.fired
+                value = _aggregate_limit_value(lr, self.test_case.type)
+                node_fired = lr.fired
             else:  # GROUP
                 value, node_fired, child_results = self._evaluate_nodes(
                     node.children or [], all_detections, crossed
@@ -548,9 +577,23 @@ class TestCaseEvaluator:
         return not is_satisfied if self._is_check else is_satisfied
 
     def limit_violating_detections(self, lr: LimitResult) -> list[BBoxDetection]:
-        """Detections to flag for a violated limit (mirrors evaluate())."""
+        """Detections to flag for a violated limit (mirrors evaluate()).
+
+        For parent-label DEFECT limits the defective parent is the highlighted
+        unit; when the limit splits per child (AREA/positional) the specific
+        satisfying children are highlighted instead — same shape CHECK uses
+        with non_satisfying.
+        """
         if self._is_check:
             return lr.non_satisfying or lr.all_targets
+        if lr.limit.targetParentLabel is not None:
+            # Per-child splittable limit (AREA/positional): defective children
+            # are the items. COUNT has no per-child split, fall back to the
+            # defective parents.
+            if lr.satisfying:
+                return lr.satisfying
+            if lr.satisfying_parents:
+                return lr.satisfying_parents
         return lr.satisfying or lr.all_targets
 
     def is_violated(
@@ -579,7 +622,14 @@ class TestCaseEvaluator:
         tc = self.test_case
         results: list[EvaluationResult] = []
         for lr in limit_results:
-            if not lr.fired or not self._is_violated(lr.is_satisfied):
+            if not lr.fired:
+                continue
+            # Match the LogicTreeEvaluator's per-test-case aggregate so a
+            # parent-label DEFECT limit emits a result for each frame where
+            # any defective parent is in the zone, not only when every parent
+            # is defective.
+            lr_value = _aggregate_limit_value(lr, tc.type)
+            if not self._is_violated(lr_value):
                 continue
 
             # CHECK: non-satisfying detections failed the check
@@ -876,13 +926,32 @@ class DashboardEvaluator:
             logger.exception("Failed to render violation picture")
             return None
 
-    def _reduce_verdict(self, samples: dict, optimistic: bool) -> bool | None:
+    def _reduce_verdict(
+        self, samples: dict, optimistic: bool, is_check: bool
+    ) -> bool | None:
+        """Reduce per-frame samples to a single 'limit satisfied' verdict.
+
+        Samples are accumulated CHECK-style: "pass" = limit was satisfied on
+        that frame, "fail" = not satisfied. Optimistic mode forgives toward
+        the test-case-passed direction, which means opposite things for
+        CHECK and DEFECT:
+          - CHECK passes when the limit is satisfied → optimistic = any
+            satisfied frame wins.
+          - DEFECT passes when the limit is NOT satisfied (no defect this
+            frame) → optimistic = any unsatisfied frame wins, so the reduced
+            verdict only lands on True ("defect found") when every frame had
+            defect.
+
+        Without this flip, a single false-negative frame (NN misses the
+        target inside the parent) is enough to commit the dwell as defective
+        even though the optimistic flag is on.
+        """
         total = samples["pass"] + samples["fail"]
         if total == 0:
             return None
-        if optimistic:
-            return samples["pass"] > 0
-        return samples["fail"] == 0
+        if is_check:
+            return samples["pass"] > 0 if optimistic else samples["fail"] == 0
+        return samples["fail"] == 0 if optimistic else samples["pass"] > 0
 
     @staticmethod
     def _subject_satisfied(lr: LimitResult, det: BBoxDetection) -> bool:
@@ -1204,10 +1273,17 @@ class DashboardEvaluator:
                     if not lr.fired:
                         continue
                     limit_subject_id = limit_meta[lr.limit.id]
+                    # Use the per-test-case aggregate so a parent-label DEFECT
+                    # limit registers as violated when any defective parent is
+                    # present — otherwise a clean sibling parent's False
+                    # verdict would AND-out the True one and every parent's
+                    # tracker would wrongly get a pass-lock, silently
+                    # suppressing the live overlay's red border.
+                    lr_value = _aggregate_limit_value(
+                        lr, evaluator.test_case.type
+                    )
                     limit_violated = (
-                        (not lr.is_satisfied)
-                        if evaluator.is_check
-                        else lr.is_satisfied
+                        (not lr_value) if evaluator.is_check else lr_value
                     )
                     failing_ids: set[int] = set()
                     if limit_violated:
@@ -1357,7 +1433,9 @@ class DashboardEvaluator:
                 # evaluator's disabled-limit handling.
                 verdicts: dict[str, bool] = {}
                 for limit_id, l_samples in tc_data["limits"].items():
-                    v = self._reduce_verdict(l_samples, config.optimistic)
+                    v = self._reduce_verdict(
+                        l_samples, config.optimistic, matching_eval.is_check
+                    )
                     if v is not None:
                         verdicts[limit_id] = v
                 if not verdicts:
