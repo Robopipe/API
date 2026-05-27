@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import av
 
@@ -63,6 +63,11 @@ class LimitResult:
     # parents as the "defective unit" under DEFECT semantics.
     satisfying_parents: list[BBoxDetection] | None = None
     satisfying_children: list[BBoxDetection] | None = None
+    # Parents that violated (their group failed the limit) and every
+    # target-label child inside them, used by the web overlay to expand
+    # the highlight set beyond the per-item breakdown.
+    violating_parents: list[BBoxDetection] | None = None
+    violating_children: list[BBoxDetection] | None = None
 
 
 @dataclass
@@ -76,6 +81,7 @@ class EvaluationResult:
     violated_limit_severity: str | None
     violated_limit_target_label_id: int | None
     violating_detections: list[BBoxDetection]
+    violating_parents: list[BBoxDetection] = field(default_factory=list)
     db_event_id: int | None = None
 
 
@@ -398,6 +404,8 @@ class LimitEvaluator:
             parent_verdicts=parent_verdicts,
             satisfying_parents=satisfying_parents,
             satisfying_children=_dedupe(satisfying_children),
+            violating_parents=_dedupe(violating_parents),
+            violating_children=_dedupe(violating_children),
         )
 
 
@@ -601,6 +609,22 @@ class TestCaseEvaluator:
                 return lr.satisfying_parents
         return lr.satisfying or lr.all_targets
 
+    def limit_highlight_sets(
+        self, lr: LimitResult
+    ) -> tuple[list[BBoxDetection], list[BBoxDetection]]:
+        """Return (violating_parents, violating_children) for the web overlay.
+
+        For parent-label limits: the parents that violated + all target-label
+        children inside them (regardless of per-child verdict). For plain limits:
+        empty parents + the existing per-detection violating set.
+        """
+        if lr.limit.targetParentLabel is None:
+            return [], self.limit_violating_detections(lr)
+        if self._is_check:
+            return (lr.violating_parents or []), (lr.violating_children or [])
+        # DEFECT: defective = satisfying under DEFECT semantics
+        return (lr.satisfying_parents or []), (lr.satisfying_children or [])
+
     def is_violated(
         self, all_detections: list[BBoxDetection], crossed: list[BBoxDetection]
     ) -> tuple[bool, bool]:
@@ -640,7 +664,7 @@ class TestCaseEvaluator:
             # CHECK: non-satisfying detections failed the check
             # DEFECT: satisfying detections are the defects
             # Fall back to all_targets for COUNT (no per-detection split)
-            violating = self.limit_violating_detections(lr)
+            highlight_parents, violating = self.limit_highlight_sets(lr)
 
             results.append(
                 EvaluationResult(
@@ -653,6 +677,7 @@ class TestCaseEvaluator:
                     ),
                     violated_limit_target_label_id=lr.limit.targetLabel.id,
                     violating_detections=violating,
+                    violating_parents=highlight_parents,
                 )
             )
 
@@ -1572,18 +1597,6 @@ class DashboardEvaluator:
             det_to_tid[id(d)] = tid
             tid_to_det[tid] = d
 
-        # For parent-label limit suppression: group current-frame detections by
-        # label_id so we can find, for a violating child, which parents contain
-        # it and check their pass-locks. Built once here to avoid rescanning
-        # detections inside the per-result loop.
-        parent_dets_by_label_id: dict[int, list[tuple[BBoxDetection, int]]] = {}
-        for _d in detections:
-            _tid = det_to_tid.get(id(_d))
-            if _tid is None:
-                continue
-            _lid = label_id_by_idx[_d.label]
-            parent_dets_by_label_id.setdefault(_lid, []).append((_d, _tid))
-
         results: list[EvaluationResult] = []
         emitted_violations: set[tuple[int, str]] = set()
         for evaluator in tc_evaluators:
@@ -1591,61 +1604,79 @@ class DashboardEvaluator:
                 if ev.violated_limit_id is None:
                     results.append(ev)
                     continue
-                # Gate: only keep violating detections whose tracker has ever
-                # validly entered the zone. Drops the result if nothing remains.
-                gated = [
-                    d
-                    for d in ev.violating_detections
-                    if det_to_tid.get(id(d)) in entered_validly
-                ]
-                if not gated:
-                    continue
-                if config.optimistic:
-                    limit_def = limit_defs_by_id.get(ev.violated_limit_id)
-                    filtered = []
-                    for d in gated:
-                        if (
-                            limit_def is not None
-                            and limit_def.targetParentLabel is not None
-                        ):
-                            # Parent-label limit: suppress the child when any
-                            # of its containing parents holds a pass-lock.
-                            parent_label_id = limit_def.targetParentLabel.id
-                            suppressed = False
-                            for pd, parent_tid in parent_dets_by_label_id.get(
-                                parent_label_id, []
-                            ):
-                                if is_within_bbox(d.coords, pd.coords):
-                                    entry = cfg_locks.get(parent_tid, {}).get(
-                                        ev.violated_limit_id
-                                    )
-                                    if (
-                                        entry is not None
-                                        and entry["verdict"] == "pass"
-                                    ):
-                                        suppressed = True
-                                        break
-                            if suppressed:
-                                continue
-                        else:
+                if ev.violating_parents:
+                    # Parent-label limit: gate and suppress on the parent
+                    # (subject) tracker, not on children's trackers.
+                    gated_parents = [
+                        p
+                        for p in ev.violating_parents
+                        if det_to_tid.get(id(p)) in entered_validly
+                    ]
+                    if not gated_parents:
+                        continue
+                    if config.optimistic:
+                        surviving_parents = [
+                            p
+                            for p in gated_parents
+                            if not (
+                                det_to_tid.get(id(p)) is not None
+                                and cfg_locks.get(
+                                    det_to_tid[id(p)], {}
+                                ).get(ev.violated_limit_id, {}).get("verdict")
+                                == "pass"
+                            )
+                        ]
+                        if not surviving_parents:
+                            continue
+                        gated_parents = surviving_parents
+                    ev.violating_parents = gated_parents
+                    # Keep children whose bbox falls inside a surviving parent.
+                    ev.violating_detections = [
+                        c
+                        for c in ev.violating_detections
+                        if any(
+                            is_within_bbox(c.coords, p.coords)
+                            for p in gated_parents
+                        )
+                    ]
+                    results.append(ev)
+                    for p in gated_parents:
+                        tid = det_to_tid.get(id(p))
+                        if tid is not None:
+                            emitted_violations.add((tid, ev.violated_limit_id))
+                else:
+                    # No-parent limit: gate on the detection's own tracker.
+                    gated = [
+                        d
+                        for d in ev.violating_detections
+                        if det_to_tid.get(id(d)) in entered_validly
+                    ]
+                    if not gated:
+                        continue
+                    if config.optimistic:
+                        filtered = []
+                        for d in gated:
                             tid = det_to_tid.get(id(d))
                             if tid is not None:
                                 entry = cfg_locks.get(tid, {}).get(
                                     ev.violated_limit_id
                                 )
-                                if entry is not None and entry["verdict"] == "pass":
+                                if (
+                                    entry is not None
+                                    and entry["verdict"] == "pass"
+                                ):
                                     continue
-                        filtered.append(d)
-                    if not filtered:
-                        continue
-                    ev.violating_detections = filtered
-                else:
-                    ev.violating_detections = gated
-                results.append(ev)
-                for d in ev.violating_detections:
-                    tid = det_to_tid.get(id(d))
-                    if tid is not None:
-                        emitted_violations.add((tid, ev.violated_limit_id))
+                            filtered.append(d)
+                        if not filtered:
+                            continue
+                        ev.violating_detections = filtered
+                    else:
+                        ev.violating_detections = gated
+                    results.append(ev)
+                    for d in ev.violating_detections:
+                        tid = det_to_tid.get(id(d))
+                        if tid is not None:
+                            emitted_violations.add((tid, ev.violated_limit_id))
 
         # Sticky fail re-emission: for any locked-fail (tracker, limit) that
         # the live evaluator didn't already flag, re-emit a synthetic
@@ -1680,6 +1711,11 @@ class DashboardEvaluator:
         for (tc_id, limit_id), entry in sticky.items():
             if entry["severity"] is None:
                 continue
+            sticky_limit_def = limit_defs_by_id.get(limit_id)
+            sticky_has_parent = (
+                sticky_limit_def is not None
+                and sticky_limit_def.targetParentLabel is not None
+            )
             results.append(
                 EvaluationResult(
                     test_case_id=tc_id,
@@ -1688,7 +1724,8 @@ class DashboardEvaluator:
                     violated_limit_name=entry["limit_name"],
                     violated_limit_severity=entry["severity"],
                     violated_limit_target_label_id=entry["target_label_id"],
-                    violating_detections=entry["dets"],
+                    violating_detections=[] if sticky_has_parent else entry["dets"],
+                    violating_parents=entry["dets"] if sticky_has_parent else [],
                 )
             )
 

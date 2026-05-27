@@ -16,6 +16,10 @@ export interface BBDetection extends Detection {
   violations?: DetectionViolation[];
   tracking_id?: number;
   display_id?: number;
+  /** "parent" = violation subject (shows limit names); "child" = highlighted target (shows label name). */
+  role?: "parent" | "child";
+  /** Max severity across all violations touching this box. Drives highlight color. */
+  severity?: "ALERT" | "WARNING";
 }
 
 export type SegmentationDetection = BBDetection;

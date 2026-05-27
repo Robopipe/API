@@ -69,6 +69,48 @@ const drawAlertTriangle = (
   ctx.restore();
 };
 
+/**
+ * Word-wrap `text` to `maxWidth` pixels using the current canvas font.
+ * Splits on spaces first; hard-breaks any token that is still too wide.
+ * Returns an array of lines.
+ */
+const wrapText = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] => {
+  const lines: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    const words = paragraph.split(" ");
+    let current = "";
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        current = candidate;
+      } else {
+        if (current) lines.push(current);
+        // Hard-break a single word that is wider than maxWidth
+        if (ctx.measureText(word).width > maxWidth) {
+          let chunk = "";
+          for (const ch of word) {
+            if (ctx.measureText(chunk + ch).width > maxWidth) {
+              lines.push(chunk);
+              chunk = ch;
+            } else {
+              chunk += ch;
+            }
+          }
+          current = chunk;
+        } else {
+          current = word;
+        }
+      }
+    }
+    if (current) lines.push(current);
+  }
+  return lines.length ? lines : [""];
+};
+
 export const renderBBoxDetection: DetectionRenderer = (
   ctx,
   labels,
@@ -86,9 +128,16 @@ export const renderBBoxDetection: DetectionRenderer = (
   ];
 
   const violations = detection.violations;
-  const isAlert = violations?.some((v) => v.severity === "ALERT");
-  const isWarning =
-    !isAlert && violations?.some((v) => v.severity === "WARNING");
+  const sev =
+    detection.severity ??
+    (violations?.some((v) => v.severity === "ALERT")
+      ? "ALERT"
+      : violations?.some((v) => v.severity === "WARNING")
+        ? "WARNING"
+        : undefined);
+  const isAlert = sev === "ALERT";
+  const isWarning = sev === "WARNING";
+  const isHighlighted = isAlert || isWarning;
 
   const borderColor = isAlert
     ? ALERT_BORDER
@@ -106,14 +155,24 @@ export const renderBBoxDetection: DetectionRenderer = (
       ? WARNING_LABEL_BG
       : label.color;
   const labelTextColor = isWarning ? "rgba(0,0,0,0.9)" : "#fff";
+
   const idPrefix =
-    isBBDetection(detection) && detection.display_id != null
-      ? `#${detection.display_id} `
-      : "";
-  const text = violations?.length
-    ? `${idPrefix}${violations.map((v) => v.limit_name).join(", ")}`
-    : `${idPrefix}${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
-  const font = violations?.length
+    detection.display_id != null ? `#${detection.display_id} ` : "";
+
+  // Build label text by role:
+  //   parent  → limit names (one per line, already filtered by multiLimitMode upstream)
+  //   child   → label name (no confidence)
+  //   plain   → label name + confidence
+  let rawText: string;
+  if (detection.role === "parent" && violations?.length) {
+    rawText = `${idPrefix}${violations.map((v) => v.limit_name).join("\n")}`;
+  } else if (isHighlighted) {
+    rawText = `${idPrefix}${label.name}`;
+  } else {
+    rawText = `${idPrefix}${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
+  }
+
+  const font = isHighlighted
     ? "500 12px 'Space Grotesk', Inter, sans-serif"
     : "14px Inter";
 
@@ -124,23 +183,37 @@ export const renderBBoxDetection: DetectionRenderer = (
   ctx.strokeRect(x, y, w, h);
   ctx.fillRect(x, y, w, h);
 
-  // Text label above the bounding box
+  // Text label above the bounding box (multi-line for parent violations)
   ctx.font = font;
-  const textWidth = ctx.measureText(text).width;
-  const textHeight = 16;
-  const padding = violations?.length ? 8 : 2;
-  ctx.fillStyle = labelBg;
-  ctx.fillRect(
-    x - 1,
-    y - textHeight - (violations?.length ? 5 : 0),
-    textWidth + padding * 2,
-    textHeight + (violations?.length ? 4 : 0),
-  );
-  ctx.fillStyle = labelTextColor;
-  ctx.fillText(text, x - 1 + padding, y - (violations?.length ? 7 : 4));
+  const lineHeight = 16;
+  const padding = isHighlighted ? 8 : 2;
+  const maxLineWidth = Math.max(w, 140);
+  const textLines = wrapText(ctx, rawText, maxLineWidth);
+  const numLines = textLines.length;
+  const labelWidth =
+    Math.max(...textLines.map((l) => ctx.measureText(l).width)) + padding * 2;
+  const labelHeight = lineHeight * numLines + (isHighlighted ? 4 : 0);
 
-  // Alert triangle
-  if (isAlert) {
+  ctx.fillStyle = labelBg;
+  ctx.fillRect(x - 1, y - labelHeight, labelWidth, labelHeight);
+  ctx.fillStyle = labelTextColor;
+  for (let i = 0; i < numLines; i++) {
+    ctx.fillText(
+      textLines[i],
+      x - 1 + padding,
+      y - labelHeight + lineHeight * (i + 1) - (isHighlighted ? 5 : 4),
+    );
+  }
+
+  // Alert triangle:
+  //   parent-label case → only on the parent box
+  //   no-parent case    → on each highlighted child (which carries violations)
+  //   parent-label children → no triangle
+  const drawTriangle =
+    isAlert &&
+    (detection.role === "parent" ||
+      (detection.role === "child" && !!violations?.length));
+  if (drawTriangle) {
     const triangleRadius = Math.min(24, h * 0.25);
     drawAlertTriangle(ctx, x - triangleRadius - 8, y + h / 2, triangleRadius);
   }

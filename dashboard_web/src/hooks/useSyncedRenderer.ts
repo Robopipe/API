@@ -4,7 +4,7 @@ import type {
   DetectionDisplayMode,
   MultiLimitDisplayMode,
 } from "../types/dashboard";
-import type { DetectionViolation, NNDetection } from "../types/detections";
+import type { NNDetection } from "../types/detections";
 import { pickBlockSize } from "../utils/decodeTimestampBurnin";
 import {
   isBBDetection,
@@ -33,29 +33,37 @@ function prepareDetectionForRender(
 ): NNDetection | null {
   if (displayMode === "all") return detection;
 
+  const effectiveSev =
+    isBBDetection(detection)
+      ? (detection.severity ??
+        (detection.violations?.some((v) => v.severity === "ALERT")
+          ? "ALERT"
+          : detection.violations?.some((v) => v.severity === "WARNING")
+            ? "WARNING"
+            : undefined))
+      : undefined;
+
   if (displayMode === "detections_only") {
-    if (isBBDetection(detection) && detection.violations?.length)
-      return { ...detection, violations: [] };
+    if (effectiveSev)
+      return { ...detection, violations: [], role: undefined, severity: undefined };
     return detection;
   }
 
-  if (!isBBDetection(detection) || !detection.violations?.length) return null;
+  // "violations_only" and "alerts": only pass highlighted detections.
+  if (!isBBDetection(detection) || !effectiveSev) return null;
 
-  let violations: DetectionViolation[];
-  if (displayMode === "alerts") {
-    violations = detection.violations.filter((v) => v.severity === "ALERT");
-    if (violations.length === 0) return null;
-  } else {
-    violations = detection.violations;
-  }
+  if (displayMode === "alerts" && effectiveSev !== "ALERT") return null;
 
-  if (multiLimitMode === "highest") {
+  // multiLimitMode "highest": collapse the parent's violations list to the
+  // single highest-severity entry. No-op for children (no violations).
+  if (multiLimitMode === "highest" && detection.violations?.length) {
+    const violations = detection.violations;
     const highest =
       violations.find((v) => v.severity === "ALERT") ?? violations[0];
-    violations = [highest];
+    return { ...detection, violations: [highest] };
   }
 
-  return { ...detection, violations };
+  return detection;
 }
 
 /**
