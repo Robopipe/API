@@ -1305,7 +1305,23 @@ class DashboardEvaluator:
                         if lr.limit.id in tr_locks:
                             continue
                         is_failing = id(det) in failing_ids
-                        if config.optimistic and not is_failing:
+                        # For parent-label limits the subject is the parent, but
+                        # failing_ids contains children — so is_failing is always
+                        # False for parents. Use the parent's own per-subject
+                        # verdict for the pass-lock decision instead, so the lock
+                        # is only written when that parent actually satisfied the
+                        # limit (matching the per-parent commit reduction).
+                        # The fail-lock / pending arms below remain keyed on
+                        # is_failing to preserve the existing behavior that
+                        # parent-label limits flag children, not the parent, and
+                        # never sticky-re-emit onto the parent after zone exit.
+                        if lr.limit.targetParentLabel is not None:
+                            subject_ok = not evaluator._is_violated(
+                                self._subject_satisfied(lr, det)
+                            )
+                        else:
+                            subject_ok = not is_failing
+                        if config.optimistic and subject_ok:
                             tr_locks[lr.limit.id] = {"verdict": "pass"}
                         elif (not config.optimistic) and is_failing:
                             tr_locks[lr.limit.id] = {
@@ -1556,6 +1572,18 @@ class DashboardEvaluator:
             det_to_tid[id(d)] = tid
             tid_to_det[tid] = d
 
+        # For parent-label limit suppression: group current-frame detections by
+        # label_id so we can find, for a violating child, which parents contain
+        # it and check their pass-locks. Built once here to avoid rescanning
+        # detections inside the per-result loop.
+        parent_dets_by_label_id: dict[int, list[tuple[BBoxDetection, int]]] = {}
+        for _d in detections:
+            _tid = det_to_tid.get(id(_d))
+            if _tid is None:
+                continue
+            _lid = label_id_by_idx[_d.label]
+            parent_dets_by_label_id.setdefault(_lid, []).append((_d, _tid))
+
         results: list[EvaluationResult] = []
         emitted_violations: set[tuple[int, str]] = set()
         for evaluator in tc_evaluators:
@@ -1573,13 +1601,40 @@ class DashboardEvaluator:
                 if not gated:
                     continue
                 if config.optimistic:
+                    limit_def = limit_defs_by_id.get(ev.violated_limit_id)
                     filtered = []
                     for d in gated:
-                        tid = det_to_tid.get(id(d))
-                        if tid is not None:
-                            entry = cfg_locks.get(tid, {}).get(ev.violated_limit_id)
-                            if entry is not None and entry["verdict"] == "pass":
+                        if (
+                            limit_def is not None
+                            and limit_def.targetParentLabel is not None
+                        ):
+                            # Parent-label limit: suppress the child when any
+                            # of its containing parents holds a pass-lock.
+                            parent_label_id = limit_def.targetParentLabel.id
+                            suppressed = False
+                            for pd, parent_tid in parent_dets_by_label_id.get(
+                                parent_label_id, []
+                            ):
+                                if is_within_bbox(d.coords, pd.coords):
+                                    entry = cfg_locks.get(parent_tid, {}).get(
+                                        ev.violated_limit_id
+                                    )
+                                    if (
+                                        entry is not None
+                                        and entry["verdict"] == "pass"
+                                    ):
+                                        suppressed = True
+                                        break
+                            if suppressed:
                                 continue
+                        else:
+                            tid = det_to_tid.get(id(d))
+                            if tid is not None:
+                                entry = cfg_locks.get(tid, {}).get(
+                                    ev.violated_limit_id
+                                )
+                                if entry is not None and entry["verdict"] == "pass":
+                                    continue
                         filtered.append(d)
                     if not filtered:
                         continue
