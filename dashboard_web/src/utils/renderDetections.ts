@@ -138,36 +138,46 @@ export const renderBBoxDetection: DetectionRenderer = (
   const isAlert = sev === "ALERT";
   const isWarning = sev === "WARNING";
   const isHighlighted = isAlert || isWarning;
+  // Parent-case child: inside a violating parent, carries no violations entry.
+  // These keep their label color while the parent box shows the severity color.
+  const isParentCaseChild = detection.role === "child" && !violations?.length;
 
-  const borderColor = isAlert
-    ? ALERT_BORDER
-    : isWarning
-      ? WARNING_BORDER
-      : label.color;
-  const fillColor = isAlert
-    ? ALERT_FILL
-    : isWarning
-      ? WARNING_FILL
-      : `${label.color}33`;
-  const labelBg = isAlert
-    ? ALERT_LABEL_BG
-    : isWarning
-      ? WARNING_LABEL_BG
-      : label.color;
-  const labelTextColor = isWarning ? "rgba(0,0,0,0.9)" : "#fff";
+  const borderColor =
+    isParentCaseChild || !isHighlighted
+      ? label.color
+      : isAlert
+        ? ALERT_BORDER
+        : WARNING_BORDER;
+  const fillColor =
+    isParentCaseChild || !isHighlighted
+      ? `${label.color}33`
+      : isAlert
+        ? ALERT_FILL
+        : WARNING_FILL;
+  const labelBg =
+    isParentCaseChild || !isHighlighted
+      ? label.color
+      : isAlert
+        ? ALERT_LABEL_BG
+        : WARNING_LABEL_BG;
+  const labelTextColor =
+    !isParentCaseChild && isWarning ? "rgba(0,0,0,0.9)" : "#fff";
 
+  // No ID prefix on highlighted boxes.
   const idPrefix =
-    detection.display_id != null ? `#${detection.display_id} ` : "";
+    !isHighlighted && detection.display_id != null
+      ? `#${detection.display_id} `
+      : "";
 
   // Build label text by role:
-  //   parent  → limit names (one per line, already filtered by multiLimitMode upstream)
+  //   parent  → limit names (one per line, filtered by multiLimitMode upstream)
   //   child   → label name (no confidence)
   //   plain   → label name + confidence
   let rawText: string;
   if (detection.role === "parent" && violations?.length) {
-    rawText = `${idPrefix}${violations.map((v) => v.limit_name).join("\n")}`;
+    rawText = violations.map((v) => v.limit_name).join("\n");
   } else if (isHighlighted) {
-    rawText = `${idPrefix}${label.name}`;
+    rawText = label.name;
   } else {
     rawText = `${idPrefix}${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
   }
@@ -183,12 +193,17 @@ export const renderBBoxDetection: DetectionRenderer = (
   ctx.strokeRect(x, y, w, h);
   ctx.fillRect(x, y, w, h);
 
-  // Text label above the bounding box (multi-line for parent violations)
+  // Text label above the bounding box.
+  // Parent: one limit name per line, no word-wrap within a name.
+  // Others: word-wrap to box width.
   ctx.font = font;
   const lineHeight = 16;
   const padding = isHighlighted ? 8 : 2;
   const maxLineWidth = Math.max(w, 140);
-  const textLines = wrapText(ctx, rawText, maxLineWidth);
+  const textLines =
+    detection.role === "parent"
+      ? rawText.split("\n")
+      : wrapText(ctx, rawText, maxLineWidth);
   const numLines = textLines.length;
   const labelWidth =
     Math.max(...textLines.map((l) => ctx.measureText(l).width)) + padding * 2;
