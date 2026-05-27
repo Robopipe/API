@@ -103,17 +103,23 @@ async def get_sensor_detections(
         parsed_detections = parse_detections(
             detections, mask_max_dim=nn_config.mask_max_dim
         )
+        # Drain the VIDEO queue in the NN producer so the frame matching this
+        # detection's ts is in the buffer before the lookup below. The NN node
+        # pushes the passthrough frame and the detection simultaneously, so the
+        # passthrough is available in the VIDEO queue right now. Without this
+        # pull the encoder thread might not have had a chance to read it yet,
+        # causing get_frame_by_ts to miss and fall back to an older last_frame.
+        sensor._try_pull_passthrough(ts_us)
         # handle_detections() runs every tick: it updates zone tracking,
         # threshold accumulators and the events store. Throttling skips
-        # only the network broadcast, not the evaluation. The cached
-        # `last_frame` (driven by the WebRTC encoder's pulls) is handed
-        # off so the commit branch can render the violation picture at
-        # zone exit without an extra queue read.
+        # only the network broadcast, not the evaluation. The frame whose
+        # device timestamp matches this detection is looked up from the
+        # buffer populated above.
         result = handle_detections(
             sensor.dashboard_config,
             parsed_detections,
             sensor.dashboard_run_session_id,
-            video_frame=sensor.last_frame,
+            video_frame=sensor.get_frame_by_ts(ts_us),
         )
         result["seq"] = seq
         result["ts_us"] = ts_us

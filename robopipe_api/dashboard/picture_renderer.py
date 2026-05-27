@@ -36,7 +36,7 @@ def render_violation_picture(
     (role, display_id) entries are skipped — a parent referenced by multiple
     child rows is drawn once.
     """
-    img = video_frame.to_ndarray(format="bgr24")
+    img = video_frame.to_ndarray(format="bgr24").copy()
     h, w = img.shape[:2]
 
     seen: set[tuple[HighlightRole, int]] = set()
