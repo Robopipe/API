@@ -33,42 +33,6 @@ const WARNING_BORDER = "#d6da18";
 const WARNING_FILL = "rgba(244,120,137,0.15)";
 const WARNING_LABEL_BG = "#dce91d";
 
-const drawAlertTriangle = (
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  radius: number,
-) => {
-  ctx.save();
-
-  // Circular semi-transparent background
-  ctx.fillStyle = "rgba(215,39,77,0.32)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Triangle
-  const triSize = radius * 0.9;
-  const triHeight = triSize * 0.866;
-  const triCy = cy + triSize * 0.08;
-  ctx.fillStyle = "#d7274d";
-  ctx.beginPath();
-  ctx.moveTo(cx, triCy - triHeight * 0.6);
-  ctx.lineTo(cx + triSize * 0.5, triCy + triHeight * 0.4);
-  ctx.lineTo(cx - triSize * 0.5, triCy + triHeight * 0.4);
-  ctx.closePath();
-  ctx.fill();
-
-  // Exclamation mark
-  ctx.fillStyle = "#fff";
-  ctx.font = `bold ${triSize * 0.55}px Inter`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("!", cx, triCy + triHeight * 0.02);
-
-  ctx.restore();
-};
-
 /**
  * Word-wrap `text` to `maxWidth` pixels using the current canvas font.
  * Splits on spaces first; hard-breaks any token that is still too wide.
@@ -218,19 +182,6 @@ export const renderBBoxDetection: DetectionRenderer = (
       x - 1 + padding,
       y - labelHeight + lineHeight * (i + 1) - (isHighlighted ? 5 : 4),
     );
-  }
-
-  // Alert triangle:
-  //   parent-label case → only on the parent box
-  //   no-parent case    → on each highlighted child (which carries violations)
-  //   parent-label children → no triangle
-  const drawTriangle =
-    isAlert &&
-    (detection.role === "parent" ||
-      (detection.role === "child" && !!violations?.length));
-  if (drawTriangle) {
-    const triangleRadius = Math.min(24, h * 0.25);
-    drawAlertTriangle(ctx, x - triangleRadius - 8, y + h / 2, triangleRadius);
   }
 };
 
