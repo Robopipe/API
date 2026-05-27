@@ -371,17 +371,22 @@ class LimitEvaluator:
 
             value, fired, sat, nsat = self._evaluate_items(children, children, [p])
             overall_fired = overall_fired or fired
-            all_satisfying.extend(sat)
-            all_non_satisfying.extend(nsat)
             parent_verdicts[id(p)] = value
 
+            # Per-detection attribution must follow each parent's own verdict:
+            # a passing parent's per-item nsat (children that failed an
+            # individual item but whose siblings carried the quantifier) must
+            # not bleed into the failing-parent highlight set, and vice versa
+            # for sat under DEFECT.
             if not value:
                 overall_satisfied = False
                 violating_parents.append(p)
                 violating_children.extend(children)
+                all_non_satisfying.extend(nsat)
             else:
                 satisfying_parents.append(p)
                 satisfying_children.extend(children)
+                all_satisfying.extend(sat)
 
         return LimitResult(
             is_satisfied=overall_satisfied,
