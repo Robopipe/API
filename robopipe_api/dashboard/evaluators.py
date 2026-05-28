@@ -13,7 +13,7 @@ from .geometry import (
     is_within_bbox,
     value_within_limits,
 )
-from .picture_renderer import Highlight, HighlightRole, render_violation_picture
+from .picture_renderer import Highlight, HighlightRole, hex_to_bgr, render_violation_picture
 from .threshold_tracker import ThresholdTracker
 from .zone_tracker import ZoneTracker, expected_entry_side, expected_exit_side
 
@@ -798,11 +798,11 @@ class DashboardEvaluator:
 
         Mirrors the (display_id, parent_display_id) shape produced upstream:
           - parent_display_id is None + limit has a parent label: the parent
-            itself failed — draw blue.
+            itself failed — draw red.
           - parent_display_id is None + limit has no parent label: non-parent
-            subject — draw red.
+            subject — draw in the target label's color.
           - parent_display_id is not None: hierarchical violation — child draws
-            red, parent draws blue.
+            in its label color, parent draws red.
 
         display_ids absent from `display_lookup` (item off-camera at commit)
         are skipped silently; the picture then highlights whatever is still
@@ -823,14 +823,24 @@ class DashboardEvaluator:
                     # Parent itself failed (parent-label limit).
                     label_id = limit_def.targetParentLabel.id
                     role: HighlightRole = "parent"
+                    coords = display_lookup.get((label_id, child_did))
+                    if coords is not None:
+                        out.append(
+                            Highlight(role=role, display_id=child_did, coords=coords)
+                        )
                 else:
                     label_id = limit_def.targetLabel.id
                     role = "child"
-                coords = display_lookup.get((label_id, child_did))
-                if coords is not None:
-                    out.append(
-                        Highlight(role=role, display_id=child_did, coords=coords)
-                    )
+                    coords = display_lookup.get((label_id, child_did))
+                    if coords is not None:
+                        out.append(
+                            Highlight(
+                                role=role,
+                                display_id=child_did,
+                                coords=coords,
+                                color=hex_to_bgr(limit_def.targetLabel.color),
+                            )
+                        )
             else:
                 if child_did is not None:
                     child_coords = display_lookup.get(
@@ -842,6 +852,7 @@ class DashboardEvaluator:
                                 role="child",
                                 display_id=child_did,
                                 coords=child_coords,
+                                color=hex_to_bgr(limit_def.targetLabel.color),
                             )
                         )
                 if limit_def.targetParentLabel is not None:
@@ -890,18 +901,18 @@ class DashboardEvaluator:
 
     @staticmethod
     def _build_tc_child_highlights(
-        child_label_ids: set[int],
+        child_label_colors: dict[int, tuple[int, int, int]],
         exit_coords: tuple[float, float, float, float] | None,
         detections: list[BBoxDetection],
         display_ids: list[int | None],
         label_id_by_idx: dict[int, int],
     ) -> list[Highlight]:
-        """Red boxes for every detection whose label is in ``child_label_ids``
+        """Colored boxes for every detection whose label is in ``child_label_colors``
         and whose bbox center falls inside ``exit_coords``.
 
-        Empty ``child_label_ids`` or missing ``exit_coords`` produce an empty list.
+        Empty ``child_label_colors`` or missing ``exit_coords`` produce an empty list.
         """
-        if not child_label_ids or exit_coords is None:
+        if not child_label_colors or exit_coords is None:
             return []
         out: list[Highlight] = []
         for i, det in enumerate(detections):
@@ -909,12 +920,17 @@ class DashboardEvaluator:
             if did is None:
                 continue
             label_id = label_id_by_idx.get(det.label)
-            if label_id is None or label_id not in child_label_ids:
+            if label_id is None or label_id not in child_label_colors:
                 continue
             if not is_within_bbox(det.coords, exit_coords):
                 continue
             out.append(
-                Highlight(role="child", display_id=did, coords=det.coords)
+                Highlight(
+                    role="child",
+                    display_id=did,
+                    coords=det.coords,
+                    color=child_label_colors[label_id],
+                )
             )
         return out
 
@@ -1521,8 +1537,10 @@ class DashboardEvaluator:
                         # violated limits' target labels inside the parent +
                         # specific violators for plain (no-parent) limits.
                         # Commit-frame coords only — no dwell-time fallback.
-                        violated_child_label_ids: set[int] = {
-                            ld.targetLabel.id
+                        violated_child_label_colors: dict[
+                            int, tuple[int, int, int]
+                        ] = {
+                            ld.targetLabel.id: hex_to_bgr(ld.targetLabel.color)
                             for r in violated_limits
                             if (ld := limit_defs_by_id.get(r["limit_id"])) is not None
                             and ld.targetParentLabel is not None
@@ -1533,7 +1551,7 @@ class DashboardEvaluator:
                             tc, exit_label_id, exit_did, display_lookup
                         )
                         child_highlights = self._build_tc_child_highlights(
-                            violated_child_label_ids,
+                            violated_child_label_colors,
                             exit_coords,
                             detections,
                             zr.display_ids,

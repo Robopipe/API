@@ -8,7 +8,6 @@ import cv2
 HighlightRole = Literal["child", "parent"]
 
 _RED_BGR = (0, 0, 255)
-_BLUE_BGR = (255, 0, 0)
 _LABEL_BG = (0, 0, 0)
 _LABEL_FG = (255, 255, 255)
 _BBOX_THICKNESS = 1
@@ -18,11 +17,19 @@ _FONT_THICKNESS = 1
 _LABEL_PAD = 2
 
 
+def hex_to_bgr(hex_color: str) -> tuple[int, int, int]:
+    """Convert a CSS hex color string (#RRGGBB) to an OpenCV BGR tuple."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return (b, g, r)
+
+
 @dataclass(frozen=True)
 class Highlight:
     role: HighlightRole
     display_id: int
     coords: tuple[float, float, float, float]
+    color: tuple[int, int, int] | None = None
 
 
 def render_violation_picture(
@@ -56,7 +63,7 @@ def render_violation_picture(
         if px2 <= px1 or py2 <= py1:
             continue
 
-        color = _BLUE_BGR if hl.role == "parent" else _RED_BGR
+        color = _RED_BGR if hl.role == "parent" else (hl.color or _RED_BGR)
         cv2.rectangle(img, (px1, py1), (px2, py2), color, _BBOX_THICKNESS)
 
         text = f"#{hl.display_id}"
