@@ -118,34 +118,6 @@ class SensorBase(ABC):
         return still_queue.getAll()[-1]
 
     def get_video_frame(self) -> av.VideoFrame:
-        # video_queue = self.output_queues[PipelineQueueType.VIDEO]
-
-        # # Drain to the freshest frame. When the WebRTC encoder pulls
-        # # slower than the NN passthrough produces (high-resolution bbox
-        # # models, constrained bandwidth), the queue would otherwise back
-        # # up — encoder ships oldest frames first, latency between video
-        # # and the matching detection grows unboundedly until matching
-        # # breaks.
-        # img_frame: dai.ImgFrame | None = None
-        # while True:
-        #     next_frame = video_queue.tryGet()
-        #     if next_frame is None:
-        #         break
-        #     img_frame = next_frame
-
-        # if img_frame is not None:
-        #     self.on_frame(img_frame)
-        #     ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-        #     self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
-        #     # self._publish_video_seq(img_frame.getSequenceNum())
-        # elif self.last_frame is None:
-        #     img_frame = video_queue.get()
-        #     self.on_frame(img_frame)
-        #     ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-        #     self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
-        #     # self._publish_video_seq(img_frame.getSequenceNum())
-
-        # return self.last_frame
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
         try:
             img_frame: dai.ImgFrame | None = video_queue.tryGet()
@@ -158,7 +130,10 @@ class SensorBase(ABC):
         if img_frame:
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+            video_frame = img_frame_to_video_frame(img_frame)
+            if self.nn_config is not None:
+                video_frame = burn_timestamp(video_frame, ts_us)
+            self.last_frame = video_frame
             self._buffer_frame(ts_us, self.last_frame)
         elif self.last_frame is None:
             try:
@@ -167,7 +142,10 @@ class SensorBase(ABC):
                 raise RuntimeError("video queue closed") from e
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+            video_frame = img_frame_to_video_frame(img_frame)
+            if self.nn_config is not None:
+                video_frame = burn_timestamp(video_frame, ts_us)
+            self.last_frame = video_frame
             self._buffer_frame(ts_us, self.last_frame)
 
         return self.last_frame
