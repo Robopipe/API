@@ -1011,6 +1011,154 @@ class DashboardEvaluator:
                 ids.add(limit.targetLabel.id)
         return ids
 
+    @staticmethod
+    def _build_tracker_maps(
+        detections: list[BBoxDetection], zr
+    ) -> tuple[dict[int, int], dict[int, int]]:
+        """Return (det_tid_by_det_id, tid_to_display_id) for snapshot building."""
+        det_tid_by_det_id: dict[int, int] = {
+            id(detections[i]): zr.tracking_ids[i]
+            for i in range(len(detections))
+            if zr.tracking_ids[i] is not None
+        }
+        tid_to_display_id: dict[int, int] = {}
+        for i in range(len(zr.tracking_ids)):
+            t, d = zr.tracking_ids[i], zr.display_ids[i]
+            if t is not None and d is not None:
+                tid_to_display_id[t] = d
+        return det_tid_by_det_id, tid_to_display_id
+
+    @staticmethod
+    def _build_limit_lookups(
+        test_case: EvalTestCase, limit_results: list[LimitResult]
+    ) -> tuple[dict[str, EvalLimit], dict[str, LimitResult], dict[str, int]]:
+        """Return (limit_defs, lr_by_id, limit_meta) keyed by limit id.
+
+        limit_meta maps each fired limit to the label id that is the
+        evaluation subject (parent label when set, else target label).
+        """
+        limit_defs = {lm.id: lm for lm in test_case.limits}
+        lr_by_id = {lr.limit.id: lr for lr in limit_results}
+        limit_meta: dict[str, int] = {
+            lr.limit.id: (
+                lr.limit.targetParentLabel.id
+                if lr.limit.targetParentLabel is not None
+                else lr.limit.targetLabel.id
+            )
+            for lr in limit_results
+            if lr.fired
+        }
+        return limit_defs, lr_by_id, limit_meta
+
+    def _accumulate_subject_sample(
+        self,
+        evaluator: "TestCaseEvaluator",
+        det: BBoxDetection,
+        det_label_id: int,
+        det_did: int | None,
+        detections: list[BBoxDetection],
+        config: DashboardConfig,
+        violated: bool,
+        limit_results: list[LimitResult],
+        latest_results: list[EvaluationResult],
+        tc_samples: dict,
+        det_tid_by_det_id: dict[int, int],
+        tid_to_display_id: dict[int, int],
+        limit_defs: dict[str, EvalLimit],
+        lr_by_id: dict[str, LimitResult],
+        limit_meta: dict[str, int],
+    ) -> None:
+        """Accumulate one frame's sample vote and violation snapshot for one subject detection."""
+        if violated:
+            subj_snapshot: list[dict] = []
+            subj_coords_map: dict[
+                tuple[int, int], tuple[float, float, float, float]
+            ] = {}
+            for r in latest_results:
+                if r.violated_limit_id is None:
+                    continue
+                limit_def = limit_defs.get(r.violated_limit_id)
+                lr = lr_by_id.get(r.violated_limit_id)
+                if limit_def is None or lr is None:
+                    continue
+                parent_label_id = (
+                    limit_def.targetParentLabel.id
+                    if limit_def.targetParentLabel is not None
+                    else None
+                )
+                items: list[tuple[int | None, int | None]] = []
+                if parent_label_id is not None:
+                    if det_label_id != parent_label_id:
+                        continue
+                    if lr.parent_verdicts is None:
+                        subject_violated = evaluator._is_violated(lr.is_satisfied)
+                    else:
+                        subject_violated = evaluator._is_violated(
+                            lr.parent_verdicts.get(id(det), True)
+                        )
+                    if not subject_violated:
+                        continue
+                    if det_did is not None:
+                        subj_coords_map[(parent_label_id, det_did)] = det.coords
+                    for d in r.violating_detections:
+                        if id(d) == id(det):
+                            items.append((det_did, None))
+                        elif (
+                            config.labels[d.label].id != parent_label_id
+                            and is_within_bbox(d.coords, det.coords)
+                        ):
+                            d_tid = det_tid_by_det_id.get(id(d))
+                            d_did = (
+                                tid_to_display_id.get(d_tid)
+                                if d_tid is not None
+                                else None
+                            )
+                            items.append((d_did, det_did))
+                            if d_did is not None:
+                                subj_coords_map[
+                                    (limit_def.targetLabel.id, d_did)
+                                ] = d.coords
+                    if not items:
+                        items.append((det_did, None))
+                else:
+                    if det_label_id != limit_def.targetLabel.id:
+                        continue
+                    violating_ids = {id(d) for d in r.violating_detections}
+                    if not r.violating_detections:
+                        items.append((det_did, None))
+                    elif id(det) in violating_ids:
+                        items.append((det_did, None))
+                    else:
+                        continue
+                    if det_did is not None:
+                        subj_coords_map[
+                            (limit_def.targetLabel.id, det_did)
+                        ] = det.coords
+                if items:
+                    subj_snapshot.append(
+                        {
+                            "limit_id": r.violated_limit_id,
+                            "limit_name": r.violated_limit_name or "",
+                            "items": items,
+                        }
+                    )
+            if subj_snapshot:
+                tc_samples["last_violation"] = subj_snapshot
+                tc_samples["last_violation_coords"] = subj_coords_map
+
+        for lr in limit_results:
+            if not lr.fired:
+                continue
+            if det_label_id != limit_meta.get(lr.limit.id):
+                continue
+            l_samples = tc_samples["limits"].setdefault(
+                lr.limit.id, {"pass": 0, "fail": 0}
+            )
+            if self._subject_satisfied(lr, det):
+                l_samples["pass"] += 1
+            else:
+                l_samples["fail"] += 1
+
     def evaluate(
         self,
         config: DashboardConfig,
@@ -1087,6 +1235,9 @@ class DashboardEvaluator:
         # on top of it.
         cfg_locks = self._lock_state.setdefault(config.id, {})
         if zr.in_zone and zr.in_zone_tracker_ids:
+            det_tid_by_det_id, tid_to_display_id = self._build_tracker_maps(
+                detections, zr
+            )
             for evaluator in tc_evaluators:
                 violated, fired, limit_results = evaluator.evaluate_with_limit_results(
                     detections, zr.in_zone
@@ -1096,51 +1247,14 @@ class DashboardEvaluator:
                 subject_ids = self._subject_label_ids(evaluator.test_case)
                 if not subject_ids:
                     continue
-                # Pre-compute lookups shared across this evaluator's subject
-                # iteration. tid_to_display_id and det_tid_by_det_id
-                # are reused both for the per-subject violation snapshot
-                # below and for resolving parent display IDs. Display IDs
-                # (per-label sequence numbers visible on the captured
-                # picture) are persisted, not Kalman tracker IDs.
-                # det_tid_by_det_id covers all confirmed detections in the
-                # frame (not just in-zone) so children whose bbox is inside
-                # a violating parent but whose center falls outside the
-                # zone still resolve to their tracker ID.
                 latest_results: list[EvaluationResult] = (
                     evaluator.build_evaluation_results(violated, limit_results)
                     if violated
                     else []
                 )
-                det_tid_by_det_id: dict[int, int] = {
-                    id(detections[i]): zr.tracking_ids[i]
-                    for i in range(len(detections))
-                    if zr.tracking_ids[i] is not None
-                }
-                tid_to_display_id: dict[int, int] = {}
-                for di in range(len(zr.tracking_ids)):
-                    tid_at = zr.tracking_ids[di]
-                    did_at = zr.display_ids[di]
-                    if tid_at is not None and did_at is not None:
-                        tid_to_display_id[tid_at] = did_at
-                limit_defs = {l.id: l for l in evaluator.test_case.limits}
-                lr_by_id = {lr.limit.id: lr for lr in limit_results}
-
-                # Pre-compute per-limit subject id and a per-subject verdict
-                # function. Sample voting and lock decisions both attribute
-                # results to an individual subject (the parent for parent-label
-                # limits, else any target). Using the aggregate `lr.is_satisfied`
-                # would let one parent's failure contaminate another's samples
-                # when both share the zone simultaneously.
-                limit_meta: dict[str, int] = {}
-                for lr in limit_results:
-                    if not lr.fired:
-                        continue
-                    limit_meta[lr.limit.id] = (
-                        lr.limit.targetParentLabel.id
-                        if lr.limit.targetParentLabel is not None
-                        else lr.limit.targetLabel.id
-                    )
-
+                limit_defs, lr_by_id, limit_meta = self._build_limit_lookups(
+                    evaluator.test_case, limit_results
+                )
                 for i, det in enumerate(zr.in_zone):
                     det_label_id = config.labels[det.label].id
                     if det_label_id not in subject_ids:
@@ -1157,135 +1271,23 @@ class DashboardEvaluator:
                             "last_violation_coords": None,
                         },
                     )
-                    if violated:
-                        # Build a snapshot of violations attributable to
-                        # THIS subject only — for parent-label limits that
-                        # means children inside this parent's bbox (or the
-                        # parent itself for parent-only violations like
-                        # parent-label COUNT); for non-parent limits it
-                        # means the subject is one of the violating items.
-                        # Without this filter, every subject in the zone
-                        # would be tagged with violations from siblings,
-                        # so a single zone-exit event would carry rows
-                        # belonging to other parents.
-                        subj_did = tid_to_display_id.get(tid)
-                        subj_snapshot: list[dict] = []
-                        # (label_id, display_id) -> coords captured at this
-                        # violation moment. Used at commit as a fallback when
-                        # the commit-frame's display_lookup is missing the
-                        # detection (small/flickery items often miss a single
-                        # NN frame, so without this the highlight is dropped
-                        # silently even though the violation row is recorded).
-                        subj_coords_map: dict[
-                            tuple[int, int], tuple[float, float, float, float]
-                        ] = {}
-                        for r in latest_results:
-                            if r.violated_limit_id is None:
-                                continue
-                            limit_def = limit_defs.get(r.violated_limit_id)
-                            lr = lr_by_id.get(r.violated_limit_id)
-                            if limit_def is None or lr is None:
-                                continue
-                            parent_label_id = (
-                                limit_def.targetParentLabel.id
-                                if limit_def.targetParentLabel is not None
-                                else None
-                            )
-                            items: list[tuple[int | None, int | None]] = []
-                            if parent_label_id is not None:
-                                # Parent-label: this subject must itself be
-                                # a parent of this limit, and must be the
-                                # specific parent that failed.
-                                if det_label_id != parent_label_id:
-                                    continue
-                                if lr.parent_verdicts is None:
-                                    subject_violated = evaluator._is_violated(
-                                        lr.is_satisfied
-                                    )
-                                else:
-                                    subject_violated = evaluator._is_violated(
-                                        lr.parent_verdicts.get(id(det), True)
-                                    )
-                                if not subject_violated:
-                                    continue
-                                # Attribute violating items belonging to
-                                # this parent only.
-                                if subj_did is not None:
-                                    subj_coords_map[
-                                        (parent_label_id, subj_did)
-                                    ] = det.coords
-                                for d in r.violating_detections:
-                                    if id(d) is id(det) or id(d) == id(det):
-                                        items.append((subj_did, None))
-                                    elif (
-                                        config.labels[d.label].id
-                                        != parent_label_id
-                                        and is_within_bbox(d.coords, det.coords)
-                                    ):
-                                        d_tid = det_tid_by_det_id.get(id(d))
-                                        d_did = (
-                                            tid_to_display_id.get(d_tid)
-                                            if d_tid is not None
-                                            else None
-                                        )
-                                        items.append((d_did, subj_did))
-                                        if d_did is not None:
-                                            subj_coords_map[
-                                                (limit_def.targetLabel.id, d_did)
-                                            ] = d.coords
-                                if not items:
-                                    # Parent failed but no specific items
-                                    # were tagged — record the parent itself.
-                                    items.append((subj_did, None))
-                            else:
-                                # Non-parent limit: subject's label must
-                                # match the limit's target label, and the
-                                # subject itself must be in the violating
-                                # detections (or the violation is synthetic
-                                # with no specific items).
-                                if det_label_id != limit_def.targetLabel.id:
-                                    continue
-                                violating_ids = {
-                                    id(d) for d in r.violating_detections
-                                }
-                                if not r.violating_detections:
-                                    items.append((subj_did, None))
-                                elif id(det) in violating_ids:
-                                    items.append((subj_did, None))
-                                else:
-                                    continue
-                                if subj_did is not None:
-                                    subj_coords_map[
-                                        (limit_def.targetLabel.id, subj_did)
-                                    ] = det.coords
-                            if items:
-                                subj_snapshot.append(
-                                    {
-                                        "limit_id": r.violated_limit_id,
-                                        "limit_name": r.violated_limit_name
-                                        or "",
-                                        "items": items,
-                                    }
-                                )
-                        if subj_snapshot:
-                            tc_samples["last_violation"] = subj_snapshot
-                            tc_samples["last_violation_coords"] = subj_coords_map
-                    for lr in limit_results:
-                        if not lr.fired:
-                            continue
-                        # Skip limits whose subject doesn't match this
-                        # detection's label — otherwise a parent of one label
-                        # would accumulate verdicts for a limit it isn't a
-                        # subject of.
-                        if det_label_id != limit_meta[lr.limit.id]:
-                            continue
-                        l_samples = tc_samples["limits"].setdefault(
-                            lr.limit.id, {"pass": 0, "fail": 0}
-                        )
-                        if self._subject_satisfied(lr, det):
-                            l_samples["pass"] += 1
-                        else:
-                            l_samples["fail"] += 1
+                    self._accumulate_subject_sample(
+                        evaluator,
+                        det,
+                        det_label_id,
+                        tid_to_display_id.get(tid),
+                        detections,
+                        config,
+                        violated,
+                        limit_results,
+                        latest_results,
+                        tc_samples,
+                        det_tid_by_det_id,
+                        tid_to_display_id,
+                        limit_defs,
+                        lr_by_id,
+                        limit_meta,
+                    )
 
                 # Per-limit, per-tracker lock update: write-once entries that
                 # mute (optimistic, locked-pass) or sticky (pessimistic,
@@ -1462,6 +1464,64 @@ class DashboardEvaluator:
                 tr_locks = cfg_locks.setdefault(tid, {})
                 for limit_id, info in tr_pending.items():
                     tr_locks.setdefault(limit_id, info)
+            # Sample the commit (zone-exit) frame so the saved picture is a
+            # frame that contributed to the verdict.
+            commit_det_idx = next(
+                (i for i, t in enumerate(zr.tracking_ids) if t == tid),
+                None,
+            )
+            if commit_det_idx is not None:
+                commit_det = detections[commit_det_idx]
+                commit_det_label_id = label_id_by_idx[commit_det.label]
+                commit_det_did = zr.display_ids[commit_det_idx]
+                commit_tid_map, commit_did_map = self._build_tracker_maps(
+                    detections, zr
+                )
+                for evaluator in tc_evaluators:
+                    violated, fired, limit_results = (
+                        evaluator.evaluate_with_limit_results(
+                            detections, [commit_det]
+                        )
+                    )
+                    if not fired:
+                        continue
+                    if commit_det_label_id not in self._subject_label_ids(
+                        evaluator.test_case
+                    ):
+                        continue
+                    tc_samples = tr_samples.setdefault(
+                        evaluator.test_case.id,
+                        {
+                            "limits": {},
+                            "last_violation": None,
+                            "last_violation_coords": None,
+                        },
+                    )
+                    latest_results: list[EvaluationResult] = (
+                        evaluator.build_evaluation_results(violated, limit_results)
+                        if violated
+                        else []
+                    )
+                    c_limit_defs, c_lr_by_id, c_limit_meta = (
+                        self._build_limit_lookups(evaluator.test_case, limit_results)
+                    )
+                    self._accumulate_subject_sample(
+                        evaluator,
+                        commit_det,
+                        commit_det_label_id,
+                        commit_det_did,
+                        detections,
+                        config,
+                        violated,
+                        limit_results,
+                        latest_results,
+                        tc_samples,
+                        commit_tid_map,
+                        commit_did_map,
+                        c_limit_defs,
+                        c_lr_by_id,
+                        c_limit_meta,
+                    )
             for tc_id, tc_data in tr_samples.items():
                 tc = tc_by_id.get(tc_id)
                 if tc is None:
@@ -1532,25 +1592,24 @@ class DashboardEvaluator:
                         if exit_label_id is not None and exit_did is not None
                         else None
                     )
-                    if not passed and violated_limits:
-                        # Failing picture: blue parent + every instance of the
-                        # violated limits' target labels inside the parent +
-                        # specific violators for plain (no-parent) limits.
-                        # Commit-frame coords only — no dwell-time fallback.
+                    # Blue exit-parent shown for passing and failing events;
+                    # failing events layer violator highlights on top when
+                    # resolvable. Bare frame saved as last resort.
+                    highlights = self._build_tc_parent_highlights(
+                        tc, exit_label_id, exit_did, display_lookup
+                    )
+                    if not passed:
                         violated_child_label_colors: dict[
                             int, tuple[int, int, int]
                         ] = {
                             ld.targetLabel.id: hex_to_bgr(ld.targetLabel.color)
-                            for r in violated_limits
+                            for r in (violated_limits or [])
                             if (ld := limit_defs_by_id.get(r["limit_id"])) is not None
                             and ld.targetParentLabel is not None
                             and exit_label_id is not None
                             and ld.targetParentLabel.id == exit_label_id
                         }
-                        parent_highlights = self._build_tc_parent_highlights(
-                            tc, exit_label_id, exit_did, display_lookup
-                        )
-                        child_highlights = self._build_tc_child_highlights(
+                        highlights += self._build_tc_child_highlights(
                             violated_child_label_colors,
                             exit_coords,
                             detections,
@@ -1558,27 +1617,14 @@ class DashboardEvaluator:
                             label_id_by_idx,
                         )
                         parentless_rows = [
-                            r for r in violated_limits
+                            r for r in (violated_limits or [])
                             if (ld2 := limit_defs_by_id.get(r["limit_id"])) is not None
                             and ld2.targetParentLabel is None
                         ]
-                        plain_highlights = self._build_highlights(
+                        highlights += self._build_highlights(
                             parentless_rows, limit_defs_by_id, display_lookup
                         )
-                        highlights = parent_highlights + child_highlights + plain_highlights
-                        if highlights:
-                            picture_url = self._render_and_save_picture(
-                                video_frame, highlights
-                            )
-                    elif passed:
-                        # Passing-event picture: blue box on the exiting parent
-                        # only. Other parents and children are not highlighted.
-                        parent_highlights = self._build_tc_parent_highlights(
-                            tc, exit_label_id, exit_did, display_lookup
-                        )
-                        picture_url = self._render_and_save_picture(
-                            video_frame, parent_highlights
-                        )
+                    picture_url = self._render_and_save_picture(video_frame, highlights)
 
                 events_store.save_event(
                     dashboard_run_session_id,

@@ -291,6 +291,11 @@ class Camera:
         if old_path and old_path != video_path:
             Path(old_path).unlink(missing_ok=True)
 
+    def get_replay_video(self, sensor_name: str) -> str | None:
+        if sensor_name not in self.all_sensors:
+            raise ValueError(f"Sensor {sensor_name} not found on camera {self.mxid}")
+        return self._replay_video_paths.get(sensor_name)
+
     def remove_replay_video(self, sensor_name: str):
         self.__check_device_active()
         if not isinstance(self.pipeline, StreamingPipeline):

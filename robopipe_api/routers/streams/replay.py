@@ -125,3 +125,17 @@ async def add_replay_video(
 @stream_router.delete("/replay", status_code=status.HTTP_202_ACCEPTED)
 def remove_replay_video(camera: CameraDep, stream_name: StreamName):
     camera.remove_replay_video(stream_name)
+
+
+@stream_router.get("/replay")
+def get_replay_video(camera: CameraDep, stream_name: StreamName):
+    from ...models.replay_info import ReplayInfo
+
+    try:
+        path = camera.get_replay_video(stream_name)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return ReplayInfo(
+        replay=path is not None,
+        filename=Path(path).name if path is not None else None,
+    )
