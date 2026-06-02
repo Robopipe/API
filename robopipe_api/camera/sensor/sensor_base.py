@@ -114,9 +114,9 @@ class SensorBase(ABC):
     def refresh_control_from_frame(self) -> None:
         pass
 
-    def capture_still(self) -> dai.EncodedFrame:
+    def capture_still(self) -> bytes:
         still_queue = self.output_queues[PipelineQueueType.STILL]
-        return still_queue.getAll()[-1]
+        return still_queue.getAll()[-1].getData().tobytes()
 
     def get_video_frame(self) -> av.VideoFrame:
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
