@@ -5,6 +5,7 @@ from ...camera.sensor.sensor_control import SensorControl
 from ...models.batch_stream_update import BatchStreamUpdate
 from ...models.sensor_control import SensorControlCapabilities, SensorControlUpdate
 from ...models.stream_info import StreamInfo
+from ...webrtc_manager import webrtc_manager_factory
 from ..common import CameraDep, SensorDep, StreamName
 from . import router, stream_router
 
@@ -38,6 +39,10 @@ def batch_update_streams(
             detail=str(e),
         )
 
+    mgr = webrtc_manager_factory()
+    for sensor_name in (update.activate or []):
+        mgr.clear_stream_ended(camera.mxid, sensor_name)
+
     get_sensor_info = lambda sensor: StreamInfo(
         name=sensor,
         active=(sensor in camera.sensors),
@@ -49,6 +54,7 @@ def batch_update_streams(
 @stream_router.post("/", status_code=status.HTTP_201_CREATED)
 def activate_stream(camera: CameraDep, stream_name: StreamName):
     camera.activate_sensor(stream_name)
+    webrtc_manager_factory().clear_stream_ended(camera.mxid, stream_name)
 
 
 @stream_router.delete("/", status_code=status.HTTP_202_ACCEPTED)

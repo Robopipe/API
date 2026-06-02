@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 from aiortc import RTCPeerConnection, RTCRtpSender, RTCSessionDescription
@@ -51,11 +50,8 @@ async def stream_video_offer(
         def on_ch_close():
             webrtc_manager.unregister_event_channel(mxid, sensor_name, ch)
 
-        if webrtc_manager.is_stream_ended(mxid, sensor_name):
-            async def _send_eof():
-                if ch.readyState == "open":
-                    await ch.send(json.dumps({"event": "eof"}))
-            asyncio.ensure_future(_send_eof())
+        if webrtc_manager.is_stream_ended(mxid, sensor_name) and ch.readyState == "open":
+            ch.send(json.dumps({"event": "eof"}))
 
     async def _deregister_channels():
         for ch in list(event_channels):
