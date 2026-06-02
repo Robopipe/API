@@ -140,12 +140,35 @@ class VideoTrack(VideoStreamTrack):
                 )
                 self._packet_buffer.extend(packets)
         except VideoStreamEnded:
-            mgr = webrtc_manager_factory()
-            mgr.mark_stream_ended(self.camera.mxid, self.sensor_name)
-            for ch in mgr.get_event_channels(self.camera.mxid, self.sensor_name):
-                if ch.readyState == "open":
-                    await ch.send(json.dumps({"event": "eof"}))
-            await asyncio.sleep(0)
+            # Distinguish natural replay EOF from camera-restart teardown.
+            # add_replay_video (and other lifecycle calls) close/reopen the
+            # device, which replaces sensor objects in camera.sensors.  If the
+            # sensor we were reading from is no longer the current one, the
+            # exception was triggered by a device restart, not a real EOF —
+            # skip the EOF event so we don't mislead connected clients.
+            current_sensor = self.camera.sensors.get(self.sensor_name)
+            is_natural_replay_eof = (
+                current_sensor is sensor
+                and self.camera.get_replay_video(self.sensor_name) is not None
+            )
+            logger.warning(
+                f"VideoStreamEnded: mxid={self.camera.mxid} sensor={self.sensor_name} "
+                f"natural_eof={is_natural_replay_eof} sensor_same={current_sensor is sensor}"
+            )
+            if is_natural_replay_eof:
+                mgr = webrtc_manager_factory()
+                mgr.mark_stream_ended(self.camera.mxid, self.sensor_name)
+                channels = mgr.get_event_channels(self.camera.mxid, self.sensor_name)
+                logger.warning(f"EOF: {len(channels)} channel(s) registered")
+                for ch in channels:
+                    if ch.readyState == "open":
+                        try:
+                            ch.send(json.dumps({"event": "eof"}))
+                        except Exception as exc:
+                            logger.warning(f"EOF send failed: {exc}")
+                # Give SCTP transport time to flush the EOF message before
+                # MediaStreamError tears down the PC and closes all channels.
+                await asyncio.sleep(0.1)
             self.stop()
             _drop_track(self.camera.mxid, self.sensor_name)
             raise MediaStreamError()
@@ -169,7 +192,6 @@ def video_track_factory(camera: Camera, sensor_name: str) -> VideoTrack:
     if track is None:
         track = VideoTrack(camera, sensor_name)
         _video_tracks[key] = track
-        webrtc_manager_factory().clear_stream_ended(camera.mxid, sensor_name)
     return track
 
 
