@@ -1,5 +1,6 @@
 import asyncio
 import fractions
+import json
 import time
 from collections import deque
 
@@ -9,7 +10,9 @@ from aiortc.contrib.media import MediaRelay
 import anyio.to_thread
 
 from .camera.camera import Camera
+from .camera.exceptions import VideoStreamEnded
 from .log import logger
+from .webrtc_manager import webrtc_manager_factory
 
 VIDEO_CLOCK_RATE = 90000
 VIDEO_TIME_BASE = fractions.Fraction(1, VIDEO_CLOCK_RATE)
@@ -136,6 +139,16 @@ class VideoTrack(VideoStreamTrack):
                     _pull_and_encode, abandon_on_cancel=True
                 )
                 self._packet_buffer.extend(packets)
+        except VideoStreamEnded:
+            mgr = webrtc_manager_factory()
+            mgr.mark_stream_ended(self.camera.mxid, self.sensor_name)
+            for ch in mgr.get_event_channels(self.camera.mxid, self.sensor_name):
+                if ch.readyState == "open":
+                    await ch.send(json.dumps({"event": "eof"}))
+            await asyncio.sleep(0)
+            self.stop()
+            _drop_track(self.camera.mxid, self.sensor_name)
+            raise MediaStreamError()
         except Exception as e:
             logger.error(f"Error in VideoTrack encode: {e}")
             self.stop()
@@ -156,6 +169,7 @@ def video_track_factory(camera: Camera, sensor_name: str) -> VideoTrack:
     if track is None:
         track = VideoTrack(camera, sensor_name)
         _video_tracks[key] = track
+        webrtc_manager_factory().clear_stream_ended(camera.mxid, sensor_name)
     return track
 
 
