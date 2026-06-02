@@ -240,12 +240,15 @@ class SensorBase(ABC):
         if nn_queue is None:
             raise ProducerTerminated()
 
-        detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
+        try:
+            detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
+            if detections is None:
+                detections = nn_queue.get(timeout=datetime.timedelta(seconds=2))
+        except Exception as e:
+            raise ProducerTerminated() from e
 
         if detections is None:
-            detections = nn_queue.get(timeout=datetime.timedelta(seconds=2))
-            if detections is None:
-                raise TimeoutError("NN queue get() timed out")
+            raise TimeoutError("NN queue get() timed out")
 
         # Wait until the video track has dispatched the frame that
         # corresponds to this detection, so both leave the server at
@@ -272,7 +275,10 @@ class SensorBase(ABC):
         all_dets = list(full_frame_parsed.detections)
 
         # Grab the tile detection for the current tile (non-blocking)
-        tile_raw = self._sahi_tile_queue.tryGet()
+        try:
+            tile_raw = self._sahi_tile_queue.tryGet()
+        except Exception as e:
+            raise ProducerTerminated() from e
         tile_got_result = tile_raw is not None
         if tile_raw is not None:
             tile = self._sahi_tiles[self._sahi_tile_index]
