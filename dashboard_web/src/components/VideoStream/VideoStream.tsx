@@ -77,7 +77,7 @@ export const VideoStream = () => {
         {(!isStreaming || replayEnded) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
             {replayEnded ? (
-              <span className="text-gray-300 text-sm">Replay finished</span>
+              <span className="text-red-500 text-sm">Replay finished</span>
             ) : error ? (
               <span className="text-red-400 text-sm">{error}</span>
             ) : (
