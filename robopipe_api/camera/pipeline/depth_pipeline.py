@@ -66,7 +66,10 @@ class DepthPipeline(StreamingPipeline):
         self.cam_left = self.pipeline.create(dai.node.Camera)
         self.cam_right = self.pipeline.create(dai.node.Camera)
         self.stereo = self.pipeline.create(dai.node.StereoDepth)
+        self.stereo.setRectification(True)
+        self.stereo.setExtendedDisparity(True)
         self.stereo.setSubpixel(False)
+        self.stereo.setLeftRightCheck(True)
 
         self.cam_left.build(left.socket)
         self.cam_right.build(right.socket)
@@ -76,12 +79,9 @@ class DepthPipeline(StreamingPipeline):
         self.cam_right.requestOutput((640, 400), dai.ImgFrame.Type.GRAY8).link(
             self.stereo.right
         )
+
         video_out = self.stereo.disparity.createOutputQueue(maxSize=2, blocking=False)
-        manip = self.pipeline.create(dai.node.ImageManip)
-        manip.initialConfig.setFrameType(dai.ImgFrame.Type.YUV400p)
-        self.stereo.disparity.link(manip.inputImage)
         self.add_queue(video_out, PipelineQueueType.VIDEO, depth_name, False)
-        self.create_mjpeg_encoder(manip.out, depth_name)
 
     def remove_stereo_pair(self):
         if self.stereo_pair is None:

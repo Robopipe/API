@@ -1,9 +1,12 @@
+import cv2
 import depthai as dai
 
 from typing import Callable
 
 from .sensor import Sensor
 from .sensor_config import SensorConfig, SensorConfigProperties
+from ..pipeline.pipeline_queue_type import PipelineQueueType
+from ...utils.image import img_frame_to_video_frame
 
 
 class DepthSensor(Sensor):
@@ -36,3 +39,11 @@ class DepthSensor(Sensor):
         self.restart_pipeline()
 
         return value
+
+    def capture_still(self) -> bytes:
+        video_queue = self.output_queues[PipelineQueueType.VIDEO]
+        img_frame = video_queue.tryGet() or video_queue.get()
+        av_frame = img_frame_to_video_frame(img_frame)
+        gray = av_frame.to_ndarray(format="gray")
+        _, buf = cv2.imencode(".jpg", gray)
+        return buf.tobytes()
