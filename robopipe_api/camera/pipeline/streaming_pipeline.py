@@ -55,7 +55,7 @@ class StreamingPipeline(Pipeline):
         if replay_video_path is not None:
             replay_video = self.pipeline.create(dai.node.ReplayVideo)
             replay_video.setReplayVideoFile(replay_video_path)
-            replay_video.setLoop(False)
+            replay_video.setLoop(True)
             if kwargs.get("replay_size") is not None:
                 replay_video.setSize(kwargs["replay_size"])
             if kwargs.get("fps") is not None:
