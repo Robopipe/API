@@ -20,6 +20,7 @@ from ...utils.detections_parser import parse_detections
 from ...utils.image import img_frame_to_video_frame
 from ...utils.timestamp_burnin import burn_timestamp
 from ...ws_relay import ProducerTerminated
+from ..exceptions import VideoStreamEnded
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from ..sahi import Tile, remap_tile_detections, nms_merge
 from .sensor_config import SensorConfigProperties
@@ -122,10 +123,10 @@ class SensorBase(ABC):
         try:
             img_frame: dai.ImgFrame | None = video_queue.tryGet()
         except Exception as e:
-            # The dai.Device backing this queue was closed (pipeline restart).
-            # Surface as RuntimeError so consumers tear down rather than loop
-            # on the cached `last_frame`.
-            raise RuntimeError("video queue closed") from e
+            # The dai.Device backing this queue was closed (pipeline restart or
+            # replay video reached EOF). Raise VideoStreamEnded so consumers
+            # tear down rather than loop on the cached `last_frame`.
+            raise VideoStreamEnded("video queue closed") from e
 
         if img_frame:
             self.on_frame(img_frame)
@@ -139,7 +140,7 @@ class SensorBase(ABC):
             try:
                 img_frame = video_queue.get()
             except Exception as e:
-                raise RuntimeError("video queue closed") from e
+                raise VideoStreamEnded("video queue closed") from e
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
             video_frame = img_frame_to_video_frame(img_frame)

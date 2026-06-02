@@ -5,10 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type {
-  DashboardDetection,
-  NNDetections,
-} from "../../types/detections";
+import type { DashboardDetection, NNDetections } from "../../types/detections";
 import {
   decodeTimestampBurnin,
   stripDimensions,
@@ -52,8 +49,11 @@ export const CameraStreamProvider = ({
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [replayEnded, setReplayEnded] = useState(false);
 
-  const [detections, setDetections] = useState<NNDetections>({ detections: [] });
+  const [detections, setDetections] = useState<NNDetections>({
+    detections: [],
+  });
   const [isDetectionsConnected, setIsDetectionsConnected] = useState(false);
   const [detectionsError, setDetectionsError] = useState<string | null>(null);
 
@@ -61,25 +61,19 @@ export const CameraStreamProvider = ({
   const syncedSubscribersRef = useRef<Set<(s: SyncedFrame) => void>>(new Set());
   const matcherRef = useRef<FrameMatcher | null>(null);
 
-  const subscribeDetections = useCallback(
-    (cb: (d: NNDetections) => void) => {
-      subscribersRef.current.add(cb);
-      return () => {
-        subscribersRef.current.delete(cb);
-      };
-    },
-    [],
-  );
+  const subscribeDetections = useCallback((cb: (d: NNDetections) => void) => {
+    subscribersRef.current.add(cb);
+    return () => {
+      subscribersRef.current.delete(cb);
+    };
+  }, []);
 
-  const subscribeSyncedFrames = useCallback(
-    (cb: (s: SyncedFrame) => void) => {
-      syncedSubscribersRef.current.add(cb);
-      return () => {
-        syncedSubscribersRef.current.delete(cb);
-      };
-    },
-    [],
-  );
+  const subscribeSyncedFrames = useCallback((cb: (s: SyncedFrame) => void) => {
+    syncedSubscribersRef.current.add(cb);
+    return () => {
+      syncedSubscribersRef.current.delete(cb);
+    };
+  }, []);
 
   // --- WebRTC ---------------------------------------------------------
   useEffect(() => {
@@ -94,7 +88,18 @@ export const CameraStreamProvider = ({
           iceTransportPolicy: "all",
         });
         peer = pc;
+        setReplayEnded(false);
         pc.addTransceiver("video", { direction: "recvonly" });
+
+        const eventsChannel = pc.createDataChannel("events");
+        eventsChannel.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data as string);
+            if (msg.event === "eof") setReplayEnded(true);
+          } catch {
+            // ignore malformed messages
+          }
+        };
 
         pc.addEventListener("track", (event) => {
           if (cancelled) return;
@@ -283,9 +288,7 @@ export const CameraStreamProvider = ({
       const capturedAt = performance.now();
 
       const bitmapPromise =
-        ts !== null && matcherRef.current
-          ? createImageBitmap(canvas)
-          : null;
+        ts !== null && matcherRef.current ? createImageBitmap(canvas) : null;
 
       rvfcId = video.requestVideoFrameCallback(onFrame);
 
@@ -486,6 +489,7 @@ export const CameraStreamProvider = ({
     mediaStream,
     isStreaming,
     streamError,
+    replayEnded,
     detections,
     isDetectionsConnected,
     detectionsError,

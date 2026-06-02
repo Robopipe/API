@@ -21,7 +21,7 @@ export const VideoStream = () => {
     hiddenLabelIds,
     zoneVisible,
   } = useAppState();
-  const { isStreaming, error } = useWebRTCStream();
+  const { isStreaming, error, replayEnded } = useWebRTCStream();
   const { canvasRef } = useSyncedRenderer({
     displayMode,
     multiLimitMode,
@@ -74,9 +74,11 @@ export const VideoStream = () => {
     >
       <div className="relative bg-gray-950 rounded-md overflow-hidden aspect-square">
         <canvas ref={canvasRef} className="absolute left-0 w-full" />
-        {!isStreaming && (
+        {(!isStreaming || replayEnded) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
-            {error ? (
+            {replayEnded ? (
+              <span className="text-gray-300 text-sm">Replay finished</span>
+            ) : error ? (
               <span className="text-red-400 text-sm">{error}</span>
             ) : (
               <>
