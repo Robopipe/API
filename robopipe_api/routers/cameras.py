@@ -56,6 +56,15 @@ def delete_camera(
     return camera.info
 
 
+@camera_router.post("/restart")
+def restart_camera(
+    camera_manager: CameraManagerDep, mxid: Mxid, camera: CameraDep
+) -> DeviceInfo:
+    camera_manager.restart_camera(mxid)
+
+    return camera_manager.cameras[mxid].info
+
+
 @camera_router.get("/stats")
 def get_camera_stats(camera: CameraDep) -> CameraStats:
     return camera.stats
