@@ -40,7 +40,7 @@ def batch_update_streams(
         )
 
     mgr = webrtc_manager_factory()
-    for sensor_name in (update.activate or []):
+    for sensor_name in update.activate or []:
         mgr.clear_stream_ended(camera.mxid, sensor_name)
 
     get_sensor_info = lambda sensor: StreamInfo(
@@ -95,10 +95,28 @@ def update_stream_control(
     update_dict = control.model_dump(exclude_unset=True, exclude_none=True)
     capabilities = SensorControlCapabilities.from_features(sensor.features)
     unsupported = capabilities.unsupported_fields(update_dict)
+
+    effective_auto = update_dict.get(
+        "auto_exposure_enable", sensor.control.auto_exposure_enable
+    )
+    manual_locked = (
+        sorted({"exposure_time", "sensitivity_iso"} & update_dict.keys())
+        if effective_auto
+        else []
+    )
+
+    errors: list[str] = []
     if unsupported:
+        errors.append(f"Fields not supported by this sensor: {', '.join(unsupported)}")
+    if manual_locked:
+        errors.append(
+            "Manual exposure fields not allowed while auto-exposure is enabled: "
+            f"{', '.join(manual_locked)}"
+        )
+    if errors:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Fields not supported by this sensor: {', '.join(unsupported)}",
+            detail="; ".join(errors),
         )
 
     updated_control = sensor.control.model_copy(update=update_dict)
