@@ -23,6 +23,7 @@ from ...ws_relay import ProducerTerminated
 from ..exceptions import VideoStreamEnded
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from ..sahi import Tile, remap_tile_detections, nms_merge
+from ...models.still_config import StillConfig
 from .sensor_config import SensorConfigProperties
 from .sensor_control import SensorControl
 
@@ -59,11 +60,11 @@ class SensorBase(ABC):
 
     @property
     @abstractmethod
-    def config(self) -> SensorConfigProperties: ...
+    def config(self) -> StillConfig: ...
 
     @config.setter
     @abstractmethod
-    def config(self, value: SensorConfigProperties) -> SensorConfigProperties: ...
+    def config(self, value: StillConfig) -> None: ...
 
     @property
     @abstractmethod
