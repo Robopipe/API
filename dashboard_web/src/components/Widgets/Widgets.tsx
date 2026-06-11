@@ -3,7 +3,7 @@ import { Container, type ContainerProps, GearIcon, SaveIcon } from "../../ui";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useAppState, useSettingsUnlocked } from "../../provider";
 import { getUserSettings, updateUserSettings } from "../../api/userSettings";
-import type { MasterDisplayMode, WidgetConfig, WidgetDisplayMode } from "../../types";
+import type { MasterDisplayMode, WidgetConfig, WidgetDisplayMode, WidgetSlot } from "../../types";
 import { CloseIcon } from "./CloseIcon";
 import { DisplayModeSelector } from "./DisplayModeSelector";
 import { DonutWidget } from "./DonutWidget";
@@ -146,7 +146,13 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
   const { thresholdStatus, masterStatus } = useThresholdStatus(running);
   const [widgetSlots, setWidgetSlots] = useState<WidgetConfig>(() => {
     const cfg = getUserSettings().widgetConfig;
-    return resizeSlots(cfg, cfg.gridSize);
+    if (cfg !== null) return resizeSlots(cfg, cfg.gridSize);
+    const enabled = window.DASHBOARD_CONFIG.testCases.filter((tc) => tc.enabled);
+    if (!enabled.length) return resizeSlots({ gridSize: 3, slots: [], masterVisible: true, masterDisplayMode: "zone" }, 3);
+    const gridSize = Math.max(1, Math.min(8, Math.ceil(Math.sqrt(enabled.length))));
+    const slots: (WidgetSlot | null)[] = enabled.slice(0, gridSize * gridSize).map((tc) => ({ id: tc.id, mode: "failures" as WidgetDisplayMode }));
+    while (slots.length < gridSize * gridSize) slots.push(null);
+    return { gridSize, slots, masterVisible: true, masterDisplayMode: "zone" };
   });
   const [editMode, setEditMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);

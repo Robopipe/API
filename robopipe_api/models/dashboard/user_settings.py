@@ -52,7 +52,7 @@ class DashboardUserSettings(BaseModel):
     hiddenLabelIds: list[int] = []
     zoneVisible: bool = False
     selectedLabelId: int | None = None
-    widgetConfig: WidgetConfig = Field(default_factory=WidgetConfig)
+    widgetConfig: WidgetConfig | None = None
     timerLabelDisplay: TimerLabelDisplay = "project_name"
     videoPanelWidthPct: float | None = Field(None, ge=0.0, le=100.0)
 
@@ -91,27 +91,27 @@ class DashboardUserSettings(BaseModel):
     def pruned(
         self, test_case_ids: set[str], label_ids: set[int]
     ) -> "DashboardUserSettings":
-        slots = [
-            slot if (slot is None or slot.id in test_case_ids) else None
-            for slot in self.widgetConfig.slots
-        ]
-        return self.model_copy(
-            update={
-                "widgetConfig": self.widgetConfig.model_copy(
-                    update={"slots": slots}
-                ),
-                "hiddenLabelIds": [
-                    lid for lid in self.hiddenLabelIds if lid in label_ids
-                ],
-                "selectedLabelId": (
-                    self.selectedLabelId
-                    if self.selectedLabelId in label_ids
-                    else None
-                ),
-                "labelConfidenceThresholds": {
-                    lid: val
-                    for lid, val in self.labelConfidenceThresholds.items()
-                    if lid in label_ids
-                },
-            }
-        )
+        update: dict = {
+            "hiddenLabelIds": [
+                lid for lid in self.hiddenLabelIds if lid in label_ids
+            ],
+            "selectedLabelId": (
+                self.selectedLabelId
+                if self.selectedLabelId in label_ids
+                else None
+            ),
+            "labelConfidenceThresholds": {
+                lid: val
+                for lid, val in self.labelConfidenceThresholds.items()
+                if lid in label_ids
+            },
+        }
+        if self.widgetConfig is not None:
+            slots = [
+                slot if (slot is None or slot.id in test_case_ids) else None
+                for slot in self.widgetConfig.slots
+            ]
+            update["widgetConfig"] = self.widgetConfig.model_copy(
+                update={"slots": slots}
+            )
+        return self.model_copy(update=update)
