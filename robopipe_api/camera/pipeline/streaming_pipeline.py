@@ -7,12 +7,12 @@ from .pipeline import Pipeline
 from .pipeline_queue_type import PipelineQueueType
 from ...models.still_config import ImgResizeMode, StillConfig, StillConfigOption
 
-
 _DAI_RESIZE_MODE: dict[ImgResizeMode, dai.ImgResizeMode] = {
     ImgResizeMode.CROP: dai.ImgResizeMode.CROP,
     ImgResizeMode.STRETCH: dai.ImgResizeMode.STRETCH,
     ImgResizeMode.LETTERBOX: dai.ImgResizeMode.LETTERBOX,
 }
+
 
 # Internal DTO used only for the auto-derived video output pick.
 class _VideoConfig:
@@ -105,7 +105,11 @@ class StreamingPipeline(Pipeline):
 
         still_area = still_cfg.width * still_cfg.height
         video_area = video_config.resolution[0] * video_config.resolution[1]
-        cam_size = (still_cfg.width, still_cfg.height) if still_area >= video_area else video_config.resolution
+        cam_size = (
+            (still_cfg.width, still_cfg.height)
+            if still_area >= video_area
+            else video_config.resolution
+        )
         cam_fps = int(min(video_config.fps, still_cfg.fps))
 
         # Always write back the effective fps so GET /config and the video
@@ -192,8 +196,10 @@ class StreamingPipeline(Pipeline):
                 best = opt
 
         if best is None:
-            best = options[-1] if options else StillConfigOption(
-                width=0, height=0, min_fps=0, max_fps=0
+            best = (
+                options[-1]
+                if options
+                else StillConfigOption(width=0, height=0, min_fps=0, max_fps=0)
             )
 
         return StillConfig(
