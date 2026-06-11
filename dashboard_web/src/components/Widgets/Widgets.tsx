@@ -4,6 +4,7 @@ import { useElementSize } from "../../hooks/useElementSize";
 import { useAppState, useSettingsUnlocked } from "../../provider";
 import { getUserSettings, updateUserSettings } from "../../api/userSettings";
 import type { MasterDisplayMode, WidgetConfig, WidgetDisplayMode } from "../../types";
+import { CloseIcon } from "./CloseIcon";
 import { DisplayModeSelector } from "./DisplayModeSelector";
 import { DonutWidget } from "./DonutWidget";
 import { GridSizeSelector } from "./GridSizeSelector";
@@ -295,7 +296,7 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
           {settingsUnlocked && (
             <button
               onClick={toggleEditMode}
-              className={`flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors ${editMode ? "text-white" : ""}`}
+              className={`flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors cursor-pointer ${editMode ? "text-white" : ""}`}
               title={editMode ? "Save widget configuration" : "Configure widgets"}
             >
               {editMode ? (
@@ -342,10 +343,10 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
                   {editMode && showWidgetContent && (
                     <button
                       onClick={() => removeFromSlot(index)}
-                      className="absolute w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white text-xs leading-none flex items-center justify-center transition-colors z-10"
+                      className="absolute w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white flex items-center justify-center transition-colors z-10 cursor-pointer"
                       style={{ top: -4, left: `calc(50% + ${donutSize / 2 - 6}px)` }}
                     >
-                      &times;
+                      <CloseIcon />
                     </button>
                   )}
                   {showWidgetContent && (
@@ -376,7 +377,7 @@ export const Widgets = ({ className, ...props }: WidgetsProps) => {
                 <button
                   key={index}
                   onClick={() => handleAddChartClick(index)}
-                  className={`flex flex-col items-center justify-center w-full h-full rounded-xl border border-dashed transition-colors ${
+                  className={`flex flex-col items-center justify-center w-full h-full rounded-xl border border-dashed transition-colors cursor-pointer ${
                     selectedSlotIndex === index
                       ? "border-blue-500 bg-blue-500/10 text-blue-400"
                       : "border-gray-600 text-gray-500 hover:border-gray-400 hover:text-gray-300"

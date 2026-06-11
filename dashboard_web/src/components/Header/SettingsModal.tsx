@@ -164,7 +164,7 @@ export const SettingsModal = ({
   };
 
   const tabButtonClass = (tab: TabKey) =>
-    `py-2 px-4 text-sm font-medium transition-colors -mb-px border-b-2 ${
+    `py-2 px-4 text-sm font-medium transition-colors -mb-px border-b-2 cursor-pointer ${
       activeTab === tab
         ? "text-emerald-400 border-emerald-500"
         : "text-gray-400 border-transparent hover:text-white"
@@ -182,7 +182,7 @@ export const SettingsModal = ({
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 className="text-lg font-semibold">Dashboard Settings</h2>
           <button
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-white transition-colors cursor-pointer"
             onClick={onClose}
           >
             &times;
@@ -214,13 +214,13 @@ export const SettingsModal = ({
 
         <div className="flex justify-end gap-2 px-6 pb-6 pt-2">
           <button
-            className="py-2 px-4 bg-gray-700 rounded-xl text-sm hover:bg-gray-600 transition-colors"
+            className="py-2 px-4 bg-gray-700 rounded-xl text-sm hover:bg-gray-600 transition-colors cursor-pointer"
             onClick={onClose}
           >
             Cancel
           </button>
           <button
-            className="py-2 px-4 bg-emerald-500/80 rounded-xl text-sm hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="py-2 px-4 bg-emerald-500/80 rounded-xl text-sm hover:bg-emerald-500 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             disabled={!isValid || saving}
             onClick={handleSave}
           >

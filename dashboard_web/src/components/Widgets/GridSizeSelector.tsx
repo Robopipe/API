@@ -14,7 +14,7 @@ export const GridSizeSelector = ({
       <button
         onClick={() => onChange(gridSize - 1)}
         disabled={gridSize <= MIN_GRID_SIZE}
-        className="w-7 h-7 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-lg leading-none"
+        className="w-7 h-7 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors text-lg leading-none"
       >
         −
       </button>
@@ -24,7 +24,7 @@ export const GridSizeSelector = ({
       <button
         onClick={() => onChange(gridSize + 1)}
         disabled={gridSize >= MAX_GRID_SIZE}
-        className="w-7 h-7 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-lg leading-none"
+        className="w-7 h-7 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors text-lg leading-none"
       >
         +
       </button>
