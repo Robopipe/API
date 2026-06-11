@@ -139,9 +139,13 @@ class SensorBase(ABC):
             self._buffer_frame(ts_us, self.last_frame)
         elif self.last_frame is None:
             try:
-                img_frame = video_queue.get()
+                img_frame = video_queue.get(
+                    timeout=datetime.timedelta(milliseconds=1500)
+                )
             except Exception as e:
                 raise VideoStreamEnded("video queue closed") from e
+            if img_frame is None:
+                raise VideoStreamEnded("video queue empty")
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
             video_frame = img_frame_to_video_frame(img_frame)
@@ -149,6 +153,10 @@ class SensorBase(ABC):
                 video_frame = burn_timestamp(video_frame, ts_us)
             self.last_frame = video_frame
             self._buffer_frame(ts_us, self.last_frame)
+        else:
+            ret = self.last_frame
+            self.last_frame = None
+            return ret
 
         return self.last_frame
 
