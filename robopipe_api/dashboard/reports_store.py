@@ -6,6 +6,16 @@ from pathlib import Path
 from ..paths import get_data_dir
 
 
+def _format_utc_z(value: datetime | str | None) -> str | None:
+    """Format a naive-UTC SQLite string or datetime as ISO 8601 with a Z suffix."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.replace(" ", "T") + "Z" if "T" not in value and not value.endswith("Z") else value
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _to_sqlite_timestamp(dt: datetime | str | None) -> str | None:
     """Format a datetime to match SQLite's CURRENT_TIMESTAMP layout.
 

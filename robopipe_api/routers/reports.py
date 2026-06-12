@@ -18,7 +18,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 
-from ..dashboard.reports_store import ReportsStore, reports_store_factory
+from ..dashboard.reports_store import ReportsStore, _format_utc_z, reports_store_factory
 from ..models.dashboard.report import (
     CreateReportRequest,
     DashboardReportSummary,
@@ -72,13 +72,19 @@ def _to_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _parse_utc(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+
+
 def _summary_from_row(row: dict) -> DashboardReportSummary:
     return DashboardReportSummary(
         id=row["id"],
         dashboard_id=row["dashboard_config_id"],
-        created_at=row["created_at"],
-        filter_start=row["filter_start"],
-        filter_end=row["filter_end"],
+        created_at=_parse_utc(row["created_at"]),
+        filter_start=_parse_utc(row["filter_start"]),
+        filter_end=_parse_utc(row["filter_end"]),
         status=row["status"],
         error=row["error"],
     )
@@ -128,9 +134,9 @@ def _generate_report(report_id: int, dashboard_config_id: int) -> None:
             writer.writerow(
                 [
                     row["session_id"],
-                    row["session_start"],
-                    row["session_end"],
-                    row["event_timestamp"] or "",
+                    _format_utc_z(row["session_start"]) or "",
+                    _format_utc_z(row["session_end"]) or "",
+                    _format_utc_z(row["event_timestamp"]) or "",
                     row["test_case_name"] or "",
                     "True" if (len(row["violated_limits"]) <= 0) else "False",
                     _format_defects_cell(row["violated_limits"]),
