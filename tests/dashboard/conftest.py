@@ -8,6 +8,7 @@ from robopipe_api.models.dashboard.dashboard_config import (
 from robopipe_api.models.dashboard.eval_models import (
     EvalLimit,
     EvalLimitItem,
+    EvalLimitItemEdge,
     EvalLimitItemOperator,
     EvalLimitItemParameter,
     EvalLimitItemQuantifierType,
@@ -67,6 +68,8 @@ def make_limit_item(
     quantifier_type: EvalLimitItemQuantifierType = EvalLimitItemQuantifierType.EXACT,
     quantifier_unit: EvalLimitItemQuantifierUnit = EvalLimitItemQuantifierUnit.PERCENT,
     quantifier_value: int = 100,
+    target_edge: EvalLimitItemEdge = EvalLimitItemEdge.CENTER,
+    parent_edge: EvalLimitItemEdge = EvalLimitItemEdge.CENTER,
 ) -> EvalLimitItem:
     return EvalLimitItem(
         id=item_id,
@@ -77,6 +80,8 @@ def make_limit_item(
         quantifierType=quantifier_type,
         quantifierUnit=quantifier_unit,
         quantifierValue=quantifier_value,
+        targetEdge=target_edge,
+        parentEdge=parent_edge,
     )
 
 

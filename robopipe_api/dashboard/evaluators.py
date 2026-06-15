@@ -145,8 +145,10 @@ class LimitItemEvaluator:
             return self._evaluate_count(count_targets)
         elif self.item.parameter == EvalLimitItemParameter.AREA:
             return self._evaluate_area(eval_targets, parent_detections)
-        else:
+        elif self.item.parameter == EvalLimitItemParameter.POSITION:
             return self._evaluate_positional(eval_targets, parent_detections)
+        else:
+            raise ValueError(f"Unhandled parameter: {self.item.parameter}")
 
     def _check_quantifier(self, satisfied: int, total: int) -> bool:
         """Return True if the number of satisfied detections meets the quantifier."""
@@ -224,7 +226,7 @@ class LimitItemEvaluator:
         non_satisfying: list[BBoxDetection] = []
         for t in targets:
             ref = self._get_reference_coords(t, parent_detections)
-            pct = compute_position_pct(t.coords, ref, self.item.parameter)
+            pct = compute_position_pct(t.coords, ref, self.item.targetEdge, self.item.parentEdge)
             if value_within_limits(pct, self.item.limitFrom, self.item.limitTo):
                 satisfying.append(t)
             else:

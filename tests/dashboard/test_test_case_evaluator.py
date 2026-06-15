@@ -1,5 +1,6 @@
 from robopipe_api.dashboard.evaluators import TestCaseEvaluator
 from robopipe_api.models.dashboard.eval_models import (
+    EvalLimitItemEdge,
     EvalLimitItemParameter,
     EvalTestCaseType,
 )
@@ -136,7 +137,8 @@ class TestPositionalCheckDefect:
 
     def test_check_positional_all_in_range(self):
         lim = make_limit(limit_items=[
-            make_limit_item(EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=70),
+            make_limit_item(EvalLimitItemParameter.POSITION, limit_from=30, limit_to=70,
+            parent_edge=EvalLimitItemEdge.LEFT),
         ])
         tc = make_test_case(
             tc_type=EvalTestCaseType.CHECK,
@@ -153,7 +155,8 @@ class TestPositionalCheckDefect:
 
     def test_check_positional_one_outside(self):
         lim = make_limit(limit_items=[
-            make_limit_item(EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=50),
+            make_limit_item(EvalLimitItemParameter.POSITION, limit_from=30, limit_to=50,
+            parent_edge=EvalLimitItemEdge.LEFT),
         ])
         tc = make_test_case(
             tc_type=EvalTestCaseType.CHECK,
@@ -173,7 +176,8 @@ class TestPositionalCheckDefect:
 
     def test_defect_positional_all_in_range(self):
         lim = make_limit(limit_items=[
-            make_limit_item(EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=70),
+            make_limit_item(EvalLimitItemParameter.POSITION, limit_from=30, limit_to=70,
+            parent_edge=EvalLimitItemEdge.LEFT),
         ])
         tc = make_test_case(
             tc_type=EvalTestCaseType.DEFECT,
@@ -190,7 +194,8 @@ class TestPositionalCheckDefect:
 
     def test_defect_positional_not_all_in_range(self):
         lim = make_limit(limit_items=[
-            make_limit_item(EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=50),
+            make_limit_item(EvalLimitItemParameter.POSITION, limit_from=30, limit_to=50,
+            parent_edge=EvalLimitItemEdge.LEFT),
         ])
         tc = make_test_case(
             tc_type=EvalTestCaseType.DEFECT,

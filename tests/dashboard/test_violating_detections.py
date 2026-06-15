@@ -13,6 +13,7 @@ from robopipe_api.dashboard.evaluators import (
 )
 from robopipe_api.dashboard.dashboard_handler import _annotate_detections
 from robopipe_api.models.dashboard.eval_models import (
+    EvalLimitItemEdge,
     EvalLimitItemOperator,
     EvalLimitItemParameter,
     EvalLimitItemQuantifierType,
@@ -51,7 +52,8 @@ class TestLimitItemViolatingDetections:
 
     def test_positional_splits_satisfying_and_non_satisfying(self):
         item = make_limit_item(
-            EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=50
+            EvalLimitItemParameter.POSITION, limit_from=30, limit_to=50,
+            parent_edge=EvalLimitItemEdge.LEFT,
         )
         evaluator = LimitItemEvaluator(item)
         d_in = make_detection(coords=(0.3, 0.3, 0.5, 0.5))  # cx=0.4 → 40%
@@ -173,21 +175,23 @@ class TestLimitResultDetections:
             target_parent_label=LABEL_CONTAINER,
             limit_items=[
                 make_limit_item(
-                    EvalLimitItemParameter.POS_LEFT,
+                    EvalLimitItemParameter.POSITION,
                     limit_from=0, limit_to=50,
                     quantifier_type=EvalLimitItemQuantifierType.MIN,
                     quantifier_unit=EvalLimitItemQuantifierUnit.PCS,
                     quantifier_value=1,
                     operator=EvalLimitItemOperator.AND,
                     item_id="li-1",
+                    parent_edge=EvalLimitItemEdge.LEFT,
                 ),
                 make_limit_item(
-                    EvalLimitItemParameter.POS_TOP,
+                    EvalLimitItemParameter.POSITION,
                     limit_from=0, limit_to=50,
                     quantifier_type=EvalLimitItemQuantifierType.MIN,
                     quantifier_unit=EvalLimitItemQuantifierUnit.PCS,
                     quantifier_value=1,
                     item_id="li-2",
+                    parent_edge=EvalLimitItemEdge.TOP,
                 ),
             ],
         )
@@ -562,21 +566,23 @@ class TestEvaluationResultViolatingDetections:
             target_parent_label=LABEL_CONTAINER,
             limit_items=[
                 make_limit_item(
-                    EvalLimitItemParameter.POS_LEFT,
+                    EvalLimitItemParameter.POSITION,
                     limit_from=0, limit_to=50,
                     quantifier_type=EvalLimitItemQuantifierType.MIN,
                     quantifier_unit=EvalLimitItemQuantifierUnit.PCS,
                     quantifier_value=1,
                     operator=EvalLimitItemOperator.AND,
                     item_id="li-1",
+                    parent_edge=EvalLimitItemEdge.LEFT,
                 ),
                 make_limit_item(
-                    EvalLimitItemParameter.POS_TOP,
+                    EvalLimitItemParameter.POSITION,
                     limit_from=0, limit_to=50,
                     quantifier_type=EvalLimitItemQuantifierType.MIN,
                     quantifier_unit=EvalLimitItemQuantifierUnit.PCS,
                     quantifier_value=1,
                     item_id="li-2",
+                    parent_edge=EvalLimitItemEdge.TOP,
                 ),
             ],
         )
@@ -620,21 +626,23 @@ class TestEvaluationResultViolatingDetections:
             target_parent_label=LABEL_CONTAINER,
             limit_items=[
                 make_limit_item(
-                    EvalLimitItemParameter.POS_LEFT,
+                    EvalLimitItemParameter.POSITION,
                     limit_from=0, limit_to=50,
                     quantifier_type=EvalLimitItemQuantifierType.MIN,
                     quantifier_unit=EvalLimitItemQuantifierUnit.PCS,
                     quantifier_value=1,
                     operator=EvalLimitItemOperator.AND,
                     item_id="li-1",
+                    parent_edge=EvalLimitItemEdge.LEFT,
                 ),
                 make_limit_item(
-                    EvalLimitItemParameter.POS_TOP,
+                    EvalLimitItemParameter.POSITION,
                     limit_from=0, limit_to=50,
                     quantifier_type=EvalLimitItemQuantifierType.MIN,
                     quantifier_unit=EvalLimitItemQuantifierUnit.PCS,
                     quantifier_value=1,
                     item_id="li-2",
+                    parent_edge=EvalLimitItemEdge.TOP,
                 ),
             ],
         )

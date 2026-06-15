@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..models.dashboard.eval_models import EvalLimitItemParameter
+from ..models.dashboard.eval_models import EvalLimitItemEdge
 
 
 def bbox_area(coords: tuple[float, float, float, float]) -> float:
@@ -53,40 +53,48 @@ def is_within_bbox(
 def compute_position_pct(
     target_coords: tuple[float, float, float, float],
     reference_coords: tuple[float, float, float, float],
-    parameter: EvalLimitItemParameter,
+    target_edge: EvalLimitItemEdge,
+    parent_edge: EvalLimitItemEdge,
 ) -> float:
-    """Compute position of a detection center as percentage within reference bbox.
+    """Unsigned edge-to-edge distance as a percentage of the parent's relevant dimension.
 
-    POS_LEFT:   % from left edge   (0 = left, 100 = right)
-    POS_RIGHT:  % from right edge  (0 = right, 100 = left)
-    POS_TOP:    % from top edge    (0 = top, 100 = bottom)
-    POS_BOTTOM: % from bottom edge (0 = bottom, 100 = top)
-    POS_CENTER: max of x/y distance from center as % of half-dimension
+    Axis is determined by whichever edge is non-CENTER:
+      LEFT or RIGHT → X-axis (divisor = parent width)
+      TOP or BOTTOM → Y-axis (divisor = parent height)
+      CENTER + CENTER → max off-center deviation: max(|dx|/(rw/2), |dy|/(rh/2)) × 100
     """
-    tcx, tcy = bbox_center(target_coords)
+    tx1, ty1, tx2, ty2 = target_coords
     rx1, ry1, rx2, ry2 = reference_coords
     rw = rx2 - rx1
     rh = ry2 - ry1
 
-    if rw == 0 or rh == 0:
-        return 0.0
-
-    if parameter == EvalLimitItemParameter.POS_LEFT:
-        return ((tcx - rx1) / rw) * 100
-    elif parameter == EvalLimitItemParameter.POS_RIGHT:
-        return ((rx2 - tcx) / rw) * 100
-    elif parameter == EvalLimitItemParameter.POS_TOP:
-        return ((tcy - ry1) / rh) * 100
-    elif parameter == EvalLimitItemParameter.POS_BOTTOM:
-        return ((ry2 - tcy) / rh) * 100
-    elif parameter == EvalLimitItemParameter.POS_CENTER:
+    if target_edge == EvalLimitItemEdge.CENTER and parent_edge == EvalLimitItemEdge.CENTER:
+        if rw == 0 or rh == 0:
+            return 0.0
+        tcx, tcy = bbox_center(target_coords)
         rcx = (rx1 + rx2) / 2
         rcy = (ry1 + ry2) / 2
-        dx = abs(tcx - rcx) / (rw / 2) * 100
-        dy = abs(tcy - rcy) / (rh / 2) * 100
-        return max(dx, dy)
+        return max(
+            abs(tcx - rcx) / (rw / 2) * 100,
+            abs(tcy - rcy) / (rh / 2) * 100,
+        )
 
-    return 0.0
+    x_axis = (
+        target_edge in (EvalLimitItemEdge.LEFT, EvalLimitItemEdge.RIGHT)
+        or parent_edge in (EvalLimitItemEdge.LEFT, EvalLimitItemEdge.RIGHT)
+    )
+    if x_axis:
+        if rw == 0:
+            return 0.0
+        t = tx1 if target_edge == EvalLimitItemEdge.LEFT else (tx2 if target_edge == EvalLimitItemEdge.RIGHT else (tx1 + tx2) / 2)
+        r = rx1 if parent_edge == EvalLimitItemEdge.LEFT else (rx2 if parent_edge == EvalLimitItemEdge.RIGHT else (rx1 + rx2) / 2)
+        return abs(t - r) / rw * 100
+    else:
+        if rh == 0:
+            return 0.0
+        t = ty1 if target_edge == EvalLimitItemEdge.TOP else (ty2 if target_edge == EvalLimitItemEdge.BOTTOM else (ty1 + ty2) / 2)
+        r = ry1 if parent_edge == EvalLimitItemEdge.TOP else (ry2 if parent_edge == EvalLimitItemEdge.BOTTOM else (ry1 + ry2) / 2)
+        return abs(t - r) / rh * 100
 
 
 def value_within_limits(
