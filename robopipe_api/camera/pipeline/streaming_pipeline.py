@@ -23,6 +23,7 @@ class _VideoConfig:
 
 class StreamingPipeline(Pipeline):
     MAX_STILL_SIZE = 2000 * 2000
+    MAX_AVAILABLE_STILL_SIZE = 20_000_000  # exclude 32 MP+ modes (e.g. 8000x6000, 5312x6000); single-output on OAK
     MAX_VIDEO_SIZE = 1920 * 1080
     IMG_TYPE = dai.ImgFrame.Type.NV12
     BYTES_PER_PIXEL = 1.5
@@ -140,10 +141,11 @@ class StreamingPipeline(Pipeline):
             filter(lambda s: s.socket.name != sensor_name, self._streaming_cameras)
         )
 
-    @staticmethod
-    def available_configs(features: dai.CameraFeatures) -> list[StillConfigOption]:
-        """Return still-output configs for this sensor, filtered by primary type and
-        mod-32 width constraint, deduped by (width, height) with unioned fps range."""
+    @classmethod
+    def available_configs(cls, features: dai.CameraFeatures) -> list[StillConfigOption]:
+        """Return still-output configs for this sensor, filtered by primary type,
+        mod-32 width constraint, and MAX_AVAILABLE_STILL_SIZE cap, deduped by
+        (width, height) with unioned fps range."""
         primary_type = None
         for t in (dai.CameraSensorType.COLOR, dai.CameraSensorType.MONO):
             if t in features.supportedTypes:
@@ -156,6 +158,8 @@ class StreamingPipeline(Pipeline):
                 continue
             w, h = config.width, config.height
             if w % 32 != 0:
+                continue
+            if w * h > cls.MAX_AVAILABLE_STILL_SIZE:
                 continue
             if (w, h) in seen:
                 seen[(w, h)] = (
@@ -205,7 +209,7 @@ class StreamingPipeline(Pipeline):
         return StillConfig(
             width=best.width,
             height=best.height,
-            fps=best.max_fps,
+            fps=round((best.min_fps + best.max_fps) / 4),
             resize_mode=ImgResizeMode.CROP,
         )
 
@@ -232,7 +236,7 @@ class StreamingPipeline(Pipeline):
                 w * h == best_w * best_h and config.maxFps > best_fps
             ):
                 best_w, best_h = w, h
-                best_fps = int(config.maxFps)
+                best_fps = round((config.minFps + config.maxFps) / 2)
 
         return _VideoConfig((best_w, best_h), best_fps)
 
