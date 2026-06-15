@@ -21,6 +21,8 @@ export interface AppState {
   setZoneVisible: (visible: boolean) => void;
   selectedLabelId: number | null;
   setSelectedLabelId: (labelId: number) => void;
+  overlayScale: number;
+  setOverlayScale: (scale: number) => void;
 }
 
 const noop = () => {};
@@ -39,6 +41,8 @@ const appState = createContext<AppState>({
   setZoneVisible: noop,
   selectedLabelId: null,
   setSelectedLabelId: noop,
+  overlayScale: 1,
+  setOverlayScale: noop,
 });
 export const AppStateContext = appState;
 
@@ -78,6 +82,8 @@ export const AppStateProvider = ({
       setZoneVisible: noop,
       selectedLabelId: initialLabelId,
       setSelectedLabelId: noop,
+      overlayScale: settings.overlayScale ?? 1,
+      setOverlayScale: noop,
     };
   });
 
@@ -111,6 +117,11 @@ export const AppStateProvider = ({
     setState((prev) => ({ ...prev, selectedLabelId: labelId }));
   }, []);
 
+  const setOverlayScale = useCallback((scale: number) => {
+    updateUserSettings({ overlayScale: scale });
+    setState((prev) => ({ ...prev, overlayScale: scale }));
+  }, []);
+
   const toggleRunning = async () => {
     const nextRunning = !state.running;
     const endpoint = nextRunning ? "start" : "stop";
@@ -142,6 +153,7 @@ export const AppStateProvider = ({
         toggleLabelVisibility,
         setZoneVisible,
         setSelectedLabelId,
+        setOverlayScale,
       }}
     >
       {children}

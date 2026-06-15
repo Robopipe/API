@@ -93,11 +93,27 @@ export const DisplayTab = () => {
     toggleLabelVisibility,
     zoneVisible,
     setZoneVisible,
+    overlayScale,
+    setOverlayScale,
   } = useAppState();
 
+  const [overlayScaleDraft, setOverlayScaleDraft] = useState(
+    String(overlayScale),
+  );
   const [labelThresholdDrafts, setLabelThresholdDrafts] = useState<
     Record<number, string>
   >(initialLabelThresholdDrafts);
+
+  const commitOverlayScale = () => {
+    const parsed = parseFloat(overlayScaleDraft);
+    if (isNaN(parsed) || parsed < 0.5 || parsed > 2) {
+      setOverlayScaleDraft(String(overlayScale));
+      return;
+    }
+    const rounded = Math.round(parsed * 10) / 10;
+    setOverlayScale(rounded);
+    setOverlayScaleDraft(String(rounded));
+  };
 
   const setLabelThresholdDraft = (labelId: number, raw: string) => {
     setLabelThresholdDrafts((prev) => ({ ...prev, [labelId]: raw }));
@@ -283,6 +299,30 @@ export const DisplayTab = () => {
             </button>
           );
         })}
+      </div>
+
+      <div className="flex flex-col gap-2 mt-6">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          Overlay scale
+        </h3>
+        <p className="text-xs text-gray-500 mb-1">
+          Multiplier for overlay box/label size. 1.0 = auto-fit to resolution.
+        </p>
+        <input
+          type="number"
+          min={0.5}
+          max={2}
+          step={0.1}
+          value={overlayScaleDraft}
+          onChange={(e) => setOverlayScaleDraft(e.target.value)}
+          onBlur={commitOverlayScale}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+        />
       </div>
     </div>
   );

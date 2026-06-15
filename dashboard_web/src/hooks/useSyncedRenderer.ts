@@ -20,6 +20,7 @@ export interface UseSyncedRendererOptions {
   multiLimitMode?: MultiLimitDisplayMode;
   hiddenLabelIds?: Set<number>;
   zoneVisible?: boolean;
+  overlayScale?: number;
 }
 
 export interface UseSyncedRendererReturn {
@@ -79,6 +80,7 @@ export const useSyncedRenderer = ({
   multiLimitMode = "highest",
   hiddenLabelIds,
   zoneVisible = true,
+  overlayScale = 1,
 }: UseSyncedRendererOptions): UseSyncedRendererReturn => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -91,12 +93,14 @@ export const useSyncedRenderer = ({
     multiLimitMode,
     hiddenLabelIds,
     zoneVisible,
+    overlayScale,
   });
   optsRef.current = {
     displayMode,
     multiLimitMode,
     hiddenLabelIds,
     zoneVisible,
+    overlayScale,
   };
 
   useEffect(() => {
@@ -150,6 +154,8 @@ export const useSyncedRenderer = ({
 
       const labels = window.DASHBOARD_CONFIG.labels || [];
       const opts = optsRef.current;
+      const cssWidth = canvas.clientWidth || canvas.width;
+      const scale = (canvas.width / cssWidth) * (opts.overlayScale ?? 1);
 
       offCtx.drawImage(synced.bitmap, 0, 0);
 
@@ -179,8 +185,8 @@ export const useSyncedRenderer = ({
           opts.multiLimitMode,
         );
         if (!prepared) continue;
-        renderBBoxDetection(offCtx, labels, prepared);
-        renderClassificationDetection(offCtx, labels, prepared);
+        renderBBoxDetection(offCtx, labels, prepared, scale);
+        renderClassificationDetection(offCtx, labels, prepared, scale);
       }
 
       if (opts.zoneVisible) {
@@ -189,6 +195,7 @@ export const useSyncedRenderer = ({
           window.DASHBOARD_CONFIG.zoneDirection,
           window.DASHBOARD_CONFIG.zoneCenter,
           window.DASHBOARD_CONFIG.zoneThickness,
+          scale,
         );
       }
 

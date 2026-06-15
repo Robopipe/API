@@ -54,6 +54,7 @@ export interface UserSettings {
   widgetConfig: WidgetConfig | null;
   timerLabelDisplay: TimerLabelDisplay;
   videoPanelWidthPct?: number;
+  overlayScale?: number;
 }
 
 export interface DashboardConfig {

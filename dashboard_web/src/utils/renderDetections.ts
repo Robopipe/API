@@ -10,6 +10,7 @@ export type DetectionRenderer = (
   ctx: CanvasRenderingContext2D,
   labels: Label[],
   detection: NNDetection,
+  scale?: number,
 ) => void;
 
 export const isBBDetection = (
@@ -79,6 +80,7 @@ export const renderBBoxDetection: DetectionRenderer = (
   ctx,
   labels,
   detection,
+  scale = 1,
 ) => {
   if (!isBBDetection(detection)) return;
   const label = labels[detection.label];
@@ -147,13 +149,13 @@ export const renderBBoxDetection: DetectionRenderer = (
   }
 
   const font = isHighlighted
-    ? "500 12px 'Space Grotesk', Inter, sans-serif"
-    : "14px Inter";
+    ? `500 ${Math.round(12 * scale)}px 'Space Grotesk', Inter, sans-serif`
+    : `${Math.round(14 * scale)}px Inter`;
 
   // Rectangle
   ctx.strokeStyle = borderColor;
   ctx.fillStyle = fillColor;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = scale;
   ctx.strokeRect(x, y, w, h);
   ctx.fillRect(x, y, w, h);
 
@@ -161,9 +163,9 @@ export const renderBBoxDetection: DetectionRenderer = (
   // Parent: one limit name per line, no word-wrap within a name.
   // Others: word-wrap to box width.
   ctx.font = font;
-  const lineHeight = 16;
-  const padding = isHighlighted ? 8 : 2;
-  const maxLineWidth = Math.max(w, 140);
+  const lineHeight = 16 * scale;
+  const padding = (isHighlighted ? 8 : 2) * scale;
+  const maxLineWidth = Math.max(w, 140 * scale);
   const textLines =
     detection.role === "parent"
       ? rawText.split("\n")
@@ -171,16 +173,16 @@ export const renderBBoxDetection: DetectionRenderer = (
   const numLines = textLines.length;
   const labelWidth =
     Math.max(...textLines.map((l) => ctx.measureText(l).width)) + padding * 2;
-  const labelHeight = lineHeight * numLines + (isHighlighted ? 4 : 0);
+  const labelHeight = lineHeight * numLines + (isHighlighted ? 4 * scale : 0);
 
   ctx.fillStyle = labelBg;
-  ctx.fillRect(x - 1, y - labelHeight, labelWidth, labelHeight);
+  ctx.fillRect(x - scale, y - labelHeight, labelWidth, labelHeight);
   ctx.fillStyle = labelTextColor;
   for (let i = 0; i < numLines; i++) {
     ctx.fillText(
       textLines[i],
-      x - 1 + padding,
-      y - labelHeight + lineHeight * (i + 1) - (isHighlighted ? 5 : 4),
+      x - scale + padding,
+      y - labelHeight + lineHeight * (i + 1) - (isHighlighted ? 5 * scale : 4 * scale),
     );
   }
 };
@@ -189,13 +191,14 @@ export const renderClassificationDetection: DetectionRenderer = (
   ctx,
   labels,
   detection,
+  scale = 1,
 ) => {
   if (!isClassificationDetection(detection)) return;
   const label = labels[detection.label];
   const text = `${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
-  ctx.font = "16px Inter";
+  ctx.font = `${Math.round(16 * scale)}px Inter`;
   ctx.fillStyle = label.color;
-  ctx.fillText(text, 10, 20);
+  ctx.fillText(text, 10 * scale, 20 * scale);
 };
 
 /**
@@ -313,6 +316,7 @@ export const renderZone = (
   direction: DashboardZoneDirection,
   center: number,
   thickness: number,
+  scale = 1,
 ) => {
   const { width, height } = ctx.canvas;
   const lo = Math.max(0, center - thickness / 2);
@@ -320,8 +324,8 @@ export const renderZone = (
 
   ctx.save();
   ctx.strokeStyle = "#ff0000";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([10, 5]);
+  ctx.lineWidth = 2 * scale;
+  ctx.setLineDash([10 * scale, 5 * scale]);
 
   const isXAxis =
     direction === DashboardZoneDirection.LeftToRight ||

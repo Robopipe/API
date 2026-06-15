@@ -20,6 +20,7 @@ export const VideoStream = () => {
     multiLimitMode,
     hiddenLabelIds,
     zoneVisible,
+    overlayScale,
   } = useAppState();
   const { isStreaming, error, replayEnded } = useWebRTCStream();
   const { canvasRef } = useSyncedRenderer({
@@ -27,6 +28,7 @@ export const VideoStream = () => {
     multiLimitMode,
     hiddenLabelIds,
     zoneVisible,
+    overlayScale,
   });
   const [borderInfo, setBorderInfo] = useState<BorderInfo | null>(null);
 
