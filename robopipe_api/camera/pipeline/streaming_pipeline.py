@@ -119,7 +119,7 @@ class StreamingPipeline(Pipeline):
         self._still_configs[sensor_name] = effective_still
         still_cfg = effective_still
 
-        pool_size = ceil(cam_size[0] * cam_size[1] * self.BYTES_PER_PIXEL * 2)
+        pool_size = ceil(cam_size[0] * cam_size[1] * self.BYTES_PER_PIXEL * 10)
         cam.setOutputsMaxSizePool(pool_size)
         self.build_camera(cam, sensor.socket, resolution=cam_size, fps=cam_fps)
 
