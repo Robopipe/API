@@ -1,3 +1,5 @@
+import json
+
 from aiortc import RTCPeerConnection, RTCRtpSender, RTCSessionDescription
 from fastapi import Request
 
@@ -33,16 +35,41 @@ async def stream_video_offer(
             transceiver.setCodecPreferences(vp8_codecs)
             break
 
+    mxid = video_track.camera.mxid
+    sensor_name = video_track.sensor_name
+    event_channels: list = []
+
+    @pc.on("datachannel")
+    def on_datachannel(ch):
+        if ch.label != "events":
+            return
+        event_channels.append(ch)
+        webrtc_manager.register_event_channel(mxid, sensor_name, ch)
+
+        @ch.on("close")
+        def on_ch_close():
+            webrtc_manager.unregister_event_channel(mxid, sensor_name, ch)
+
+        if webrtc_manager.is_stream_ended(mxid, sensor_name) and ch.readyState == "open":
+            ch.send(json.dumps({"event": "eof"}))
+
+    async def _deregister_channels():
+        for ch in list(event_channels):
+            webrtc_manager.unregister_event_channel(mxid, sensor_name, ch)
+        event_channels.clear()
+
     await pc.setRemoteDescription(rtc_offer)
 
     @pc.on("iceconnectionstatechange")
     async def on_iceconnectionstatechange():
         if pc.iceConnectionState in ("failed", "disconnected", "closed"):
+            await _deregister_channels()
             await webrtc_manager.remove_pc(pc)
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
         if pc.connectionState in ("failed", "disconnected", "closed"):
+            await _deregister_channels()
             await webrtc_manager.remove_pc(pc)
 
     answer = await pc.createAnswer()

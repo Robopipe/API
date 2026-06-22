@@ -46,8 +46,10 @@ def img_frame_to_video_frame(img_frame: dai.ImgFrame) -> av.VideoFrame:
         raise UnsupportedImageFormat(f"Given format: {img_type}")
 
     if img_type == dai.ImgFrame.Type.RAW16:
-        img_frame = (img_frame.getFrame() / 256).astype(np.uint8)
-        return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])
+        frame = img_frame.getFrame().astype(np.float32)
+        max_val = frame.max()
+        frame = (frame / max_val * 255).astype(np.uint8) if max_val > 0 else np.zeros_like(frame, dtype=np.uint8)
+        return av.VideoFrame.from_ndarray(frame, "gray")
     elif img_type == dai.ImgFrame.Type.BGR888i:
         img_frame = img_frame.getFrame()
         return av.VideoFrame.from_ndarray(img_frame, FORMAT_MAP[img_type])

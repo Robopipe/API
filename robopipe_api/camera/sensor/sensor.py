@@ -5,8 +5,8 @@ import depthai as dai
 from typing import Callable
 
 from ...log import logger
+from ...models.still_config import StillConfig
 from ..pipeline.pipeline_queue_type import PipelineQueueType
-from .sensor_config import SensorConfig, SensorConfigProperties
 from .sensor_control import SensorControl
 from .sensor_base import SensorBase
 
@@ -26,7 +26,7 @@ class Sensor(SensorBase):
 
         self._sensor_features = sensor_features
         self.sensor_node = sensor_node
-        self._config = SensorConfig(self.sensor_node)
+        self._still_config: StillConfig | None = None
         self._control = SensorControl.default_for(sensor_features)
         self.refresh_control_from_frame()
 
@@ -47,13 +47,12 @@ class Sensor(SensorBase):
         return self._sensor_features
 
     @property
-    def config(self) -> SensorConfigProperties:
-        return self._config.properties
+    def config(self) -> StillConfig:
+        return self._still_config
 
     @config.setter
-    def config(self, value: SensorConfigProperties):
-        self._config.properties = value
-        self.restart_pipeline()
+    def config(self, value: StillConfig) -> None:
+        self._still_config = value
 
     @property
     def control(self) -> SensorControl:

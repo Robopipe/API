@@ -87,7 +87,6 @@ class SensorControl(BaseModel):
     auto_exposure_lock: Annotated[bool, Field(default=False)]
 
     # ISP
-    brightness: Annotated[int, Field(ge=-10, le=10, default=0)]
     contrast: Annotated[int, Field(ge=-10, le=10, default=0)]
     saturation: Annotated[int, Field(ge=-10, le=10, default=0)]
     sharpness: Annotated[int, Field(ge=0, le=4, default=1)]
@@ -134,7 +133,6 @@ class SensorControl(BaseModel):
         ctrl = dai.CameraControl()
         is_color = dai.CameraSensorType.COLOR in features.supportedTypes
 
-        ctrl.setBrightness(self.brightness)
         ctrl.setContrast(self.contrast)
         ctrl.setSharpness(self.sharpness)
         ctrl.setLumaDenoise(self.luma_denoise)

@@ -1,5 +1,6 @@
 import datetime
 import threading
+from collections import OrderedDict
 
 import depthai as dai
 from depthai_nodes import Classifications, ImgDetectionsExtended
@@ -19,8 +20,10 @@ from ...utils.detections_parser import parse_detections
 from ...utils.image import img_frame_to_video_frame
 from ...utils.timestamp_burnin import burn_timestamp
 from ...ws_relay import ProducerTerminated
+from ..exceptions import VideoStreamEnded
 from ..pipeline.pipeline_queue_type import PipelineQueueType
 from ..sahi import Tile, remap_tile_detections, nms_merge
+from ...models.still_config import StillConfig
 from .sensor_config import SensorConfigProperties
 from .sensor_control import SensorControl
 
@@ -42,6 +45,9 @@ class SensorBase(ABC):
         self.last_frame: av.VideoFrame | None = None
         self._video_seq: int = -1
         self._video_seq_cond = threading.Condition()
+        self._frame_buffer: OrderedDict[int, av.VideoFrame] = OrderedDict()
+        self._frame_buffer_lock = threading.Lock()
+        self._frame_buffer_max = 60
 
         # SAHI state
         self._sahi_tile_queue: dai.MessageQueue | None = None
@@ -54,11 +60,11 @@ class SensorBase(ABC):
 
     @property
     @abstractmethod
-    def config(self) -> SensorConfigProperties: ...
+    def config(self) -> StillConfig: ...
 
     @config.setter
     @abstractmethod
-    def config(self, value: SensorConfigProperties) -> SensorConfigProperties: ...
+    def config(self, value: StillConfig) -> None: ...
 
     @property
     @abstractmethod
@@ -109,60 +115,48 @@ class SensorBase(ABC):
     def refresh_control_from_frame(self) -> None:
         pass
 
-    def capture_still(self) -> dai.EncodedFrame:
+    def capture_still(self) -> bytes:
         still_queue = self.output_queues[PipelineQueueType.STILL]
-        return still_queue.getAll()[-1]
+        return still_queue.getAll()[-1].getData().tobytes()
 
     def get_video_frame(self) -> av.VideoFrame:
-        # video_queue = self.output_queues[PipelineQueueType.VIDEO]
-
-        # # Drain to the freshest frame. When the WebRTC encoder pulls
-        # # slower than the NN passthrough produces (high-resolution bbox
-        # # models, constrained bandwidth), the queue would otherwise back
-        # # up — encoder ships oldest frames first, latency between video
-        # # and the matching detection grows unboundedly until matching
-        # # breaks.
-        # img_frame: dai.ImgFrame | None = None
-        # while True:
-        #     next_frame = video_queue.tryGet()
-        #     if next_frame is None:
-        #         break
-        #     img_frame = next_frame
-
-        # if img_frame is not None:
-        #     self.on_frame(img_frame)
-        #     ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-        #     self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
-        #     # self._publish_video_seq(img_frame.getSequenceNum())
-        # elif self.last_frame is None:
-        #     img_frame = video_queue.get()
-        #     self.on_frame(img_frame)
-        #     ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-        #     self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
-        #     # self._publish_video_seq(img_frame.getSequenceNum())
-
-        # return self.last_frame
         video_queue = self.output_queues[PipelineQueueType.VIDEO]
         try:
             img_frame: dai.ImgFrame | None = video_queue.tryGet()
         except Exception as e:
-            # The dai.Device backing this queue was closed (pipeline restart).
-            # Surface as RuntimeError so consumers tear down rather than loop
-            # on the cached `last_frame`.
-            raise RuntimeError("video queue closed") from e
+            # The dai.Device backing this queue was closed (pipeline restart or
+            # replay video reached EOF). Raise VideoStreamEnded so consumers
+            # tear down rather than loop on the cached `last_frame`.
+            raise VideoStreamEnded("video queue closed") from e
 
         if img_frame:
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+            video_frame = img_frame_to_video_frame(img_frame)
+            if self.nn_config is not None:
+                video_frame = burn_timestamp(video_frame, ts_us)
+            self.last_frame = video_frame
+            self._buffer_frame(ts_us, self.last_frame)
         elif self.last_frame is None:
             try:
-                img_frame = video_queue.get()
+                img_frame = video_queue.get(
+                    timeout=datetime.timedelta(milliseconds=1500)
+                )
             except Exception as e:
-                raise RuntimeError("video queue closed") from e
+                raise VideoStreamEnded("video queue closed") from e
+            if img_frame is None:
+                raise VideoStreamEnded("video queue empty")
             self.on_frame(img_frame)
             ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-            self.last_frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+            video_frame = img_frame_to_video_frame(img_frame)
+            if self.nn_config is not None:
+                video_frame = burn_timestamp(video_frame, ts_us)
+            self.last_frame = video_frame
+            self._buffer_frame(ts_us, self.last_frame)
+        else:
+            ret = self.last_frame
+            self.last_frame = None
+            return ret
 
         return self.last_frame
 
@@ -175,6 +169,44 @@ class SensorBase(ABC):
             if seq > self._video_seq:
                 self._video_seq = seq
                 self._video_seq_cond.notify_all()
+
+    def _buffer_frame(self, ts_us: int, frame: av.VideoFrame) -> None:
+        with self._frame_buffer_lock:
+            self._frame_buffer[ts_us] = frame
+            while len(self._frame_buffer) > self._frame_buffer_max:
+                self._frame_buffer.popitem(last=False)
+
+    def get_frame_by_ts(self, ts_us: int) -> av.VideoFrame | None:
+        """Return the buffered frame whose ts_us matches exactly, else last_frame."""
+        with self._frame_buffer_lock:
+            frame = self._frame_buffer.get(ts_us)
+        return frame if frame is not None else self.last_frame
+
+    def _try_pull_passthrough(self, ts_us_hint: int) -> None:
+        """Drain the VIDEO queue, buffering each frame, until the frame matching
+        ``ts_us_hint`` is found or the queue is empty.
+
+        Called by the NN WS producer right after reading a detection so the
+        commit-picture renderer can get the exact passthrough frame via
+        ``get_frame_by_ts``. Does NOT call ``on_frame`` — that side-effect is
+        reserved for the encoder's ``get_video_frame`` path.
+        """
+        video_queue = self.output_queues.get(PipelineQueueType.VIDEO)
+        if video_queue is None:
+            return
+        for _ in range(8):  # VIDEO queue maxSize=4; 8 is a generous safety cap
+            try:
+                img_frame = video_queue.tryGet()
+            except Exception:
+                return
+            if img_frame is None:
+                return
+            ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
+            frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
+            self.last_frame = frame
+            self._buffer_frame(ts_us, frame)
+            if ts_us == ts_us_hint:
+                return
 
     def get_nn_frame(self):
         try:
@@ -217,12 +249,15 @@ class SensorBase(ABC):
         if nn_queue is None:
             raise ProducerTerminated()
 
-        detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
+        try:
+            detections: dai.ImgDetections | Classifications | None = nn_queue.tryGet()
+            if detections is None:
+                detections = nn_queue.get(timeout=datetime.timedelta(seconds=2))
+        except Exception as e:
+            raise ProducerTerminated() from e
 
         if detections is None:
-            detections = nn_queue.get(timeout=datetime.timedelta(seconds=2))
-            if detections is None:
-                raise TimeoutError("NN queue get() timed out")
+            raise TimeoutError("NN queue get() timed out")
 
         # Wait until the video track has dispatched the frame that
         # corresponds to this detection, so both leave the server at
@@ -249,7 +284,10 @@ class SensorBase(ABC):
         all_dets = list(full_frame_parsed.detections)
 
         # Grab the tile detection for the current tile (non-blocking)
-        tile_raw = self._sahi_tile_queue.tryGet()
+        try:
+            tile_raw = self._sahi_tile_queue.tryGet()
+        except Exception as e:
+            raise ProducerTerminated() from e
         tile_got_result = tile_raw is not None
         if tile_raw is not None:
             tile = self._sahi_tiles[self._sahi_tile_index]

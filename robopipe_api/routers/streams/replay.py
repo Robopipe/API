@@ -7,6 +7,7 @@ import httpx
 from fastapi import HTTPException, Request, UploadFile, status
 
 from ...paths import get_data_dir
+from ...webrtc_manager import webrtc_manager_factory
 from ..common import CameraDep, StreamName
 from . import stream_router
 
@@ -120,8 +121,24 @@ async def add_replay_video(
     except (ValueError, RuntimeError):
         file_path.unlink(missing_ok=True)
         raise
+    webrtc_manager_factory().clear_stream_ended(camera.mxid, stream_name)
 
 
 @stream_router.delete("/replay", status_code=status.HTTP_202_ACCEPTED)
 def remove_replay_video(camera: CameraDep, stream_name: StreamName):
     camera.remove_replay_video(stream_name)
+    webrtc_manager_factory().clear_stream_ended(camera.mxid, stream_name)
+
+
+@stream_router.get("/replay")
+def get_replay_video(camera: CameraDep, stream_name: StreamName):
+    from ...models.replay_info import ReplayInfo
+
+    try:
+        path = camera.get_replay_video(stream_name)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return ReplayInfo(
+        replay=path is not None,
+        filename=Path(path).name if path is not None else None,
+    )

@@ -1,10 +1,14 @@
 from fastapi import HTTPException, status
 
-from ...camera.sensor.sensor_config import SensorConfigProperties
+from ...camera.pipeline.nn_pipeline import NNPipeline
+from ...camera.pipeline.streaming_pipeline import StreamingPipeline
+from ...camera.sensor.depth_sensor import DepthSensor
 from ...camera.sensor.sensor_control import SensorControl
 from ...models.batch_stream_update import BatchStreamUpdate
 from ...models.sensor_control import SensorControlCapabilities, SensorControlUpdate
+from ...models.still_config import StillConfig, StillConfigOption
 from ...models.stream_info import StreamInfo
+from ...webrtc_manager import webrtc_manager_factory
 from ..common import CameraDep, SensorDep, StreamName
 from . import router, stream_router
 
@@ -14,7 +18,7 @@ def list_all_streams(camera: CameraDep) -> list[StreamInfo]:
     get_sensor_info = lambda sensor: StreamInfo(
         name=sensor,
         active=(sensor in camera.sensors),
-        replay=(sensor in camera._replay_video_paths),
+        replay=(camera.get_replay_video(sensor) is not None),
     )
     sensors = list(map(get_sensor_info, camera.all_sensors.keys()))
 
@@ -38,10 +42,14 @@ def batch_update_streams(
             detail=str(e),
         )
 
+    mgr = webrtc_manager_factory()
+    for sensor_name in update.activate or []:
+        mgr.clear_stream_ended(camera.mxid, sensor_name)
+
     get_sensor_info = lambda sensor: StreamInfo(
         name=sensor,
         active=(sensor in camera.sensors),
-        replay=(sensor in camera._replay_video_paths),
+        replay=(camera.get_replay_video(sensor) is not None),
     )
     return list(map(get_sensor_info, camera.all_sensors.keys()))
 
@@ -49,6 +57,7 @@ def batch_update_streams(
 @stream_router.post("/", status_code=status.HTTP_201_CREATED)
 def activate_stream(camera: CameraDep, stream_name: StreamName):
     camera.activate_sensor(stream_name)
+    webrtc_manager_factory().clear_stream_ended(camera.mxid, stream_name)
 
 
 @stream_router.delete("/", status_code=status.HTTP_202_ACCEPTED)
@@ -56,18 +65,60 @@ def deactivate_stream(camera: CameraDep, stream_name: StreamName):
     camera.deactivate_sensor(stream_name)
 
 
+def _require_still_config_support(
+    camera: CameraDep, sensor: SensorDep, stream_name: StreamName
+):
+    if isinstance(sensor, DepthSensor):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Still config is not available for depth streams",
+        )
+    if (
+        isinstance(camera.pipeline, NNPipeline)
+        and stream_name in camera.pipeline.nn_configs
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Still config is not available — sensor is in NN mode",
+        )
+
+
 @stream_router.get("/config")
-def get_stream_config(sensor: SensorDep) -> SensorConfigProperties:
+def get_stream_config(
+    camera: CameraDep, sensor: SensorDep, stream_name: StreamName
+) -> StillConfig:
+    _require_still_config_support(camera, sensor, stream_name)
     return sensor.config
+
+
+@stream_router.get("/config/available")
+def get_available_configs(
+    camera: CameraDep, sensor: SensorDep, stream_name: StreamName
+) -> list[StillConfigOption]:
+    _require_still_config_support(camera, sensor, stream_name)
+    return StreamingPipeline.available_configs(sensor.features)
 
 
 @stream_router.post("/config")
 def update_stream_config(
-    sensor: SensorDep, config: SensorConfigProperties
-) -> SensorConfigProperties:
-    sensor.config = config
-
-    return sensor.config
+    camera: CameraDep,
+    sensor: SensorDep,
+    stream_name: StreamName,
+    config: StillConfig,
+) -> StillConfig:
+    _require_still_config_support(camera, sensor, stream_name)
+    try:
+        return camera.set_still_config(stream_name, config)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e),
+        )
 
 
 @stream_router.get("/control")
@@ -89,10 +140,28 @@ def update_stream_control(
     update_dict = control.model_dump(exclude_unset=True, exclude_none=True)
     capabilities = SensorControlCapabilities.from_features(sensor.features)
     unsupported = capabilities.unsupported_fields(update_dict)
+
+    effective_auto = update_dict.get(
+        "auto_exposure_enable", sensor.control.auto_exposure_enable
+    )
+    manual_locked = (
+        sorted({"exposure_time", "sensitivity_iso"} & update_dict.keys())
+        if effective_auto
+        else []
+    )
+
+    errors: list[str] = []
     if unsupported:
+        errors.append(f"Fields not supported by this sensor: {', '.join(unsupported)}")
+    if manual_locked:
+        errors.append(
+            "Manual exposure fields not allowed while auto-exposure is enabled: "
+            f"{', '.join(manual_locked)}"
+        )
+    if errors:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Fields not supported by this sensor: {', '.join(unsupported)}",
+            detail="; ".join(errors),
         )
 
     updated_control = sensor.control.model_copy(update=update_dict)

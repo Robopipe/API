@@ -39,6 +39,7 @@ class _Channel:
 
     def __init__(self):
         self.queues: set[asyncio.Queue[str]] = set()
+        self.websockets: dict[asyncio.Queue[str], WebSocket] = {}
         self.producer_task: asyncio.Task | None = None
 
 
@@ -87,6 +88,7 @@ class WebSocketRelay:
         # stale data so the subscriber always gets the latest message.
         q: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
         channel.queues.add(q)
+        channel.websockets[q] = ws
 
         if channel.producer_task is None or channel.producer_task.done():
             channel.producer_task = asyncio.create_task(self._produce(key, producer))
@@ -107,6 +109,7 @@ class WebSocketRelay:
                 t.cancel()
         finally:
             channel.queues.discard(q)
+            channel.websockets.pop(q, None)
             if not channel.queues:
                 if channel.producer_task is not None:
                     channel.producer_task.cancel()
@@ -136,6 +139,13 @@ class WebSocketRelay:
                     logger.info(
                         "Producer terminated for channel %s (resource gone)", key
                     )
+                    channel = self._channels.get(key)
+                    if channel is not None:
+                        for sub_ws in list(channel.websockets.values()):
+                            try:
+                                await sub_ws.close()
+                            except Exception:
+                                pass
                     return
                 except ProducerSkipMessage:
                     continue

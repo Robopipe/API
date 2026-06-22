@@ -6,6 +6,7 @@ from pathlib import Path
 from ..error import CameraShutDownException, CameraException
 from ..log import logger
 from ..models.nn_config import NNConfig, NNType
+from ..models.still_config import StillConfig
 from .camera_stats import CameraStats
 from .constants import DEPTH_NAME
 from .device_info import DeviceInfo
@@ -127,6 +128,11 @@ class Camera:
                     sensor._sahi_tile_cache = [
                         [] for _ in self.pipeline.sahi_tiles[sensor_name]
                     ]
+
+                # Populate still config from pipeline (covers both user overrides and
+                # auto-derived defaults stored during add_sensor).
+                if isinstance(self.pipeline, StreamingPipeline):
+                    sensor.config = self.pipeline._still_configs.get(sensor_name)
 
                 if sensor_name in existing_sensors:
                     existing_sensor = existing_sensors[sensor_name]
@@ -291,6 +297,11 @@ class Camera:
         if old_path and old_path != video_path:
             Path(old_path).unlink(missing_ok=True)
 
+    def get_replay_video(self, sensor_name: str) -> str | None:
+        if sensor_name not in self.all_sensors:
+            raise ValueError(f"Sensor {sensor_name} not found on camera {self.mxid}")
+        return self._replay_video_paths.get(sensor_name)
+
     def remove_replay_video(self, sensor_name: str):
         self.__check_device_active()
         if not isinstance(self.pipeline, StreamingPipeline):
@@ -372,6 +383,51 @@ class Camera:
         pipeline.remove_nn(sensor_name)
         pipeline.add_sensor_config(self.all_sensors[sensor_name])
         self.open(pipeline)
+
+    def set_still_config(self, stream_name: str, config: StillConfig) -> StillConfig:
+        self.__check_device_active()
+        if not isinstance(self.pipeline, StreamingPipeline):
+            raise RuntimeError("Server is in invalid state")
+
+        sensor_features = self.all_sensors.get(stream_name)
+        available = StreamingPipeline.available_configs(sensor_features)
+        match = next(
+            (
+                o
+                for o in available
+                if o.width == config.width
+                and o.height == config.height
+                and o.min_fps <= config.fps <= o.max_fps
+            ),
+            None,
+        )
+        if match is None:
+            raise ValueError(
+                f"Config ({config.width}x{config.height} @ {config.fps} fps) "
+                "is not available for this sensor"
+            )
+
+        pipeline = self.pipeline
+        previous_config = pipeline._still_configs.get(stream_name)
+
+        pipeline._still_configs[stream_name] = config
+        self.close()
+        try:
+            self.open(pipeline)
+            return config
+        except Exception as primary_error:
+            self.close()
+            if previous_config is not None:
+                pipeline._still_configs[stream_name] = previous_config
+            else:
+                pipeline._still_configs.pop(stream_name, None)
+            try:
+                self.open(pipeline)
+            except Exception as rollback_error:
+                raise CameraException(
+                    "Pipeline restart failed and rollback also failed"
+                ) from rollback_error
+            raise primary_error
 
     def __check_device_active(self):
         if self.camera_handle is None:
