@@ -169,8 +169,6 @@ def delete_dashboard_config(
     events_store: EventsStoreDep,
 ):
     _teardown_dashboard_run(sensor, events_store)
-    sensor.dashboard_config = None
-    config_store_factory().clear_configs(mxid, stream_name)
     camera.delete_nn(stream_name)
 
 
