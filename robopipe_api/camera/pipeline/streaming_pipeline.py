@@ -142,17 +142,70 @@ class StreamingPipeline(Pipeline):
         )
 
     @classmethod
+    def _get_primary_type(
+        cls, features: dai.CameraFeatures
+    ) -> "dai.CameraSensorType | None":
+        """Return the primary sensor type (COLOR preferred over MONO)."""
+        for t in (dai.CameraSensorType.COLOR, dai.CameraSensorType.MONO):
+            if t in features.supportedTypes:
+                return t
+        return None
+
+    @classmethod
+    def _reference_aspect(cls, features: dai.CameraFeatures) -> float:
+        """Full-sensor aspect ratio (width/height). Falls back to the
+        largest-area config if features.width/height are not set."""
+        if features.width > 0 and features.height > 0:
+            return features.width / features.height
+        best = max(features.configs, key=lambda c: c.width * c.height, default=None)
+        return (best.width / best.height) if best else 4 / 3
+
+    @classmethod
+    def _full_fov_max_fps(
+        cls,
+        features: dai.CameraFeatures,
+        primary_type: "dai.CameraSensorType | None",
+        width: int,
+        height: int,
+    ) -> float:
+        """Max fps for (width, height) that avoids a cropped sensor mode.
+
+        A sensor config is considered full-FOV when its aspect ratio matches
+        the reference (native sensor) aspect within 2 %. The cap is the
+        highest maxFps among full-FOV configs whose width and height are both
+        >= the target dimensions — these are modes DepthAI can downscale to
+        the target without switching to a narrower sensor window.
+
+        Falls back to the native maxFps for the exact (width, height) if no
+        full-FOV source exists (preserves current behaviour for edge cases)."""
+        ref_aspect = cls._reference_aspect(features)
+        cap: float | None = None
+        native_max: float = 0.0
+
+        for cfg in features.configs:
+            if primary_type is not None and cfg.type != primary_type:
+                continue
+            if cfg.width < width or cfg.height < height:
+                continue
+            if cfg.width == width and cfg.height == height:
+                native_max = max(native_max, cfg.maxFps)
+            if cfg.height == 0:
+                continue
+            cfg_aspect = cfg.width / cfg.height
+            if abs(cfg_aspect - ref_aspect) / ref_aspect < 0.02:
+                cap = max(cap, cfg.maxFps) if cap is not None else cfg.maxFps
+
+        return cap if cap is not None else native_max
+
+    @classmethod
     def available_configs(cls, features: dai.CameraFeatures) -> list[StillConfigOption]:
         """Return still-output configs for this sensor, filtered by primary type,
         mod-32 width constraint, and MAX_AVAILABLE_STILL_SIZE cap, deduped by
-        (width, height) with unioned fps range."""
-        primary_type = None
-        for t in (dai.CameraSensorType.COLOR, dai.CameraSensorType.MONO):
-            if t in features.supportedTypes:
-                primary_type = t
-                break
+        (width, height). The max fps per resolution is capped at the fastest
+        full-FOV source mode to prevent windowed-sensor cropping at high fps."""
+        primary_type = cls._get_primary_type(features)
 
-        seen: dict[tuple[int, int], tuple[float, float]] = {}
+        seen: dict[tuple[int, int], float] = {}  # (w, h) -> min_fps
         for config in features.configs:
             if primary_type is not None and config.type != primary_type:
                 continue
@@ -162,21 +215,18 @@ class StreamingPipeline(Pipeline):
             if w * h > cls.MAX_AVAILABLE_STILL_SIZE:
                 continue
             if (w, h) in seen:
-                seen[(w, h)] = (
-                    min(seen[(w, h)][0], config.minFps),
-                    max(seen[(w, h)][1], config.maxFps),
-                )
+                seen[(w, h)] = min(seen[(w, h)], config.minFps)
             else:
-                seen[(w, h)] = (config.minFps, config.maxFps)
+                seen[(w, h)] = config.minFps
 
         return [
             StillConfigOption(
                 width=w,
                 height=h,
                 min_fps=ceil(min_fps),
-                max_fps=floor(max_fps),
+                max_fps=floor(cls._full_fov_max_fps(features, primary_type, w, h)),
             )
-            for (w, h), (min_fps, max_fps) in sorted(
+            for (w, h), min_fps in sorted(
                 seen.items(), key=lambda x: x[0][0] * x[0][1], reverse=True
             )
         ]
@@ -237,6 +287,13 @@ class StreamingPipeline(Pipeline):
             ):
                 best_w, best_h = w, h
                 best_fps = round((config.minFps + config.maxFps) / 2)
+
+        # Clamp to the full-FOV fps cap so the auto video path never pushes the
+        # sensor onto a windowed (cropped) mode independently of the still config.
+        if best_w > 0 and best_h > 0:
+            primary_type = self._get_primary_type(sensor)
+            fov_cap = self._full_fov_max_fps(sensor, primary_type, best_w, best_h)
+            best_fps = min(best_fps, round(fov_cap))
 
         return _VideoConfig((best_w, best_h), best_fps)
 
