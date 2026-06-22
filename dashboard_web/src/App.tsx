@@ -1,5 +1,6 @@
 import { Toaster } from "sonner";
 import { updateUserSettings } from "./api/userSettings";
+import { ModelSelectModal } from "./components/Header/ModelSelectModal";
 import { LiveStream } from "./components/LiveStream";
 import { NoConfigError } from "./components/NoConfigError";
 import { Widgets } from "./components/Widgets";
@@ -34,6 +35,7 @@ function App() {
               right={<Widgets className="h-full" />}
             />
           </main>
+          {window.DASHBOARD_CONFIG.awaitingModel && <ModelSelectModal />}
         </CameraStreamProvider>
       </AppStateProvider>
     </SettingsLockProvider>

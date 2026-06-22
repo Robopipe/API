@@ -100,6 +100,7 @@ def serve_dashboard(
             "running": sensor.dashboard_run_session_id is not None,
             "runningSince": running_since,
             "hasMultipleConfigs": has_multiple,
+            "awaitingModel": sensor.nn_config is None,
             "userSettings": user_settings.model_dump(),
             "settingsUnlock": compute_settings_unlock(mxid, stream_name),
         }
@@ -150,6 +151,8 @@ async def set_dashboard_config(
     # Apply persisted tuning overrides on top of the deployed config.
     user_settings = store.load_user_settings(mxid, stream_name, first_config.id)
     sensor._dashboard_config = apply_tuning_overrides(first_config, user_settings)
+    # Persist the active config pointer for post-restart restore.
+    store.set_active_config(mxid, stream_name, first_config.id)
 
     return {
         "dashboard_url": f"/cameras/{mxid}/streams/{stream_name}/dashboard",
@@ -318,6 +321,8 @@ def switch_dashboard_config(
     sensor._dashboard_config = apply_tuning_overrides(
         stored.dashboard_config, user_settings
     )
+    # Persist the active config pointer for post-restart restore.
+    store.set_active_config(mxid, stream_name, config_id)
 
     return {"switched_to": config_id, "config_name": stored.config_name}
 

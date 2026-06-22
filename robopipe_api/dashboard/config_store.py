@@ -69,6 +69,22 @@ class DashboardConfigStore:
             model_path=str(model_path),
         )
 
+    def set_active_config(self, mxid: str, stream_name: str, config_id: int) -> None:
+        stream_dir = self._stream_dir(mxid, stream_name)
+        stream_dir.mkdir(parents=True, exist_ok=True)
+        active_path = stream_dir / "active.json"
+        active_path.write_text(json.dumps({"config_id": config_id}))
+
+    def get_active_config_id(self, mxid: str, stream_name: str) -> int | None:
+        active_path = self._stream_dir(mxid, stream_name) / "active.json"
+        if not active_path.exists():
+            return None
+        try:
+            data = json.loads(active_path.read_text())
+            return int(data["config_id"])
+        except Exception:
+            return None
+
     def list_configs(self, mxid: str, stream_name: str) -> list[StoredConfigSummary]:
         stream_dir = self._stream_dir(mxid, stream_name)
         if not stream_dir.exists():
@@ -77,6 +93,8 @@ class DashboardConfigStore:
         configs = []
         for meta_file in sorted(stream_dir.glob("*.json")):
             if meta_file.name.endswith(".user.json"):
+                continue
+            if meta_file.name == "active.json":
                 continue
             metadata = json.loads(meta_file.read_text())
             dc = metadata["dashboard_config"]

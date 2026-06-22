@@ -322,6 +322,12 @@ export const CameraStreamProvider = ({
 
   // --- Detections WebSocket ------------------------------------------
   useEffect(() => {
+    // When the dashboard is in the awaiting-model state (restored from disk but
+    // no NN deployed), skip the detections WS entirely. The backend producer
+    // would terminate immediately via ProducerTerminated, causing the WS to
+    // cycle through its max reconnect attempts and surface a cosmetic error.
+    if (window.DASHBOARD_CONFIG.awaitingModel) return;
+
     let cancelled = false;
     let ws: WebSocket | null = null;
     let reconnectAttempts = 0;

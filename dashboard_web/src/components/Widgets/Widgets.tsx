@@ -63,7 +63,7 @@ function computeSizes(
     (panelW - GRID_GAP * (n - 1)) / n,
   );
   const gridVGap = GRID_GAP * (n - 1);
-  const masterFooter = editMode ? MASTER_FOOTER_H_EDIT : MASTER_FOOTER_H_VIEW;
+  let masterFooter = editMode ? MASTER_FOOTER_H_EDIT : MASTER_FOOTER_H_VIEW;
   // Account for the master's name label, which can extend up to 1.4 * size
   // (DonutWidget.tsx). Cap by panelW / 1.4 so the master + label fit horizontally.
   const widthCap = Math.max(0, panelW / 1.4);
@@ -129,10 +129,21 @@ function computeSizes(
 
   let reserve = editMode ? 64 : 26;
   let result = solve(reserve);
-  for (let i = 0; i < 2; i++) {
-    const next = labelReserveFor(result.donutSize, editMode);
-    if (Math.abs(next - reserve) < 1) break;
-    reserve = next;
+  for (let i = 0; i < 3; i++) {
+    const nextReserve = labelReserveFor(result.donutSize, editMode);
+    // MasterWidget's footer = gap(8) + name-label-line-height + mb-4(16).
+    // The name font scales with masterSize, so recompute each pass to avoid
+    // the fixed MASTER_FOOTER_H_VIEW constant underestimating large masters.
+    let nextMasterFooter = masterFooter;
+    if (!editMode && hasMaster && result.masterSize > 0) {
+      const mFont = Math.max(10, Math.round(result.masterSize * 0.095));
+      nextMasterFooter = 8 + Math.ceil(mFont * 1.5) + 16;
+    }
+    const reserveStable = Math.abs(nextReserve - reserve) < 1;
+    const footerStable = Math.abs(nextMasterFooter - masterFooter) < 1;
+    if (reserveStable && footerStable) break;
+    reserve = nextReserve;
+    masterFooter = nextMasterFooter;
     result = solve(reserve);
   }
   return result;

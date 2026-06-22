@@ -80,6 +80,7 @@ export interface DashboardConfig {
   running: boolean;
   runningSince: string | null;
   hasMultipleConfigs: boolean;
+  awaitingModel: boolean;
   userSettings: UserSettings;
   settingsUnlock: string;
 }

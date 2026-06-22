@@ -3,6 +3,8 @@ import depthai as dai
 import time
 from functools import lru_cache
 
+from ..dashboard.config_store import config_store_factory
+from ..dashboard.dashboard_handler import apply_tuning_overrides
 from ..error import CameraNotFoundException
 from ..log import logger
 from .camera import Camera
@@ -59,6 +61,37 @@ class CameraManager:
         for sensor in boot_sensors:
             pipeline.add_sensor_config(sensor)
         camera.open(pipeline)
+        self._restore_dashboards(mxid, camera)
+
+    def _restore_dashboards(self, mxid: str, camera: Camera):
+        """Restore the last-active dashboard config (without the NN model) for each
+        stream that has a valid persisted active-config pointer. The sensor is left
+        in the 'awaiting model' state: dashboard_config is set but nn_config is None,
+        so serve_dashboard returns 200 with awaitingModel=True and the frontend shows
+        the blocking model-select modal."""
+        store = config_store_factory()
+        for stream_name, sensor in camera.sensors.items():
+            try:
+                active_id = store.get_active_config_id(mxid, stream_name)
+                if active_id is None:
+                    continue  # no valid pointer — skip (legacy / no prior deploy)
+                stored = store.get_config(mxid, stream_name, active_id)
+                if stored is None:
+                    continue  # pointer dangles (config deleted) — skip
+                sensor.dashboard_config = stored.dashboard_config
+                user_settings = store.load_user_settings(mxid, stream_name, active_id)
+                sensor._dashboard_config = apply_tuning_overrides(
+                    stored.dashboard_config, user_settings
+                )
+                # Deliberately do NOT set sensor.nn_config / call deploy_nn.
+                logger.info(
+                    f"Restored dashboard config {active_id} for {mxid}/{stream_name} "
+                    "(awaiting model selection)"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to restore dashboard for {mxid}/{stream_name}: {e}"
+                )
 
     def shutdown_camera(self, mxid: str):
         self.cameras[mxid].cleanup_replay_videos()
