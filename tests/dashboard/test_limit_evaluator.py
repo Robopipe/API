@@ -1,5 +1,6 @@
 from robopipe_api.dashboard.evaluators import LimitEvaluator
 from robopipe_api.models.dashboard.eval_models import (
+    EvalLimitItemEdge,
     EvalLimitItemOperator,
     EvalLimitItemParameter,
 )
@@ -89,8 +90,8 @@ class TestLimitEvaluatorItemCombination:
                     operator=EvalLimitItemOperator.AND, item_id="li-1",
                 ),
                 make_limit_item(
-                    EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=70,
-                    item_id="li-2",
+                    EvalLimitItemParameter.POSITION, limit_from=30, limit_to=70,
+                    item_id="li-2", parent_edge=EvalLimitItemEdge.LEFT,
                 ),
             ],
         )
@@ -114,8 +115,8 @@ class TestLimitEvaluatorItemCombination:
                     operator=EvalLimitItemOperator.AND, item_id="li-1",
                 ),
                 make_limit_item(
-                    EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=70,
-                    item_id="li-2",
+                    EvalLimitItemParameter.POSITION, limit_from=30, limit_to=70,
+                    item_id="li-2", parent_edge=EvalLimitItemEdge.LEFT,
                 ),
             ],
         )
@@ -139,8 +140,8 @@ class TestLimitEvaluatorItemCombination:
                     operator=EvalLimitItemOperator.OR, item_id="li-1",
                 ),
                 make_limit_item(
-                    EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=70,
-                    item_id="li-2",
+                    EvalLimitItemParameter.POSITION, limit_from=30, limit_to=70,
+                    item_id="li-2", parent_edge=EvalLimitItemEdge.LEFT,
                 ),
             ],
         )
@@ -164,8 +165,9 @@ class TestLimitEvaluatorItemCombination:
                     operator=EvalLimitItemOperator.AND, item_id="li-1",
                 ),
                 make_limit_item(
-                    EvalLimitItemParameter.POS_LEFT, limit_from=80, limit_to=100,
+                    EvalLimitItemParameter.POSITION, limit_from=80, limit_to=100,
                     operator=EvalLimitItemOperator.OR, item_id="li-2",
+                    parent_edge=EvalLimitItemEdge.LEFT,
                 ),
                 make_limit_item(
                     EvalLimitItemParameter.AREA, limit_from=0, limit_to=100,

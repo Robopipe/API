@@ -34,7 +34,6 @@ class SensorControlCapabilities(BaseModel):
     has_autofocus: bool
     has_color_controls: bool
 
-    brightness: ControlRange
     contrast: ControlRange
     sharpness: ControlRange
     luma_denoise: ControlRange
@@ -77,7 +76,6 @@ class SensorControlCapabilities(BaseModel):
             sensor_type=sensor_type,
             has_autofocus=has_af,
             has_color_controls=is_color,
-            brightness=ControlRange(min=-10, max=10, default=0, step=1),
             contrast=ControlRange(min=-10, max=10, default=0, step=1),
             sharpness=ControlRange(min=0, max=4, default=1, step=1),
             luma_denoise=ControlRange(min=0, max=4, default=1, step=1),

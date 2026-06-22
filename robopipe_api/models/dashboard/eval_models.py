@@ -15,12 +15,16 @@ class EvalSeverity(str, Enum):
 # --- Limit Item ---
 
 
+class EvalLimitItemEdge(str, Enum):
+    LEFT = "LEFT"
+    RIGHT = "RIGHT"
+    TOP = "TOP"
+    BOTTOM = "BOTTOM"
+    CENTER = "CENTER"
+
+
 class EvalLimitItemParameter(str, Enum):
-    POS_LEFT = "POS_LEFT"
-    POS_RIGHT = "POS_RIGHT"
-    POS_TOP = "POS_TOP"
-    POS_BOTTOM = "POS_BOTTOM"
-    POS_CENTER = "POS_CENTER"
+    POSITION = "POSITION"
     AREA = "AREA"
     COUNT = "COUNT"
 
@@ -50,6 +54,8 @@ class EvalLimitItem(BaseModel):
     quantifierType: EvalLimitItemQuantifierType = EvalLimitItemQuantifierType.EXACT
     quantifierUnit: EvalLimitItemQuantifierUnit = EvalLimitItemQuantifierUnit.PERCENT
     quantifierValue: int = 100
+    targetEdge: EvalLimitItemEdge
+    parentEdge: EvalLimitItemEdge
 
 
 # --- Limit ---

@@ -51,9 +51,10 @@ export interface UserSettings {
   hiddenLabelIds: number[];
   zoneVisible: boolean;
   selectedLabelId: number | null;
-  widgetConfig: WidgetConfig;
+  widgetConfig: WidgetConfig | null;
   timerLabelDisplay: TimerLabelDisplay;
   videoPanelWidthPct?: number;
+  overlayScale?: number;
 }
 
 export interface DashboardConfig {

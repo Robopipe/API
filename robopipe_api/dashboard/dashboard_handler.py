@@ -1,5 +1,7 @@
 import hashlib
 
+import av
+
 from ..models.dashboard.dashboard_config import DashboardConfig
 from ..models.dashboard.user_settings import (
     TUNING_OVERRIDE_FIELDS,
@@ -44,36 +46,89 @@ def apply_tuning_overrides(
     return config.model_copy(update=overrides) if overrides else config
 
 
+_SEV_RANK = {"ALERT": 1, "WARNING": 0}
+
+
+def _max_severity(a: str | None, b: str) -> str:
+    if a is None:
+        return b
+    return a if _SEV_RANK.get(a, -1) >= _SEV_RANK.get(b, -1) else b
+
+
 def _annotate_detections(
     result: dict,
     evaluation_results: list[EvaluationResult],
     source_detections: list[BBoxDetection],
 ) -> None:
-    """Embed violation info into the specific detections that violated each limit."""
+    """Embed role/severity/violation info into highlighted detections.
+
+    Parent-label limits: the parent detection gets role='parent',
+    violations (for limit-name text + counter), and a severity field.
+    Its children get role='child' and severity only (no violations entry
+    so the counter is not inflated).
+
+    No-parent limits: the violating detection gets role='child',
+    violations (for counting), and severity.
+    """
     id_to_index = {id(det): i for i, det in enumerate(source_detections)}
     for ev in evaluation_results:
         if ev.violated_limit_severity is None:
             continue
-        violation = {
-            "limit_name": ev.violated_limit_name,
-            "severity": ev.violated_limit_severity,
-        }
-        for det in ev.violating_detections:
-            idx = id_to_index.get(id(det))
-            if idx is None:
-                continue
-            target = result["detections"][idx]
-            if "violations" not in target:
-                target["violations"] = []
-            target["violations"].append(violation)
+        sev = ev.violated_limit_severity
+        is_parent_label = bool(ev.violating_parents)
+
+        if is_parent_label:
+            violation = {
+                "limit_name": ev.violated_limit_name,
+                "severity": sev,
+            }
+            for det in ev.violating_parents:
+                idx = id_to_index.get(id(det))
+                if idx is None:
+                    continue
+                target = result["detections"][idx]
+                target["role"] = "parent"
+                target["severity"] = _max_severity(target.get("severity"), sev)
+                if "violations" not in target:
+                    target["violations"] = []
+                target["violations"].append(violation)
+            for det in ev.violating_detections:
+                idx = id_to_index.get(id(det))
+                if idx is None:
+                    continue
+                target = result["detections"][idx]
+                target["role"] = "child"
+                target["severity"] = _max_severity(target.get("severity"), sev)
+        else:
+            violation = {
+                "limit_name": ev.violated_limit_name,
+                "severity": sev,
+            }
+            for det in ev.violating_detections:
+                idx = id_to_index.get(id(det))
+                if idx is None:
+                    continue
+                target = result["detections"][idx]
+                target["role"] = "child"
+                target["severity"] = _max_severity(target.get("severity"), sev)
+                if "violations" not in target:
+                    target["violations"] = []
+                target["violations"].append(violation)
 
 
 def handle_detections(
     dashboard_config: DashboardConfig | None,
     detections: BaseNNDetections,
     dashboard_run_session_id: int | None,
+    video_frame: av.VideoFrame | None = None,
 ) -> dict:
-    """Evaluate dashboard test cases against detections and return enriched result."""
+    """Evaluate dashboard test cases against detections and return enriched result.
+
+    `video_frame` is forwarded to the evaluator so the commit branch can
+    render the violation picture server-side at zone exit. When None (no
+    frame available — e.g. WebRTC isn't connected yet), the evaluation still
+    runs and events are saved without a picture.
+    """
     result = detections.model_dump()
 
     if dashboard_config is None or dashboard_run_session_id is None:
@@ -87,10 +142,8 @@ def handle_detections(
         if d.confidence >= overrides.get(d.label, global_threshold)
     ]
 
-    evaluation_results, violation_events, tracking_ids, display_ids = (
-        _dashboard_evaluator.evaluate(
-            dashboard_config, filtered, dashboard_run_session_id
-        )
+    evaluation_results, tracking_ids, display_ids = _dashboard_evaluator.evaluate(
+        dashboard_config, filtered, dashboard_run_session_id, video_frame=video_frame
     )
 
     # Build after evaluate — line crossing sorts filtered in-place for stable ID assignment
@@ -128,9 +181,6 @@ def handle_detections(
     )
     events_store = events_store_factory()
     result["counters"] = events_store.get_counters(dashboard_run_session_id)
-
-    if violation_events:
-        result["violation_events"] = violation_events
 
     return result
 

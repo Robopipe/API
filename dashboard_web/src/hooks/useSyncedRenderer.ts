@@ -4,7 +4,7 @@ import type {
   DetectionDisplayMode,
   MultiLimitDisplayMode,
 } from "../types/dashboard";
-import type { DetectionViolation, NNDetection } from "../types/detections";
+import type { NNDetection } from "../types/detections";
 import { pickBlockSize } from "../utils/decodeTimestampBurnin";
 import {
   isBBDetection,
@@ -14,43 +14,13 @@ import {
   renderZone,
 } from "../utils/renderDetections";
 
-const VIOLATION_SNAPSHOT_QUALITY = 0.85;
-
-const X_AXIS_DIRECTIONS = new Set(["LEFT_TO_RIGHT", "RIGHT_TO_LEFT"]);
-
-/**
- * Signed distance of the bbox center from the configured zone center,
- * measured along the zone's axis. Returns null when the bbox center is
- * outside the zone — the caller treats that as "don't buffer this frame"
- * so post-exit sticky-violation frames don't get considered for the
- * picture.
- *
- * Used to pick the *closest-to-center* in-zone frame as the saved
- * picture: each new in-zone frame replaces the buffered blob only if its
- * absolute distance to zoneCenter is smaller than the buffered distance.
- */
-function inZoneDistance(
-  coords: [number, number, number, number],
-  direction: string,
-  center: number,
-  thickness: number,
-): number | null {
-  const cx = (coords[0] + coords[2]) / 2;
-  const cy = (coords[1] + coords[3]) / 2;
-  const half = thickness / 2;
-  const lo = Math.max(0, center - half);
-  const hi = Math.min(1, center + half);
-  const coord = X_AXIS_DIRECTIONS.has(direction) ? cx : cy;
-  if (coord < lo || coord > hi) return null;
-  return Math.abs(coord - center);
-}
-
 export interface UseSyncedRendererOptions {
   enabled?: boolean;
   displayMode?: DetectionDisplayMode;
   multiLimitMode?: MultiLimitDisplayMode;
   hiddenLabelIds?: Set<number>;
   zoneVisible?: boolean;
+  overlayScale?: number;
 }
 
 export interface UseSyncedRendererReturn {
@@ -64,29 +34,37 @@ function prepareDetectionForRender(
 ): NNDetection | null {
   if (displayMode === "all") return detection;
 
+  const effectiveSev =
+    isBBDetection(detection)
+      ? (detection.severity ??
+        (detection.violations?.some((v) => v.severity === "ALERT")
+          ? "ALERT"
+          : detection.violations?.some((v) => v.severity === "WARNING")
+            ? "WARNING"
+            : undefined))
+      : undefined;
+
   if (displayMode === "detections_only") {
-    if (isBBDetection(detection) && detection.violations?.length)
-      return { ...detection, violations: [] };
+    if (effectiveSev)
+      return { ...detection, violations: [], role: undefined, severity: undefined };
     return detection;
   }
 
-  if (!isBBDetection(detection) || !detection.violations?.length) return null;
+  // "violations_only" and "alerts": only pass highlighted detections.
+  if (!isBBDetection(detection) || !effectiveSev) return null;
 
-  let violations: DetectionViolation[];
-  if (displayMode === "alerts") {
-    violations = detection.violations.filter((v) => v.severity === "ALERT");
-    if (violations.length === 0) return null;
-  } else {
-    violations = detection.violations;
-  }
+  if (displayMode === "alerts" && effectiveSev !== "ALERT") return null;
 
-  if (multiLimitMode === "highest") {
+  // multiLimitMode "highest": collapse the parent's violations list to the
+  // single highest-severity entry. No-op for children (no violations).
+  if (multiLimitMode === "highest" && detection.violations?.length) {
+    const violations = detection.violations;
     const highest =
       violations.find((v) => v.severity === "ALERT") ?? violations[0];
-    violations = [highest];
+    return { ...detection, violations: [highest] };
   }
 
-  return { ...detection, violations };
+  return detection;
 }
 
 /**
@@ -102,11 +80,11 @@ export const useSyncedRenderer = ({
   multiLimitMode = "highest",
   hiddenLabelIds,
   zoneVisible = true,
+  overlayScale = 1,
 }: UseSyncedRendererOptions): UseSyncedRendererReturn => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
-  const { subscribeSyncedFrames, setDisplayCanvas, bufferViolationFrame } =
-    useCameraStream();
+  const { subscribeSyncedFrames } = useCameraStream();
 
   // Keep latest options in a ref so the subscriber callback always sees
   // current values without resubscribing every render.
@@ -115,20 +93,15 @@ export const useSyncedRenderer = ({
     multiLimitMode,
     hiddenLabelIds,
     zoneVisible,
+    overlayScale,
   });
   optsRef.current = {
     displayMode,
     multiLimitMode,
     hiddenLabelIds,
     zoneVisible,
+    overlayScale,
   };
-
-  // Expose the canvas to the provider so it can snapshot it for
-  // violation pictures.
-  useEffect(() => {
-    setDisplayCanvas(canvasRef.current);
-    return () => setDisplayCanvas(null);
-  }, [setDisplayCanvas]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -181,6 +154,8 @@ export const useSyncedRenderer = ({
 
       const labels = window.DASHBOARD_CONFIG.labels || [];
       const opts = optsRef.current;
+      const cssWidth = canvas.clientWidth || canvas.width;
+      const scale = (canvas.width / cssWidth) * (opts.overlayScale ?? 1);
 
       offCtx.drawImage(synced.bitmap, 0, 0);
 
@@ -210,8 +185,8 @@ export const useSyncedRenderer = ({
           opts.multiLimitMode,
         );
         if (!prepared) continue;
-        renderBBoxDetection(offCtx, labels, prepared);
-        renderClassificationDetection(offCtx, labels, prepared);
+        renderBBoxDetection(offCtx, labels, prepared, scale);
+        renderClassificationDetection(offCtx, labels, prepared, scale);
       }
 
       if (opts.zoneVisible) {
@@ -220,59 +195,19 @@ export const useSyncedRenderer = ({
           window.DASHBOARD_CONFIG.zoneDirection,
           window.DASHBOARD_CONFIG.zoneCenter,
           window.DASHBOARD_CONFIG.zoneThickness,
+          scale,
         );
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(offscreen, 0, 0);
 
-      // Snapshot the just-painted matched frame for any tracker the live
-      // overlay is flagging as violating *and* whose bbox center is still
-      // inside the configured zone. Each entry carries the tracker's
-      // distance from zoneCenter so the provider can keep the
-      // closest-to-center frame across the dwell — that's the moment the
-      // object is best framed for the saved picture, while still also
-      // implicitly excluding post-exit sticky-violation frames (the
-      // distance is null once the bbox center crosses the zone boundary).
-      const dashCfg = window.DASHBOARD_CONFIG;
-      const violatingEntries: { trackerId: number; distance: number }[] = [];
-      for (const detection of synced.detections.detections) {
-        if (
-          !isBBDetection(detection) ||
-          detection.tracking_id === undefined ||
-          !detection.violations ||
-          detection.violations.length === 0
-        ) {
-          continue;
-        }
-        const distance = inZoneDistance(
-          detection.coords,
-          dashCfg.zoneDirection,
-          dashCfg.zoneCenter,
-          dashCfg.zoneThickness,
-        );
-        if (distance === null) continue;
-        violatingEntries.push({
-          trackerId: detection.tracking_id,
-          distance,
-        });
-      }
-      if (violatingEntries.length > 0) {
-        canvas.toBlob(
-          (blob) => {
-            if (blob) bufferViolationFrame(violatingEntries, blob);
-          },
-          "image/jpeg",
-          VIOLATION_SNAPSHOT_QUALITY,
-        );
-      }
-
       synced.bitmap.close();
       synced.detections.maskBitmap?.close?.();
     });
 
     return unsubscribe;
-  }, [enabled, subscribeSyncedFrames, bufferViolationFrame]);
+  }, [enabled, subscribeSyncedFrames]);
 
   return { canvasRef };
 };

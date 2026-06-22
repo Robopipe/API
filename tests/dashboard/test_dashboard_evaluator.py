@@ -2,6 +2,7 @@ from robopipe_api.dashboard.evaluators import DashboardEvaluator
 from robopipe_api.dashboard.line_crossing import LineCrossingTracker
 from robopipe_api.dashboard.threshold_tracker import ThresholdTracker
 from robopipe_api.models.dashboard.eval_models import (
+    EvalLimitItemEdge,
     EvalLimitItemParameter,
     EvalLogicOperatorValue,
     EvalTestCaseType,
@@ -133,7 +134,8 @@ class TestDashboardEvaluator:
         )
         pos_limit = make_limit(
             limit_id="lim-pos",
-            limit_items=[make_limit_item(EvalLimitItemParameter.POS_LEFT, limit_from=30, limit_to=70)],
+            limit_items=[make_limit_item(EvalLimitItemParameter.POSITION, limit_from=30, limit_to=70,
+                                         parent_edge=EvalLimitItemEdge.LEFT)],
         )
         tc = make_test_case(
             tc_type=EvalTestCaseType.DEFECT,

@@ -5,7 +5,7 @@ from robopipe_api.dashboard.geometry import (
     compute_position_pct,
     value_within_limits,
 )
-from robopipe_api.models.dashboard.eval_models import EvalLimitItemParameter
+from robopipe_api.models.dashboard.eval_models import EvalLimitItemEdge
 
 
 class TestBboxArea:
@@ -55,71 +55,71 @@ class TestComputePositionPct:
     def test_pos_left_center(self):
         # center at (0.5, 0.5) in full frame → 50% from left
         pct = compute_position_pct(
-            (0.4, 0.4, 0.6, 0.6), self.FULL_FRAME, EvalLimitItemParameter.POS_LEFT
+            (0.4, 0.4, 0.6, 0.6), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.LEFT
         )
         assert pct == pytest.approx(50.0)
 
     def test_pos_right_center(self):
         pct = compute_position_pct(
-            (0.4, 0.4, 0.6, 0.6), self.FULL_FRAME, EvalLimitItemParameter.POS_RIGHT
+            (0.4, 0.4, 0.6, 0.6), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.RIGHT
         )
         assert pct == pytest.approx(50.0)
 
     def test_pos_left_at_quarter(self):
         # center at (0.25, 0.5) → 25% from left
         pct = compute_position_pct(
-            (0.15, 0.4, 0.35, 0.6), self.FULL_FRAME, EvalLimitItemParameter.POS_LEFT
+            (0.15, 0.4, 0.35, 0.6), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.LEFT
         )
         assert pct == pytest.approx(25.0)
 
     def test_pos_right_at_quarter_from_right(self):
         # center at (0.75, 0.5) → 25% from right
         pct = compute_position_pct(
-            (0.65, 0.4, 0.85, 0.6), self.FULL_FRAME, EvalLimitItemParameter.POS_RIGHT
+            (0.65, 0.4, 0.85, 0.6), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.RIGHT
         )
         assert pct == pytest.approx(25.0)
 
     def test_pos_top(self):
         # center at (0.5, 0.3) → 30% from top
         pct = compute_position_pct(
-            (0.4, 0.2, 0.6, 0.4), self.FULL_FRAME, EvalLimitItemParameter.POS_TOP
+            (0.4, 0.2, 0.6, 0.4), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.TOP
         )
         assert pct == pytest.approx(30.0)
 
     def test_pos_bottom(self):
         # center at (0.5, 0.7) → 30% from bottom
         pct = compute_position_pct(
-            (0.4, 0.6, 0.6, 0.8), self.FULL_FRAME, EvalLimitItemParameter.POS_BOTTOM
+            (0.4, 0.6, 0.6, 0.8), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.BOTTOM
         )
         assert pct == pytest.approx(30.0)
 
     def test_pos_center_at_origin(self):
         # center at (0.5, 0.5) in full frame → 0% from center
         pct = compute_position_pct(
-            (0.4, 0.4, 0.6, 0.6), self.FULL_FRAME, EvalLimitItemParameter.POS_CENTER
+            (0.4, 0.4, 0.6, 0.6), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.CENTER
         )
         assert pct == pytest.approx(0.0)
 
     def test_pos_center_at_corner(self):
-        # center at (1.0, 1.0) in full frame → 100% from center
+        # center at (0.95, 0.95) in full frame → 90% off-center
         pct = compute_position_pct(
-            (0.9, 0.9, 1.0, 1.0), self.FULL_FRAME, EvalLimitItemParameter.POS_CENTER
+            (0.9, 0.9, 1.0, 1.0), self.FULL_FRAME, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.CENTER
         )
         assert pct == pytest.approx(90.0)
 
     def test_within_parent_bbox(self):
-        # Parent bbox: (0.2, 0.2, 0.8, 0.8) → width/height = 0.6
-        # Detection center at (0.5, 0.5) → POS_LEFT = (0.5-0.2)/0.6*100 = 50%
+        # Parent bbox: (0.2, 0.2, 0.8, 0.8) → width = 0.6
+        # Detection center at (0.5, 0.5) → |0.5-0.2|/0.6*100 = 50%
         parent = (0.2, 0.2, 0.8, 0.8)
         pct = compute_position_pct(
-            (0.4, 0.4, 0.6, 0.6), parent, EvalLimitItemParameter.POS_LEFT
+            (0.4, 0.4, 0.6, 0.6), parent, EvalLimitItemEdge.CENTER, EvalLimitItemEdge.LEFT
         )
         assert pct == pytest.approx(50.0)
 
     def test_zero_dimension_returns_zero(self):
         pct = compute_position_pct(
             (0.5, 0.5, 0.6, 0.6), (0.5, 0.0, 0.5, 1.0),  # zero width
-            EvalLimitItemParameter.POS_LEFT,
+            EvalLimitItemEdge.CENTER, EvalLimitItemEdge.LEFT,
         )
         assert pct == 0.0
 

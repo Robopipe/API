@@ -16,7 +16,7 @@ export function DisplayModeSelector<T extends string>({
           key={value}
           onClick={() => onChange(value)}
           title={label}
-          className={`px-2 py-0.5 rounded text-xs transition-colors ${
+          className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
             selected === value
               ? "bg-blue-600 text-white"
               : "bg-gray-700 text-gray-400 hover:text-white"

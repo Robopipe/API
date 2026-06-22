@@ -89,6 +89,7 @@ class EventsStore:
         test_case_name: str,
         passed: bool,
         violated_limits: list[dict] | None = None,
+        picture_url: str | None = None,
     ) -> int:
         """Persist a single test-case verdict at zone-exit commit.
 
@@ -114,10 +115,16 @@ class EventsStore:
             cursor = conn.execute(
                 """
                 INSERT INTO dashboard_evaluation_event
-                    (dashboard_run_session_id, test_case_id, test_case_name, passed)
-                VALUES (?, ?, ?, ?)
+                    (dashboard_run_session_id, test_case_id, test_case_name, passed, picture_url)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (session_id, test_case_id, test_case_name, 1 if passed else 0),
+                (
+                    session_id,
+                    test_case_id,
+                    test_case_name,
+                    1 if passed else 0,
+                    picture_url,
+                ),
             )
             event_id = cursor.lastrowid
             if violated_limits:

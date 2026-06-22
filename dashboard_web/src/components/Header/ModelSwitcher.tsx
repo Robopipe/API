@@ -116,7 +116,7 @@ export const ModelSwitcher = () => {
   return (
     <>
       <button
-        className="py-3 px-3 md:px-4 bg-gray-700 rounded-xl flex items-center gap-2 shrink-0"
+        className="py-3 px-3 md:px-4 bg-gray-700 rounded-xl flex items-center gap-2 shrink-0 cursor-pointer"
         onClick={() => setOpen((prev) => !prev)}
         title="Switch model"
       >

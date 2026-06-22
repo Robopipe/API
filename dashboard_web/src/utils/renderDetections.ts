@@ -10,6 +10,7 @@ export type DetectionRenderer = (
   ctx: CanvasRenderingContext2D,
   labels: Label[],
   detection: NNDetection,
+  scale?: number,
 ) => void;
 
 export const isBBDetection = (
@@ -33,46 +34,53 @@ const WARNING_BORDER = "#d6da18";
 const WARNING_FILL = "rgba(244,120,137,0.15)";
 const WARNING_LABEL_BG = "#dce91d";
 
-const drawAlertTriangle = (
+/**
+ * Word-wrap `text` to `maxWidth` pixels using the current canvas font.
+ * Splits on spaces first; hard-breaks any token that is still too wide.
+ * Returns an array of lines.
+ */
+const wrapText = (
   ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  radius: number,
-) => {
-  ctx.save();
-
-  // Circular semi-transparent background
-  ctx.fillStyle = "rgba(215,39,77,0.32)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Triangle
-  const triSize = radius * 0.9;
-  const triHeight = triSize * 0.866;
-  const triCy = cy + triSize * 0.08;
-  ctx.fillStyle = "#d7274d";
-  ctx.beginPath();
-  ctx.moveTo(cx, triCy - triHeight * 0.6);
-  ctx.lineTo(cx + triSize * 0.5, triCy + triHeight * 0.4);
-  ctx.lineTo(cx - triSize * 0.5, triCy + triHeight * 0.4);
-  ctx.closePath();
-  ctx.fill();
-
-  // Exclamation mark
-  ctx.fillStyle = "#fff";
-  ctx.font = `bold ${triSize * 0.55}px Inter`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("!", cx, triCy + triHeight * 0.02);
-
-  ctx.restore();
+  text: string,
+  maxWidth: number,
+): string[] => {
+  const lines: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    const words = paragraph.split(" ");
+    let current = "";
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        current = candidate;
+      } else {
+        if (current) lines.push(current);
+        // Hard-break a single word that is wider than maxWidth
+        if (ctx.measureText(word).width > maxWidth) {
+          let chunk = "";
+          for (const ch of word) {
+            if (ctx.measureText(chunk + ch).width > maxWidth) {
+              lines.push(chunk);
+              chunk = ch;
+            } else {
+              chunk += ch;
+            }
+          }
+          current = chunk;
+        } else {
+          current = word;
+        }
+      }
+    }
+    if (current) lines.push(current);
+  }
+  return lines.length ? lines : [""];
 };
 
 export const renderBBoxDetection: DetectionRenderer = (
   ctx,
   labels,
   detection,
+  scale = 1,
 ) => {
   if (!isBBDetection(detection)) return;
   const label = labels[detection.label];
@@ -86,63 +94,96 @@ export const renderBBoxDetection: DetectionRenderer = (
   ];
 
   const violations = detection.violations;
-  const isAlert = violations?.some((v) => v.severity === "ALERT");
-  const isWarning =
-    !isAlert && violations?.some((v) => v.severity === "WARNING");
+  const sev =
+    detection.severity ??
+    (violations?.some((v) => v.severity === "ALERT")
+      ? "ALERT"
+      : violations?.some((v) => v.severity === "WARNING")
+        ? "WARNING"
+        : undefined);
+  const isAlert = sev === "ALERT";
+  const isWarning = sev === "WARNING";
+  const isHighlighted = isAlert || isWarning;
+  // Parent-case child: inside a violating parent, carries no violations entry.
+  // These keep their label color while the parent box shows the severity color.
+  const isParentCaseChild = detection.role === "child" && !violations?.length;
 
-  const borderColor = isAlert
-    ? ALERT_BORDER
-    : isWarning
-      ? WARNING_BORDER
-      : label.color;
-  const fillColor = isAlert
-    ? ALERT_FILL
-    : isWarning
-      ? WARNING_FILL
-      : `${label.color}33`;
-  const labelBg = isAlert
-    ? ALERT_LABEL_BG
-    : isWarning
-      ? WARNING_LABEL_BG
-      : label.color;
-  const labelTextColor = isWarning ? "rgba(0,0,0,0.9)" : "#fff";
+  const borderColor =
+    isParentCaseChild || !isHighlighted
+      ? label.color
+      : isAlert
+        ? ALERT_BORDER
+        : WARNING_BORDER;
+  const fillColor =
+    isParentCaseChild || !isHighlighted
+      ? `${label.color}33`
+      : isAlert
+        ? ALERT_FILL
+        : WARNING_FILL;
+  const labelBg =
+    isParentCaseChild || !isHighlighted
+      ? label.color
+      : isAlert
+        ? ALERT_LABEL_BG
+        : WARNING_LABEL_BG;
+  const labelTextColor =
+    !isParentCaseChild && isWarning ? "rgba(0,0,0,0.9)" : "#fff";
+
+  // No ID prefix on highlighted boxes.
   const idPrefix =
-    isBBDetection(detection) && detection.display_id != null
+    !isHighlighted && detection.display_id != null
       ? `#${detection.display_id} `
       : "";
-  const text = violations?.length
-    ? `${idPrefix}${violations.map((v) => v.limit_name).join(", ")}`
-    : `${idPrefix}${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
-  const font = violations?.length
-    ? "500 12px 'Space Grotesk', Inter, sans-serif"
-    : "14px Inter";
+
+  // Build label text by role:
+  //   parent  → limit names (one per line, filtered by multiLimitMode upstream)
+  //   child   → label name (no confidence)
+  //   plain   → label name + confidence
+  let rawText: string;
+  if (detection.role === "parent" && violations?.length) {
+    rawText = violations.map((v) => v.limit_name).join("\n");
+  } else if (isHighlighted) {
+    rawText = label.name;
+  } else {
+    rawText = `${idPrefix}${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
+  }
+
+  const font = isHighlighted
+    ? `500 ${Math.round(12 * scale)}px 'Space Grotesk', Inter, sans-serif`
+    : `${Math.round(14 * scale)}px Inter`;
 
   // Rectangle
   ctx.strokeStyle = borderColor;
   ctx.fillStyle = fillColor;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = scale;
   ctx.strokeRect(x, y, w, h);
   ctx.fillRect(x, y, w, h);
 
-  // Text label above the bounding box
+  // Text label above the bounding box.
+  // Parent: one limit name per line, no word-wrap within a name.
+  // Others: word-wrap to box width.
   ctx.font = font;
-  const textWidth = ctx.measureText(text).width;
-  const textHeight = 16;
-  const padding = violations?.length ? 8 : 2;
-  ctx.fillStyle = labelBg;
-  ctx.fillRect(
-    x - 1,
-    y - textHeight - (violations?.length ? 5 : 0),
-    textWidth + padding * 2,
-    textHeight + (violations?.length ? 4 : 0),
-  );
-  ctx.fillStyle = labelTextColor;
-  ctx.fillText(text, x - 1 + padding, y - (violations?.length ? 7 : 4));
+  const lineHeight = 16 * scale;
+  const padding = (isHighlighted ? 8 : 2) * scale;
+  const maxLineWidth = Math.max(w, 140 * scale);
+  const textLines =
+    detection.role === "parent"
+      ? rawText.split("\n")
+      : wrapText(ctx, rawText, maxLineWidth);
+  const numLines = textLines.length;
+  const labelWidth =
+    Math.max(...textLines.map((l) => ctx.measureText(l).width)) + padding * 2;
+  const labelHeight = lineHeight * numLines + (isHighlighted ? 4 * scale : 0);
 
-  // Alert triangle
-  if (isAlert) {
-    const triangleRadius = Math.min(24, h * 0.25);
-    drawAlertTriangle(ctx, x - triangleRadius - 8, y + h / 2, triangleRadius);
+  ctx.fillStyle = labelBg;
+  ctx.fillRect(x - scale, y - labelHeight, labelWidth, labelHeight);
+  ctx.fillStyle = labelTextColor;
+  for (let i = 0; i < numLines; i++) {
+    ctx.fillText(
+      textLines[i],
+      x - scale + padding,
+      y - labelHeight + lineHeight * (i + 1) - (isHighlighted ? 5 * scale : 4 * scale),
+    );
   }
 };
 
@@ -150,13 +191,14 @@ export const renderClassificationDetection: DetectionRenderer = (
   ctx,
   labels,
   detection,
+  scale = 1,
 ) => {
   if (!isClassificationDetection(detection)) return;
   const label = labels[detection.label];
   const text = `${label.name} (${(detection.confidence * 100).toFixed(1)}%)`;
-  ctx.font = "16px Inter";
+  ctx.font = `${Math.round(16 * scale)}px Inter`;
   ctx.fillStyle = label.color;
-  ctx.fillText(text, 10, 20);
+  ctx.fillText(text, 10 * scale, 20 * scale);
 };
 
 /**
@@ -274,6 +316,7 @@ export const renderZone = (
   direction: DashboardZoneDirection,
   center: number,
   thickness: number,
+  scale = 1,
 ) => {
   const { width, height } = ctx.canvas;
   const lo = Math.max(0, center - thickness / 2);
@@ -281,8 +324,8 @@ export const renderZone = (
 
   ctx.save();
   ctx.strokeStyle = "#ff0000";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([10, 5]);
+  ctx.lineWidth = 2 * scale;
+  ctx.setLineDash([10 * scale, 5 * scale]);
 
   const isXAxis =
     direction === DashboardZoneDirection.LeftToRight ||

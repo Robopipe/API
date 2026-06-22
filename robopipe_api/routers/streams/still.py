@@ -20,4 +20,4 @@ from . import JpegResponse, stream_router
 async def capture_still_image(sensor: SensorDep) -> JpegResponse:
     img = await anyio.to_thread.run_sync(sensor.capture_still)
 
-    return JpegResponse(img.getData().tobytes())
+    return JpegResponse(img)

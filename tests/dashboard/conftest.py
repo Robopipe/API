@@ -3,12 +3,12 @@ import pytest
 from robopipe_api.models.dashboard.label import Label
 from robopipe_api.models.dashboard.dashboard_config import (
     DashboardConfig,
-    DashboardLineDirection,
-    DashboardLineFlow,
+    DashboardZoneDirection,
 )
 from robopipe_api.models.dashboard.eval_models import (
     EvalLimit,
     EvalLimitItem,
+    EvalLimitItemEdge,
     EvalLimitItemOperator,
     EvalLimitItemParameter,
     EvalLimitItemQuantifierType,
@@ -68,6 +68,8 @@ def make_limit_item(
     quantifier_type: EvalLimitItemQuantifierType = EvalLimitItemQuantifierType.EXACT,
     quantifier_unit: EvalLimitItemQuantifierUnit = EvalLimitItemQuantifierUnit.PERCENT,
     quantifier_value: int = 100,
+    target_edge: EvalLimitItemEdge = EvalLimitItemEdge.CENTER,
+    parent_edge: EvalLimitItemEdge = EvalLimitItemEdge.CENTER,
 ) -> EvalLimitItem:
     return EvalLimitItem(
         id=item_id,
@@ -78,6 +80,8 @@ def make_limit_item(
         quantifierType=quantifier_type,
         quantifierUnit=quantifier_unit,
         quantifierValue=quantifier_value,
+        targetEdge=target_edge,
+        parentEdge=parent_edge,
     )
 
 
@@ -116,9 +120,9 @@ def make_test_case(
 def make_config(
     test_cases: list[EvalTestCase] | None = None,
     labels: list[Label] | None = None,
-    line_direction: DashboardLineDirection = DashboardLineDirection.HORIZONTAL,
-    line_position: float = 0.5,
-    line_flow: DashboardLineFlow = DashboardLineFlow.POSITIVE,
+    zone_direction: DashboardZoneDirection = DashboardZoneDirection.LeftToRight,
+    zone_center: float = 0.5,
+    zone_thickness: float = 0.1,
     config_id: int = 1,
     debounce_frames: int = 1,
     max_match_distance: float = 1.0,
@@ -128,9 +132,9 @@ def make_config(
         name="Test config",
         projectId=1,
         projectName="Test project",
-        lineDirection=line_direction,
-        linePosition=line_position,
-        lineFlow=line_flow,
+        zoneDirection=zone_direction,
+        zoneCenter=zone_center,
+        zoneThickness=zone_thickness,
         debounceFrames=debounce_frames,
         maxMatchDistance=max_match_distance,
         testCases=test_cases or [],

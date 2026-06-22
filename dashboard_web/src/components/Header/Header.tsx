@@ -83,7 +83,7 @@ export const Header = () => {
     <header className="flex justify-stretch items-center mb-4 gap-2">
       <button
         className={
-          "py-3 px-6 rounded-xl" +
+          "py-3 px-6 rounded-xl cursor-pointer" +
           (running ? " bg-red-500/80" : " bg-emerald-500/80")
         }
         onClick={toggleRunning}
@@ -108,7 +108,7 @@ export const Header = () => {
             {TIMER_LABEL_OPTIONS.map((option) => (
               <button
                 key={option.value}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
                   labelDisplay === option.value
                     ? "bg-emerald-500/20 text-emerald-400"
                     : "text-gray-300 hover:bg-gray-700"
@@ -125,7 +125,7 @@ export const Header = () => {
       {settingsUnlocked && (
         <>
           <button
-            className="p-3 rounded-xl transition-colors bg-white/5 text-gray-400 hover:text-white"
+            className="p-3 rounded-xl transition-colors bg-white/5 text-gray-400 hover:text-white cursor-pointer"
             onClick={() => setSettingsOpen(true)}
             title="Dashboard Settings"
           >
@@ -140,7 +140,7 @@ export const Header = () => {
       {wakeLock.supported && (
         <button
           className={
-            "p-3 rounded-xl transition-colors bg-white/5" +
+            "p-3 rounded-xl transition-colors bg-white/5 cursor-pointer" +
             (wakeLock.enabled
               ? " text-emerald-400 hover:text-emerald-300"
               : " text-gray-400 hover:text-white")
