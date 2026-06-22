@@ -70,7 +70,7 @@ export const MasterWidget = ({
         <button
           onClick={onToggleVisible}
           className="absolute w-5 h-5 rounded-full bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white flex items-center justify-center transition-colors z-10 cursor-pointer"
-          style={{ top: -4, left: `calc(50% + ${masterSize / 2 - 6}px)` }}
+          style={{ top: 0, left: `calc(50% + ${masterSize / 2 - 6}px)` }}
         >
           <CloseIcon />
         </button>
