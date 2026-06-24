@@ -66,6 +66,16 @@ export const ModelSelectModal = () => {
         setDeploying(false);
         return;
       }
+      window.parent.postMessage(
+        {
+          type: "MODEL_DEPLOYED",
+          data: {
+            mxid: window.DASHBOARD_CONFIG.mxid,
+            streamName: window.DASHBOARD_CONFIG.streamName,
+          },
+        },
+        "*",
+      );
       window.location.reload();
     } catch {
       setError("Connection error");
@@ -80,9 +90,12 @@ export const ModelSelectModal = () => {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-white">Select a model</h2>
+            <h2 className="text-lg font-semibold text-white">
+              Select a configuration
+            </h2>
             <p className="text-sm text-gray-400 mt-0.5">
-              The camera was restarted. Pick a model to deploy and continue.
+              The camera was restarted. Pick a configuration to deploy and
+              continue.
             </p>
           </div>
         </div>
@@ -131,7 +144,8 @@ export const ModelSelectModal = () => {
 
               {configs.length === 0 && (
                 <p className="text-gray-400 text-center py-8 text-sm">
-                  No stored configurations found. Deploy a dashboard from Studio first.
+                  No stored configurations found. Deploy a dashboard from Studio
+                  first.
                 </p>
               )}
             </div>
