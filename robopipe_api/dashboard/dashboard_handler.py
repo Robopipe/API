@@ -10,13 +10,17 @@ from ..models.dashboard.user_settings import (
 from ..models.detection.bbox_detection import BBoxDetection
 from ..models.detection.detection import BaseNNDetections
 from .evaluators import DashboardEvaluator, EvaluationResult
+from .product_monitor import ProductMonitor
 from .zone_tracker import ZoneTracker
 from .threshold_tracker import ThresholdTracker
 from .events_store import events_store_factory
 
 _zone_tracker = ZoneTracker()
 _threshold_tracker = ThresholdTracker()
-_dashboard_evaluator = DashboardEvaluator(_zone_tracker, _threshold_tracker)
+_product_monitor = ProductMonitor()
+_dashboard_evaluator = DashboardEvaluator(
+    _zone_tracker, _threshold_tracker, _product_monitor
+)
 
 # Mirror in Studio: apps/web/src/modules/run/utils/dashboardUnlock.ts
 def compute_settings_unlock(mxid: str, stream_name: str) -> str:
@@ -182,10 +186,36 @@ def handle_detections(
     events_store = events_store_factory()
     result["counters"] = events_store.get_counters(dashboard_run_session_id)
 
+    product_match = _product_monitor.status(dashboard_config)
+    if product_match is not None:
+        result["product_match"] = product_match
+
     return result
+
+
+def maybe_auto_stop_product_switch(sensor) -> None:
+    """Stop the run when a product-switch alarm countdown expired uncancelled.
+
+    Runs on every WS producer tick. claim_auto_stop returns the alarm
+    timestamp exactly once, so concurrent producer ticks and a racing cancel
+    endpoint can't double-stop or resurrect a claimed alarm.
+    """
+    config = sensor.dashboard_config
+    session_id = sensor.dashboard_run_session_id
+    if config is None or session_id is None:
+        return
+    alarm_time = _product_monitor.claim_auto_stop(config.id)
+    if alarm_time is None:
+        return
+    events_store_factory().end_session(
+        session_id, "product_switch_auto_stop", alarm_time
+    )
+    sensor.dashboard_run_session_id = None
+    _product_monitor.reset(config.id)
 
 
 def reset_zone_tracking(config_id: int) -> None:
     """Reset zone tracking and threshold state for a config (called on dashboard start)."""
     _dashboard_evaluator.reset(config_id)
     _threshold_tracker.reset(config_id)
+    _product_monitor.reset(config_id)

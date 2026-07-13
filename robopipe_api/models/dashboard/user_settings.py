@@ -43,6 +43,13 @@ TUNING_OVERRIDE_FIELDS: tuple[str, ...] = (
     "measurementNoiseSize",
     "initialVarPos",
     "initialVarVel",
+    "productCheckEnabled",
+    "productCheckCalibrationCount",
+    "productCheckWindowSize",
+    "productCheckDivergenceThreshold",
+    "productCheckSnoozeCommits",
+    "productCheckSnoozeSeconds",
+    "productCheckStarvationMultiplier",
 )
 
 
@@ -76,6 +83,13 @@ class DashboardUserSettings(BaseModel):
     measurementNoiseSize: float | None = Field(None, gt=0.0)
     initialVarPos: float | None = Field(None, gt=0.0)
     initialVarVel: float | None = Field(None, gt=0.0)
+    productCheckEnabled: bool | None = None
+    productCheckCalibrationCount: int | None = Field(None, ge=5, le=500)
+    productCheckWindowSize: int | None = Field(None, ge=5, le=200)
+    productCheckDivergenceThreshold: float | None = Field(None, gt=0.0, le=1.0)
+    productCheckSnoozeCommits: int | None = Field(None, ge=1, le=1000)
+    productCheckSnoozeSeconds: float | None = Field(None, gt=0.0)
+    productCheckStarvationMultiplier: float | None = Field(None, gt=1.0)
 
     @field_validator("labelConfidenceThresholds")
     @classmethod

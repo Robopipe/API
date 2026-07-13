@@ -62,6 +62,15 @@ class DashboardConfig(BaseModel):
     measurementNoiseSize: float = Field(default=0.01, gt=0.0)
     initialVarPos: float = Field(default=0.01, gt=0.0)
     initialVarVel: float = Field(default=1.0, gt=0.0)
+    # Product-switch monitoring. Effective only when the PRODUCT_CHECK_ENABLED
+    # env flag is on; productCheckEnabled then opts a single dashboard out.
+    productCheckEnabled: bool = True
+    productCheckCalibrationCount: int = Field(default=30, ge=5, le=500)
+    productCheckWindowSize: int = Field(default=20, ge=5, le=200)
+    productCheckDivergenceThreshold: float = Field(default=0.35, gt=0.0, le=1.0)
+    productCheckSnoozeCommits: int = Field(default=30, ge=1, le=1000)
+    productCheckSnoozeSeconds: float = Field(default=120.0, gt=0.0)
+    productCheckStarvationMultiplier: float = Field(default=10.0, gt=1.0)
     testCases: list[EvalTestCase] = []
     thresholds: list[EvalThreshold] = []
     labels: list[Label] = []
@@ -89,6 +98,13 @@ class DashboardConfigUpdate(BaseModel):
     measurementNoiseSize: float | None = Field(None, gt=0.0)
     initialVarPos: float | None = Field(None, gt=0.0)
     initialVarVel: float | None = Field(None, gt=0.0)
+    productCheckEnabled: bool | None = None
+    productCheckCalibrationCount: int | None = Field(None, ge=5, le=500)
+    productCheckWindowSize: int | None = Field(None, ge=5, le=200)
+    productCheckDivergenceThreshold: float | None = Field(None, gt=0.0, le=1.0)
+    productCheckSnoozeCommits: int | None = Field(None, ge=1, le=1000)
+    productCheckSnoozeSeconds: float | None = Field(None, gt=0.0)
+    productCheckStarvationMultiplier: float | None = Field(None, gt=1.0)
 
     _validate_label_thresholds = field_validator("labelConfidenceThresholds")(
         _validate_label_confidence_thresholds

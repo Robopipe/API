@@ -236,8 +236,10 @@ class TestReduceVerdict:
     CHECK (clean = limit satisfied) or DEFECT (clean = limit NOT satisfied)."""
 
     def _evaluator(self):
-        # _reduce_verdict is pure — the tracker args are unused.
-        return DashboardEvaluator(zone_tracker=None, threshold_tracker=None)
+        # _reduce_verdict is pure — the tracker/monitor args are unused.
+        return DashboardEvaluator(
+            zone_tracker=None, threshold_tracker=None, product_monitor=None
+        )
 
     def test_check_optimistic_any_satisfied_frame_wins(self):
         ev = self._evaluator()

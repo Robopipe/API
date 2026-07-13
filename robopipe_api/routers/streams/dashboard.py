@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Literal
 
 import anyio.to_thread
 from bs4 import BeautifulSoup
@@ -8,12 +9,14 @@ from fastapi.responses import HTMLResponse, Response
 
 from robopipe_api.dashboard.config_store import config_store_factory
 from robopipe_api.dashboard.dashboard_handler import (
+    _product_monitor,
     _threshold_tracker,
     apply_tuning_overrides,
     compute_settings_unlock,
     reset_zone_tracking,
 )
 from robopipe_api.dashboard.events_store import events_store_factory
+from robopipe_api.dashboard.product_monitor import product_check_enabled
 
 from ...models.dashboard.dashboard_config import DashboardConfigUpdate
 from ...models.dashboard.detection_event import DetectionEvent
@@ -99,6 +102,10 @@ def serve_dashboard(
             "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
             "running": sensor.dashboard_run_session_id is not None,
             "runningSince": running_since,
+            # Effective value: env feature flag AND per-dashboard opt-in, so
+            # the frontend can hide the product-check UI before the first WS
+            # tick arrives.
+            "productCheckEnabled": product_check_enabled(sensor.dashboard_config),
             "hasMultipleConfigs": has_multiple,
             "awaitingModel": sensor.nn_config is None,
             "userSettings": user_settings.model_dump(),
@@ -185,6 +192,13 @@ def get_dashboard_config_params(sensor: SensorDep):
         "debounceFrames": sensor.dashboard_config.debounceFrames,
         "maxMissingFrames": sensor.dashboard_config.maxMissingFrames,
         "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
+        "productCheckEnabled": sensor.dashboard_config.productCheckEnabled,
+        "productCheckCalibrationCount": sensor.dashboard_config.productCheckCalibrationCount,
+        "productCheckWindowSize": sensor.dashboard_config.productCheckWindowSize,
+        "productCheckDivergenceThreshold": sensor.dashboard_config.productCheckDivergenceThreshold,
+        "productCheckSnoozeCommits": sensor.dashboard_config.productCheckSnoozeCommits,
+        "productCheckSnoozeSeconds": sensor.dashboard_config.productCheckSnoozeSeconds,
+        "productCheckStarvationMultiplier": sensor.dashboard_config.productCheckStarvationMultiplier,
     }
 
 
@@ -217,12 +231,24 @@ def update_dashboard_config(
     # _dashboard_run_session_id and _active_config_id
     sensor._dashboard_config = updated
 
+    # Tuning changes shift the detection statistics the product-switch
+    # baseline was learned from, so a running monitor must relearn it.
+    if sensor.dashboard_run_session_id is not None:
+        _product_monitor.recalibrate(config_id)
+
     return {
         "confidenceThreshold": updated.confidenceThreshold,
         "labelConfidenceThresholds": updated.labelConfidenceThresholds,
         "debounceFrames": updated.debounceFrames,
         "maxMissingFrames": updated.maxMissingFrames,
         "maxMatchDistance": updated.maxMatchDistance,
+        "productCheckEnabled": updated.productCheckEnabled,
+        "productCheckCalibrationCount": updated.productCheckCalibrationCount,
+        "productCheckWindowSize": updated.productCheckWindowSize,
+        "productCheckDivergenceThreshold": updated.productCheckDivergenceThreshold,
+        "productCheckSnoozeCommits": updated.productCheckSnoozeCommits,
+        "productCheckSnoozeSeconds": updated.productCheckSnoozeSeconds,
+        "productCheckStarvationMultiplier": updated.productCheckStarvationMultiplier,
     }
 
 
@@ -340,15 +366,66 @@ def start_dashboard(sensor: SensorDep, events_store: EventsStoreDep):
 
 
 @stream_router.post("/dashboard/stop")
-def stop_dashboard(sensor: SensorDep, events_store: EventsStoreDep):
+def stop_dashboard(
+    sensor: SensorDep,
+    events_store: EventsStoreDep,
+    reason: Literal["manual", "product_switch_confirmed"] = "manual",
+):
     if sensor.dashboard_config is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No dashboard configured for this stream",
         )
-    events_store.end_session(sensor.dashboard_run_session_id)
+    config_id = sensor.dashboard_config.id
+    alarm_time = (
+        _product_monitor.get_alarm_time(config_id)
+        if reason == "product_switch_confirmed"
+        else None
+    )
+    events_store.end_session(sensor.dashboard_run_session_id, reason, alarm_time)
     sensor.dashboard_run_session_id = None
+    _product_monitor.reset(config_id)
     return {"running": False}
+
+
+@stream_router.post("/dashboard/product-check/cancel")
+def cancel_product_switch_alarm(sensor: SensorDep):
+    """Dismiss the product-switch alarm modal: evaluation resumes and the
+    alarm snoozes before re-arming. Any connected client may cancel; the
+    first action (cancel vs. auto-stop) wins."""
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+    if sensor.dashboard_run_session_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dashboard is not running",
+        )
+    if not _product_monitor.cancel_alarm(sensor.dashboard_config):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No active product-switch alarm",
+        )
+    return {"state": "snoozed"}
+
+
+@stream_router.post("/dashboard/product-check/recalibrate")
+def recalibrate_product_check(sensor: SensorDep):
+    """Relearn the product baseline from the next products on the line."""
+    if sensor.dashboard_config is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No dashboard configured for this stream",
+        )
+    if sensor.dashboard_run_session_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dashboard is not running",
+        )
+    _product_monitor.recalibrate(sensor.dashboard_config.id)
+    return {"state": "calibrating"}
 
 
 @stream_router.get("/dashboard/metrics")

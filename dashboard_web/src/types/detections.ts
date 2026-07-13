@@ -45,6 +45,38 @@ export interface ThresholdTestCaseStatus {
 
 export type ThresholdStatus = Record<string, ThresholdTestCaseStatus>;
 
+export type ProductMatchState =
+  | "calibrating"
+  | "ok"
+  | "starved"
+  | "mismatch"
+  | "snoozed";
+
+/** Product-switch monitor status; present only when the feature is enabled
+ * and a run is active. */
+export interface ProductMatchStatus {
+  state: ProductMatchState;
+  /** calibrating only */
+  calibrated?: number;
+  calibration_target?: number;
+  /** post-calibration; null until the judgment window is full */
+  score?: number | null;
+  threshold?: number;
+  /** mismatch only — absolute wall-clock deadline of the auto-stop */
+  deadline_epoch_ms?: number;
+  /** mismatch only — server-computed remaining seconds (skew-free) */
+  deadline_in_s?: number;
+  /**
+   * Client-side only (not on the wire): skew-corrected deadline in local
+   * epoch ms, anchored once per alarm by useProductMatch so the rendered
+   * countdown never jitters with per-message network latency.
+   */
+  deadlineAtMs?: number;
+  /** snoozed only */
+  snooze_remaining_commits?: number;
+  snooze_remaining_s?: number;
+}
+
 export type NNDetections = {
   detections: NNDetection[];
   /**
@@ -65,6 +97,12 @@ export type NNDetections = {
   threshold_status?: ThresholdStatus;
   master_threshold_status?: ThresholdTestCaseStatus;
   counters?: Record<string, number>;
+  product_match?: ProductMatchStatus;
+  /**
+   * Whether a dashboard run is active on the backend. Flipping to false
+   * mid-stream signals a backend-initiated stop (product-switch auto-stop).
+   */
+  running?: boolean;
   /**
    * DepthAI sequence number. Stable per session, but parser nodes may
    * renumber — prefer `ts_us` for matching.

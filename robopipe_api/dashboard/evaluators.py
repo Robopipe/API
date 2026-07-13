@@ -14,6 +14,7 @@ from .geometry import (
     value_within_limits,
 )
 from .picture_renderer import Highlight, HighlightRole, hex_to_bgr, render_violation_picture
+from .product_monitor import ProductMonitor
 from .threshold_tracker import ThresholdTracker
 from .zone_tracker import ZoneTracker, expected_entry_side, expected_exit_side
 
@@ -732,9 +733,11 @@ class DashboardEvaluator:
         self,
         zone_tracker: ZoneTracker,
         threshold_tracker: ThresholdTracker,
+        product_monitor: ProductMonitor,
     ) -> None:
         self._tracker = zone_tracker
         self._threshold_tracker = threshold_tracker
+        self._product_monitor = product_monitor
         # config_id -> tracker_id -> test_case_id -> {
         #   "limits": {limit_id: {"pass": int, "fail": int}},
         #   "last_violation": list[EvaluationResult] | None,
@@ -1184,6 +1187,10 @@ class DashboardEvaluator:
         ``event_pictures/`` before persisting the event.
         """
         events_store = events_store_factory()
+        # While the product-switch alarm is active, verdict commits, counters
+        # and threshold samples pause (they would describe the wrong product);
+        # tracking and the live overlay continue so state can't leak.
+        suspended = self._product_monitor.is_suspended(config.id)
         zr = self._tracker.find_in_zone_detections(detections, config)
 
         expected_in = expected_entry_side(config.zoneDirection)
@@ -1216,8 +1223,11 @@ class DashboardEvaluator:
                 continue
             label = config.labels[det.label]
             cfg_tracker_labels.setdefault(tid, (label.id, label.name))
+            self._product_monitor.observe_dwell_confidence(
+                config, tid, det.confidence
+            )
 
-        if config.countMode == DashboardCountMode.ON_CONFIRM:
+        if config.countMode == DashboardCountMode.ON_CONFIRM and not suspended:
             # Counter ticks the frame a tracker is confirmed by Kalman,
             # regardless of zone presence.
             for _display_id, label_int in zr.just_confirmed:
@@ -1447,15 +1457,26 @@ class DashboardEvaluator:
                 # stops emitting until it validly re-enters the zone.
                 cfg_locks.pop(tid, None)
                 entered_validly.discard(tid)
+                self._product_monitor.discard_dwell(config, tid)
                 continue
             if (
                 config.countMode == DashboardCountMode.ON_ZONE_ENTER
                 and tr_label is not None
+                and not suspended
             ):
                 label_id, label_name = tr_label
                 events_store.inc_counter(
                     dashboard_run_session_id, label_id, label_name
                 )
+            # The product-throughput commit is test-case independent: every
+            # clean traversal feeds the monitor, whether or not samples exist.
+            if tr_label is not None:
+                if suspended:
+                    self._product_monitor.discard_dwell(config, tid)
+                else:
+                    self._product_monitor.observe_commit(
+                        config, tid, tr_label[0]
+                    )
             if tr_samples is None:
                 continue
             committed.add(tid)
@@ -1466,6 +1487,8 @@ class DashboardEvaluator:
                 tr_locks = cfg_locks.setdefault(tid, {})
                 for limit_id, info in tr_pending.items():
                     tr_locks.setdefault(limit_id, info)
+            if suspended:
+                continue
             # Sample the commit (zone-exit) frame so the saved picture is a
             # frame that contributed to the verdict.
             commit_det_idx = next(

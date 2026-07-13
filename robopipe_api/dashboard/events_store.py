@@ -54,11 +54,20 @@ class EventsStore:
             ).fetchone()
             return row[0] if row else None
 
-    def end_session(self, session_id: int) -> None:
+    def end_session(
+        self,
+        session_id: int,
+        end_reason: str = "manual",
+        product_alarm_time: str | None = None,
+    ) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "UPDATE dashboard_run_session SET end_time = CURRENT_TIMESTAMP WHERE id = ?",
-                (session_id,),
+                """
+                UPDATE dashboard_run_session
+                SET end_time = CURRENT_TIMESTAMP, end_reason = ?, product_alarm_time = ?
+                WHERE id = ?
+                """,
+                (end_reason, product_alarm_time, session_id),
             )
 
     def inc_counter(

@@ -5,7 +5,10 @@ import time
 import depthai as dai
 from fastapi import UploadFile, WebSocket, status
 
-from robopipe_api.dashboard.dashboard_handler import handle_detections
+from robopipe_api.dashboard.dashboard_handler import (
+    handle_detections,
+    maybe_auto_stop_product_switch,
+)
 
 from ..common import (
     CameraDep,
@@ -123,6 +126,13 @@ async def get_sensor_detections(
         )
         result["seq"] = seq
         result["ts_us"] = ts_us
+        # Backend-owned product-switch countdown: enforced here because
+        # evaluation (and thus the alarm) only advances while a producer
+        # ticks. `running` flipping false is how clients learn the run was
+        # auto-stopped.
+        maybe_auto_stop_product_switch(sensor)
+        if sensor.dashboard_config is not None:
+            result["running"] = sensor.dashboard_run_session_id is not None
 
         throttle_hz = nn_config.throttle_hz
         if throttle_hz and throttle_hz > 0:

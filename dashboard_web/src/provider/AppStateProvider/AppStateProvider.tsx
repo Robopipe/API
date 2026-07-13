@@ -10,6 +10,9 @@ export interface AppState {
   running: boolean;
   runningSince: Date | null;
   toggleRunning?: () => void;
+  /** Sync run state reported by the backend (e.g. product-switch auto-stop)
+   * without issuing a start/stop request. */
+  setRunning: (next: boolean) => void;
   testCaseMap: Record<string, TestCase>;
   displayMode: DetectionDisplayMode;
   setDisplayMode: (mode: DetectionDisplayMode) => void;
@@ -30,6 +33,7 @@ const noop = () => {};
 const appState = createContext<AppState>({
   running: false,
   runningSince: null,
+  setRunning: noop,
   testCaseMap: {},
   displayMode: "all",
   setDisplayMode: noop,
@@ -71,6 +75,7 @@ export const AppStateProvider = ({
       running,
       runningSince:
         running && runningSince ? new Date(runningSince + "Z") : null,
+      setRunning: noop,
       testCaseMap,
       displayMode: settings.displayMode,
       setDisplayMode: noop,
@@ -122,6 +127,17 @@ export const AppStateProvider = ({
     setState((prev) => ({ ...prev, overlayScale: scale }));
   }, []);
 
+  const setRunning = useCallback((next: boolean) => {
+    setState((prev) => {
+      if (prev.running === next) return prev;
+      return {
+        ...prev,
+        running: next,
+        runningSince: next ? new Date() : null,
+      };
+    });
+  }, []);
+
   const toggleRunning = async () => {
     const nextRunning = !state.running;
     const endpoint = nextRunning ? "start" : "stop";
@@ -148,6 +164,7 @@ export const AppStateProvider = ({
       value={{
         ...state,
         toggleRunning,
+        setRunning,
         setDisplayMode,
         setMultiLimitMode,
         toggleLabelVisibility,

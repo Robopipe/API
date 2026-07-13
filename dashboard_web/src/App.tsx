@@ -3,6 +3,10 @@ import { updateUserSettings } from "./api/userSettings";
 import { ModelSelectModal } from "./components/Header/ModelSelectModal";
 import { LiveStream } from "./components/LiveStream";
 import { NoConfigError } from "./components/NoConfigError";
+import {
+  ProductCheckBanner,
+  ProductSwitchModal,
+} from "./components/ProductCheck";
 import { Widgets } from "./components/Widgets";
 import {
   AppStateProvider,
@@ -36,6 +40,12 @@ function App() {
             />
           </main>
           {window.DASHBOARD_CONFIG.awaitingModel && <ModelSelectModal />}
+          {window.DASHBOARD_CONFIG.productCheckEnabled && (
+            <>
+              <ProductCheckBanner />
+              <ProductSwitchModal />
+            </>
+          )}
         </CameraStreamProvider>
       </AppStateProvider>
     </SettingsLockProvider>
