@@ -63,7 +63,7 @@ class TestCalibration:
         assert st.baseline.share == {1: 0.6, 2: 0.4}
         assert st.baseline.mean_conf == {1: pytest.approx(0.9), 2: pytest.approx(0.9)}
         assert st.baseline.anchor_label_id == 1
-        assert st.baseline.median_interval_s == pytest.approx(1.0)
+        assert st.baseline.typical_interval_s == pytest.approx(1.0)
         assert len(st.window) == 5  # seeded with the calibration commits
         assert st.calib == []
 
@@ -107,7 +107,7 @@ class TestScoring:
             share=share,
             mean_conf=mean_conf or {},
             anchor_label_id=anchor,
-            median_interval_s=1.0,
+            typical_interval_s=1.0,
         )
 
     def test_steady_mix_scores_zero(self):
@@ -289,6 +289,34 @@ class TestStarvation:
 
         commit(m, config, 1, now=15.0)
         assert m.status(config, now=15.5)["state"] == "ok"
+
+    def test_bursty_commits_do_not_false_starve(self):
+        """One product commits all its labels within a fraction of a second;
+        the watchdog must scale with the gap BETWEEN those bursts, not the
+        near-zero gaps inside them (regression: median-of-all-gaps made the
+        banner fire during every normal between-product pause)."""
+        m, config = ProductMonitor(), pc_config()
+        times = [0.0, 0.05, 0.1, 2.0, 2.1]  # two products, ~2s cadence
+        for label, t in zip([1, 2, 2, 1, 2], times):
+            commit(m, config, label, now=t)
+
+        st = m._runs[config.id]
+        assert st.baseline.typical_interval_s == pytest.approx(1.9)
+
+        # An ordinary between-product gap stays quiet…
+        assert m.status(config, now=2.1 + 5.0)["state"] == "ok"
+        # …only ~multiplier × product cadence goes starved.
+        assert m.status(config, now=2.1 + 19.1)["state"] == "starved"
+
+    def test_starvation_timeout_has_floor(self):
+        m, config = ProductMonitor(), pc_config()
+        for i in range(5):  # very fast line: commits every 0.1s
+            commit(m, config, 1, now=i * 0.1)
+
+        # multiplier 10 × 0.1s = 1s would flash constantly; the 10s floor
+        # keeps the banner quiet until the pause is meaningfully long.
+        assert m.status(config, now=0.4 + 5.0)["state"] == "ok"
+        assert m.status(config, now=0.4 + 10.1)["state"] == "starved"
 
     def test_mismatch_takes_precedence_over_starved(self):
         m, config = ProductMonitor(), pc_config()

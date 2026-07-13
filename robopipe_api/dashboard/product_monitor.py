@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import math
 import os
-import statistics
 import threading
 import time
 from collections import Counter, deque
@@ -12,6 +12,11 @@ from ..models.dashboard.dashboard_config import DashboardConfig
 
 # Countdown between the mismatch alarm firing and the automatic run stop.
 ALARM_COUNTDOWN_S = 10.0
+
+# The starvation timeout is multiplier × typical inter-product interval, but
+# never below this floor — on very fast lines a scaled timeout of a couple of
+# seconds would flash the banner in every ordinary gap between products.
+STARVATION_MIN_TIMEOUT_S = 10.0
 
 # Labels whose commit share (baseline and window alike) stays below this get
 # proportionally down-weighted in the mix divergence, so a label that is rare
@@ -32,7 +37,10 @@ class _Baseline:
     share: dict[int, float]  # label_id -> share of calibration commits
     mean_conf: dict[int, float]  # label_id -> mean dwell confidence
     anchor_label_id: int  # most-committed label during calibration
-    median_interval_s: float | None  # None disables the starvation watchdog
+    # Estimated gap between consecutive products (not consecutive commits —
+    # one product commits all its labels in a burst). None disables the
+    # starvation watchdog.
+    typical_interval_s: float | None
 
 
 @dataclass
@@ -57,7 +65,7 @@ class ProductMonitor:
     """Detects a product switch from the model's own output statistics.
 
     Learns a per-run baseline (label commit shares, per-label mean dwell
-    confidence, median inter-commit interval) from the first
+    confidence, typical inter-product interval) from the first
     productCheckCalibrationCount clean zone-exit commits, then scores a
     sliding window of the last productCheckWindowSize commits against it.
     Sustained divergence raises a mismatch alarm with a backend-owned
@@ -265,6 +273,15 @@ class ProductMonitor:
         intervals = [
             b - a for a, b in zip(st.calib_times, st.calib_times[1:])
         ]
+        # One product commits all its labels in a burst, so most gaps measure
+        # within-burst spacing (~0). A high percentile skips the burst noise
+        # and lands on the between-product gap — the cadence the starvation
+        # watchdog should scale with.
+        if len(intervals) >= 2:
+            ranked = sorted(intervals)
+            typical = ranked[math.ceil(0.9 * (len(ranked) - 1))]
+        else:
+            typical = None
         st.baseline = _Baseline(
             share={label: count / n for label, count in counts.items()},
             mean_conf={
@@ -273,9 +290,7 @@ class ProductMonitor:
             },
             # Ties break toward the smaller label id for determinism.
             anchor_label_id=max(counts.items(), key=lambda kv: (kv[1], -kv[0]))[0],
-            median_interval_s=(
-                statistics.median(intervals) if len(intervals) >= 2 else None
-            ),
+            typical_interval_s=typical,
         )
         st.window.extend(st.calib[-st.window.maxlen :])
         st.calib = []
@@ -333,11 +348,15 @@ class ProductMonitor:
     def _is_starved(
         st: _RunState, config: DashboardConfig, now: float
     ) -> bool:
-        return (
-            st.baseline is not None
-            and st.baseline.median_interval_s is not None
-            and st.last_commit_mono is not None
-            and now - st.last_commit_mono
-            > config.productCheckStarvationMultiplier
-            * st.baseline.median_interval_s
+        if (
+            st.baseline is None
+            or st.baseline.typical_interval_s is None
+            or st.last_commit_mono is None
+        ):
+            return False
+        timeout = max(
+            config.productCheckStarvationMultiplier
+            * st.baseline.typical_interval_s,
+            STARVATION_MIN_TIMEOUT_S,
         )
+        return now - st.last_commit_mono > timeout
