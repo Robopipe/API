@@ -5,6 +5,12 @@ import type { SyncedFrame } from "../../utils/frameMatcher";
 export interface CameraStreamSnapshot {
   mediaStream: MediaStream | null;
   isStreaming: boolean;
+  /**
+   * True while a previously working video connection is down and the
+   * provider is auto-renegotiating. Detections may still be flowing —
+   * the two transports fail independently.
+   */
+  isReconnecting: boolean;
   streamError: string | null;
   replayEnded: boolean;
   detections: NNDetections;

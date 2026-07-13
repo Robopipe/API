@@ -22,7 +22,8 @@ export const VideoStream = () => {
     zoneVisible,
     overlayScale,
   } = useAppState();
-  const { isStreaming, error, replayEnded } = useWebRTCStream();
+  const { isStreaming, isReconnecting, error, replayEnded } =
+    useWebRTCStream();
   const { canvasRef } = useSyncedRenderer({
     displayMode,
     multiLimitMode,
@@ -77,15 +78,33 @@ export const VideoStream = () => {
       <div className="relative bg-gray-950 rounded-md overflow-hidden aspect-square">
         <canvas ref={canvasRef} className="absolute left-0 w-full" />
         {(!isStreaming || replayEnded) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+          <div
+            className={
+              "absolute inset-0 flex flex-col items-center justify-center gap-3 z-10" +
+              // Dim the last rendered frame (still on the canvas below) so
+              // it reads as stale context, not live video.
+              (isReconnecting && !replayEnded ? " bg-gray-950/70" : "")
+            }
+          >
             {replayEnded ? (
               <span className="text-red-500 text-sm">Replay finished</span>
-            ) : error ? (
-              <span className="text-red-400 text-sm">{error}</span>
+            ) : isReconnecting ? (
+              <>
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
+                <span className="text-gray-200 text-sm">
+                  Video connection lost — reconnecting…
+                </span>
+                <span className="text-gray-400 text-xs">
+                  Detection data is still live
+                </span>
+              </>
             ) : (
               <>
                 <div className="w-8 h-8 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
                 <span className="text-gray-400 text-sm">Connecting...</span>
+                {error && (
+                  <span className="text-gray-500 text-xs">{error}</span>
+                )}
               </>
             )}
           </div>

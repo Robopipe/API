@@ -28,8 +28,20 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const ICE_GATHERING_TIMEOUT_MS = 5000;
-const DETECTIONS_RECONNECT_DELAY_MS = 3000;
-const DETECTIONS_MAX_RECONNECT_ATTEMPTS = 10;
+// Shared reconnect policy for both the WebRTC video and the detections WS:
+// retry forever with capped exponential backoff. Dashboards run unattended,
+// so both transports must self-heal after outages of any length.
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 15000;
+// ICE "disconnected" is often transient and recovers on its own; only
+// renegotiate if it doesn't return to "connected" within the grace period.
+const DISCONNECTED_GRACE_MS = 4000;
+// No new decoded video frame for this long while the peer connection still
+// reports "connected" → treat as a silent stall and renegotiate.
+const VIDEO_STARVATION_TIMEOUT_MS = 5000;
+
+const reconnectDelayMs = (attempt: number) =>
+  Math.min(RECONNECT_BASE_DELAY_MS * 2 ** attempt, RECONNECT_MAX_DELAY_MS);
 
 export interface CameraStreamProviderProps {
   children: ReactNode;
@@ -48,6 +60,7 @@ export const CameraStreamProvider = ({
 
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [replayEnded, setReplayEnded] = useState(false);
 
@@ -60,6 +73,14 @@ export const CameraStreamProvider = ({
   const subscribersRef = useRef<Set<(d: NNDetections) => void>>(new Set());
   const syncedSubscribersRef = useRef<Set<(s: SyncedFrame) => void>>(new Set());
   const matcherRef = useRef<FrameMatcher | null>(null);
+  // Mirror of `replayEnded` readable from timers/handlers in the WebRTC
+  // effect without stale-closure issues. A finished replay must gate every
+  // reconnect path: the backend closes the pc after EOF, and renegotiating
+  // would restart the replay in a loop.
+  const replayEndedRef = useRef(false);
+  // Stamped by the capture loop on every decoded frame; read by the
+  // starvation watchdog in the WebRTC effect.
+  const lastFrameAtRef = useRef(0);
 
   const subscribeDetections = useCallback((cb: (d: NNDetections) => void) => {
     subscribersRef.current.add(cb);
@@ -79,8 +100,47 @@ export const CameraStreamProvider = ({
   useEffect(() => {
     let cancelled = false;
     let peer: RTCPeerConnection | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let graceTimeout: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    // Distinguishes the initial "Connecting..." state from a lost
+    // connection ("reconnecting", dimmed last frame) in the UI.
+    let hasConnectedOnce = false;
 
-    const init = async () => {
+    replayEndedRef.current = false;
+    setReplayEnded(false);
+
+    const clearGraceTimer = () => {
+      if (graceTimeout) {
+        clearTimeout(graceTimeout);
+        graceTimeout = null;
+      }
+    };
+
+    const teardownPeer = () => {
+      clearGraceTimer();
+      if (peer) {
+        peer.close();
+        peer = null;
+      }
+      setMediaStream(null);
+      setIsStreaming(false);
+    };
+
+    const scheduleReconnect = () => {
+      if (cancelled || replayEndedRef.current || reconnectTimeout) return;
+      teardownPeer();
+      if (hasConnectedOnce) setIsReconnecting(true);
+      const delay = reconnectDelayMs(attempts);
+      attempts += 1;
+      reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null;
+        void connect();
+      }, delay);
+    };
+
+    const connect = async () => {
+      if (cancelled || replayEndedRef.current) return;
       try {
         setStreamError(null);
         const pc = new RTCPeerConnection({
@@ -88,24 +148,29 @@ export const CameraStreamProvider = ({
           iceTransportPolicy: "all",
         });
         peer = pc;
-        setReplayEnded(false);
         pc.addTransceiver("video", { direction: "recvonly" });
 
         const eventsChannel = pc.createDataChannel("events");
         eventsChannel.onmessage = (ev) => {
           try {
             const msg = JSON.parse(ev.data as string);
-            if (msg.event === "eof") setReplayEnded(true);
+            if (msg.event === "eof") {
+              replayEndedRef.current = true;
+              setReplayEnded(true);
+            }
           } catch {
             // ignore malformed messages
           }
         };
 
         pc.addEventListener("track", (event) => {
-          if (cancelled) return;
+          if (cancelled || peer !== pc) return;
           const incoming = event.streams[0] ?? null;
           setMediaStream(incoming);
           setIsStreaming(true);
+          setIsReconnecting(false);
+          hasConnectedOnce = true;
+          lastFrameAtRef.current = performance.now();
         });
 
         const iceCandidates: RTCIceCandidate[] = [];
@@ -114,15 +179,31 @@ export const CameraStreamProvider = ({
         });
 
         pc.addEventListener("connectionstatechange", () => {
-          if (cancelled) return;
-          if (
-            pc.connectionState === "failed" ||
-            pc.connectionState === "disconnected"
-          ) {
-            setIsStreaming(false);
-            setStreamError("Connection lost");
-          } else if (pc.connectionState === "connected") {
+          if (cancelled || peer !== pc) return;
+          if (pc.connectionState === "connected") {
+            attempts = 0;
+            hasConnectedOnce = true;
+            clearGraceTimer();
             setIsStreaming(true);
+            setIsReconnecting(false);
+            setStreamError(null);
+            lastFrameAtRef.current = performance.now();
+          } else if (
+            pc.connectionState === "failed" ||
+            pc.connectionState === "closed"
+          ) {
+            setStreamError("Connection lost");
+            scheduleReconnect();
+          } else if (pc.connectionState === "disconnected") {
+            if (!graceTimeout) {
+              graceTimeout = setTimeout(() => {
+                graceTimeout = null;
+                if (peer === pc && pc.connectionState === "disconnected") {
+                  setStreamError("Connection lost");
+                  scheduleReconnect();
+                }
+              }, DISCONNECTED_GRACE_MS);
+            }
           }
         });
 
@@ -142,7 +223,7 @@ export const CameraStreamProvider = ({
           check();
         });
 
-        if (cancelled) return;
+        if (cancelled || peer !== pc) return;
 
         const offerUrl = `${apiBase}/video`;
         const response = await fetch(offerUrl, {
@@ -164,7 +245,7 @@ export const CameraStreamProvider = ({
           );
         }
         const answerData = await response.json();
-        if (cancelled) return;
+        if (cancelled || peer !== pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(answerData));
 
         if (Array.isArray(answerData.candidates)) {
@@ -182,16 +263,42 @@ export const CameraStreamProvider = ({
         setStreamError(message);
         setIsStreaming(false);
         console.error("WebRTC error:", err);
+        scheduleReconnect();
       }
     };
 
-    init();
+    // Catches streams that freeze while the peer connection still reports
+    // "connected" (encoder death, backend video queue stall) — no
+    // connection state event fires for those.
+    const watchdog = setInterval(() => {
+      if (cancelled || replayEndedRef.current) return;
+      if (document.hidden) {
+        // rVFC throttles in background tabs; keep the stamp fresh so
+        // returning to the tab doesn't look like starvation.
+        lastFrameAtRef.current = performance.now();
+        return;
+      }
+      if (!peer || peer.connectionState !== "connected") return;
+      if (
+        performance.now() - lastFrameAtRef.current >
+        VIDEO_STARVATION_TIMEOUT_MS
+      ) {
+        setStreamError("Video stalled");
+        scheduleReconnect();
+      }
+    }, 1000);
+
+    void connect();
 
     return () => {
       cancelled = true;
+      clearInterval(watchdog);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      clearGraceTimer();
       if (peer) peer.close();
       setMediaStream(null);
       setIsStreaming(false);
+      setIsReconnecting(false);
     };
   }, [apiBase]);
 
@@ -264,6 +371,7 @@ export const CameraStreamProvider = ({
 
     const onFrame: VideoFrameRequestCallback = () => {
       if (cancelled) return;
+      lastFrameAtRef.current = performance.now();
       const w = video.videoWidth;
       const h = video.videoHeight;
       if (w === 0 || h === 0) {
@@ -461,17 +569,12 @@ export const CameraStreamProvider = ({
           if (cancelled) return;
           setIsDetectionsConnected(false);
           ws = null;
-          if (reconnectAttempts < DETECTIONS_MAX_RECONNECT_ATTEMPTS) {
-            reconnectAttempts += 1;
-            reconnectTimeout = setTimeout(
-              connect,
-              DETECTIONS_RECONNECT_DELAY_MS,
-            );
-          } else {
-            setDetectionsError(
-              "Connection lost. Max reconnect attempts reached.",
-            );
-          }
+          // Same policy as the WebRTC effect: retry forever so the
+          // dashboard recovers from arbitrarily long backend outages
+          // without a page reload.
+          const delay = reconnectDelayMs(reconnectAttempts);
+          reconnectAttempts += 1;
+          reconnectTimeout = setTimeout(connect, delay);
         };
       } catch (err) {
         setDetectionsError(
@@ -494,6 +597,7 @@ export const CameraStreamProvider = ({
   const value: CameraStreamContextValue = {
     mediaStream,
     isStreaming,
+    isReconnecting,
     streamError,
     replayEnded,
     detections,

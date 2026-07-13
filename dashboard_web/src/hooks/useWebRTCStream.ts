@@ -5,6 +5,7 @@ export interface UseWebRTCStreamReturn {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   mediaStream: MediaStream | null;
   isStreaming: boolean;
+  isReconnecting: boolean;
   error: string | null;
   replayEnded: boolean;
 }
@@ -15,7 +16,8 @@ export interface UseWebRTCStreamReturn {
  * runs its own off-DOM video for sync capture.
  */
 export const useWebRTCStream = (): UseWebRTCStreamReturn => {
-  const { mediaStream, isStreaming, streamError, replayEnded } = useCameraStream();
+  const { mediaStream, isStreaming, isReconnecting, streamError, replayEnded } =
+    useCameraStream();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export const useWebRTCStream = (): UseWebRTCStreamReturn => {
     videoRef,
     mediaStream,
     isStreaming,
+    isReconnecting,
     error: streamError,
     replayEnded,
   };
