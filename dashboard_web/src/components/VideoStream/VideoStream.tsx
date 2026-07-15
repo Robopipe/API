@@ -94,9 +94,6 @@ export const VideoStream = () => {
                 <span className="text-gray-200 text-sm">
                   Video connection lost — reconnecting…
                 </span>
-                <span className="text-gray-400 text-xs">
-                  Detection data is still live
-                </span>
               </>
             ) : (
               <>
