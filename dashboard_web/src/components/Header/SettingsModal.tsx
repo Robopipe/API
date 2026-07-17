@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useAppState } from "../../provider";
 import { DisplayTab } from "./DisplayTab";
+import { PRODUCT_CHECK_FIELDS } from "./productCheckFields";
+import { ProductCheckTab } from "./ProductCheckTab";
 
-interface SettingsField {
+export interface SettingsField {
   key: string;
   label: string;
   description: string;
@@ -50,16 +53,18 @@ const FIELDS: SettingsField[] = [
 ];
 
 type Values = Record<string, number>;
-type TabKey = "display" | "parameters";
+type TabKey = "display" | "parameters" | "productCheck";
+
+const NUMERIC_FIELDS = [...FIELDS, ...PRODUCT_CHECK_FIELDS];
 
 function loadCurrentValues(): Values {
   const cfg = window.DASHBOARD_CONFIG;
-  return {
-    confidenceThreshold: cfg.confidenceThreshold,
-    debounceFrames: cfg.debounceFrames,
-    maxMissingFrames: cfg.maxMissingFrames,
-    maxMatchDistance: cfg.maxMatchDistance,
-  };
+  return Object.fromEntries(
+    NUMERIC_FIELDS.map((f) => [
+      f.key,
+      cfg[f.key as keyof typeof cfg] as number,
+    ]),
+  );
 }
 
 const ParametersTab = ({
@@ -97,16 +102,20 @@ export const SettingsModal = ({
   open: boolean;
   onClose: () => void;
 }) => {
+  const { productCheckEnabled, setProductCheckEnabled } = useAppState();
   const [activeTab, setActiveTab] = useState<TabKey>("display");
   const [values, setValues] = useState<Values>(loadCurrentValues);
+  const [pcEnabled, setPcEnabled] = useState(productCheckEnabled);
   const [saving, setSaving] = useState(false);
   const backdropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
       setValues(loadCurrentValues());
+      setPcEnabled(productCheckEnabled);
       setActiveTab("display");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -127,7 +136,7 @@ export const SettingsModal = ({
     }
   };
 
-  const isValid = FIELDS.every((f) => {
+  const isValid = NUMERIC_FIELDS.every((f) => {
     const v = values[f.key];
     return v !== undefined && v >= f.min && v <= f.max;
   });
@@ -140,7 +149,7 @@ export const SettingsModal = ({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify({ ...values, productCheckEnabled: pcEnabled }),
         },
       );
       if (!res.ok) {
@@ -148,10 +157,12 @@ export const SettingsModal = ({
         throw new Error(detail);
       }
       const updated = await res.json();
-      window.DASHBOARD_CONFIG.confidenceThreshold = updated.confidenceThreshold;
-      window.DASHBOARD_CONFIG.debounceFrames = updated.debounceFrames;
-      window.DASHBOARD_CONFIG.maxMissingFrames = updated.maxMissingFrames;
-      window.DASHBOARD_CONFIG.maxMatchDistance = updated.maxMatchDistance;
+      for (const field of NUMERIC_FIELDS) {
+        (window.DASHBOARD_CONFIG as unknown as Values)[field.key] =
+          updated[field.key];
+      }
+      window.DASHBOARD_CONFIG.productCheckEnabled = updated.productCheckEnabled;
+      setProductCheckEnabled(updated.productCheckEnabled);
       toast.success("Settings updated");
       onClose();
     } catch (err) {
@@ -202,13 +213,26 @@ export const SettingsModal = ({
           >
             Parameters
           </button>
+          <button
+            className={tabButtonClass("productCheck")}
+            onClick={() => setActiveTab("productCheck")}
+          >
+            Product check
+          </button>
         </div>
 
         <div className="px-6 py-5 overflow-y-auto">
           {activeTab === "display" ? (
             <DisplayTab />
-          ) : (
+          ) : activeTab === "parameters" ? (
             <ParametersTab values={values} onChange={handleChange} />
+          ) : (
+            <ProductCheckTab
+              values={values}
+              onChange={handleChange}
+              enabled={pcEnabled}
+              onEnabledChange={setPcEnabled}
+            />
           )}
         </div>
 

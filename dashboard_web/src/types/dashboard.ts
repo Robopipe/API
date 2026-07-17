@@ -79,8 +79,15 @@ export interface DashboardConfig {
   maxMatchDistance: number;
   running: boolean;
   runningSince: string | null;
-  /** Effective product-switch monitoring state (env flag AND config opt-in). */
+  /** Per-dashboard product-switch monitoring opt-in. */
   productCheckEnabled: boolean;
+  productCheckAlarmSeconds: number;
+  productCheckCalibrationCount: number;
+  productCheckWindowSize: number;
+  productCheckDivergenceThreshold: number;
+  productCheckSnoozeCommits: number;
+  productCheckSnoozeSeconds: number;
+  productCheckStarvationMultiplier: number;
   hasMultipleConfigs: boolean;
   awaitingModel: boolean;
   userSettings: UserSettings;

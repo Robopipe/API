@@ -63,6 +63,21 @@ const AlarmDialog = ({
   const expired = remainingMs !== null && remainingMs <= 0;
   const apiBase = window.DASHBOARD_CONFIG.apiBase;
 
+  // One visual state for "stop in progress", whether the operator clicked
+  // Stop or the countdown ran out: bar full, label "Stopping…".
+  const stopping = busy === "stop" || expired;
+  const totalMs =
+    typeof status.total_in_s === "number" && status.total_in_s > 0
+      ? status.total_in_s * 1000
+      : null;
+  // Without a total (older backend) the bar stays empty; the label still
+  // counts down.
+  const fillFraction = stopping
+    ? 1
+    : totalMs !== null && remainingMs !== null
+      ? Math.min(1, Math.max(0, 1 - remainingMs / totalMs))
+      : 0;
+
   const handleStop = async () => {
     if (busy) return;
     setBusy("stop");
@@ -110,27 +125,13 @@ const AlarmDialog = ({
             </h2>
             <p className="text-sm text-gray-400 mt-0.5">
               The detections no longer match the product this model was deployed
-              for. Evaluation is paused — counters and reports are not
-              recording.
+              for. Evaluation is paused — the run stops automatically unless
+              you cancel.
             </p>
           </div>
         </div>
 
-        <div className="px-6 py-5 flex flex-col gap-4">
-          <p className="text-sm text-gray-300">
-            {expired ? (
-              "Stopping the run…"
-            ) : (
-              <>
-                The run will stop automatically in{" "}
-                <span className="font-mono font-semibold text-red-400">
-                  {secondsLeft}s
-                </span>
-                .
-              </>
-            )}
-          </p>
-
+        <div className="px-6 py-5">
           <div className="flex gap-2 justify-end">
             <button
               className="py-2.5 px-5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default"
@@ -139,12 +140,28 @@ const AlarmDialog = ({
             >
               {busy === "cancel" ? "Resuming…" : "Cancel"}
             </button>
+            {/* Loading button: the fill grows toward 100%, at which point the
+                backend auto-stop fires — clicking it just stops now. */}
             <button
-              className="py-2.5 px-5 rounded-xl bg-red-500/80 hover:bg-red-500 text-white cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default"
+              className="relative overflow-hidden py-2.5 px-5 rounded-xl bg-red-500/30 hover:bg-red-500/40 text-white cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default"
               onClick={handleStop}
               disabled={busy !== null || expired}
             >
-              {busy === "stop" ? "Stopping…" : "Stop run"}
+              <span
+                aria-hidden
+                className="absolute inset-y-0 left-0 bg-red-500/80 transition-[width] duration-300 ease-linear"
+                style={{ width: `${fillFraction * 100}%` }}
+              />
+              <span className="relative">
+                {stopping ? (
+                  "Stopping…"
+                ) : (
+                  <>
+                    Stop run ·{" "}
+                    <span className="tabular-nums">{secondsLeft}s</span>
+                  </>
+                )}
+              </span>
             </button>
           </div>
         </div>

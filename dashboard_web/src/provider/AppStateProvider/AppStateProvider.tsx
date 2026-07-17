@@ -26,6 +26,11 @@ export interface AppState {
   setSelectedLabelId: (labelId: number) => void;
   overlayScale: number;
   setOverlayScale: (scale: number) => void;
+  /** Product-switch monitoring opt-in; persistence is owned by
+   * PATCH /dashboard/config — this only mirrors it so toggling from the
+   * settings modal mounts/unmounts the product-check UI without a reload. */
+  productCheckEnabled: boolean;
+  setProductCheckEnabled: (enabled: boolean) => void;
 }
 
 const noop = () => {};
@@ -47,6 +52,8 @@ const appState = createContext<AppState>({
   setSelectedLabelId: noop,
   overlayScale: 1,
   setOverlayScale: noop,
+  productCheckEnabled: false,
+  setProductCheckEnabled: noop,
 });
 export const AppStateContext = appState;
 
@@ -89,6 +96,8 @@ export const AppStateProvider = ({
       setSelectedLabelId: noop,
       overlayScale: settings.overlayScale ?? 1,
       setOverlayScale: noop,
+      productCheckEnabled: window.DASHBOARD_CONFIG.productCheckEnabled,
+      setProductCheckEnabled: noop,
     };
   });
 
@@ -125,6 +134,10 @@ export const AppStateProvider = ({
   const setOverlayScale = useCallback((scale: number) => {
     updateUserSettings({ overlayScale: scale });
     setState((prev) => ({ ...prev, overlayScale: scale }));
+  }, []);
+
+  const setProductCheckEnabled = useCallback((enabled: boolean) => {
+    setState((prev) => ({ ...prev, productCheckEnabled: enabled }));
   }, []);
 
   const setRunning = useCallback((next: boolean) => {
@@ -171,6 +184,7 @@ export const AppStateProvider = ({
         setZoneVisible,
         setSelectedLabelId,
         setOverlayScale,
+        setProductCheckEnabled,
       }}
     >
       {children}

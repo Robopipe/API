@@ -12,8 +12,22 @@ import {
   AppStateProvider,
   CameraStreamProvider,
   SettingsLockProvider,
+  useAppState,
 } from "./provider";
 import { ResizablePanels } from "./ui";
+
+/** Mounted via app state (not the injected global) so toggling product
+ * check in the settings modal takes effect without a page reload. */
+const ProductCheckOverlays = () => {
+  const { productCheckEnabled } = useAppState();
+  if (!productCheckEnabled) return null;
+  return (
+    <>
+      <ProductCheckBanner />
+      <ProductSwitchModal />
+    </>
+  );
+};
 
 function App() {
   if (!("DASHBOARD_CONFIG" in window)) {
@@ -40,12 +54,7 @@ function App() {
             />
           </main>
           {window.DASHBOARD_CONFIG.awaitingModel && <ModelSelectModal />}
-          {window.DASHBOARD_CONFIG.productCheckEnabled && (
-            <>
-              <ProductCheckBanner />
-              <ProductSwitchModal />
-            </>
-          )}
+          <ProductCheckOverlays />
         </CameraStreamProvider>
       </AppStateProvider>
     </SettingsLockProvider>

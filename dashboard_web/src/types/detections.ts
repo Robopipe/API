@@ -66,6 +66,9 @@ export interface ProductMatchStatus {
   deadline_epoch_ms?: number;
   /** mismatch only — server-computed remaining seconds (skew-free) */
   deadline_in_s?: number;
+  /** mismatch only — full alarm duration stamped at alarm time; the 100%
+   * reference for the auto-stop progress fill */
+  total_in_s?: number;
   /**
    * Client-side only (not on the wire): skew-corrected deadline in local
    * epoch ms, anchored once per alarm by useProductMatch so the rendered

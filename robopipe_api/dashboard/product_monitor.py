@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import os
 import threading
 import time
 from collections import Counter, deque
@@ -9,9 +8,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from ..models.dashboard.dashboard_config import DashboardConfig
-
-# Countdown between the mismatch alarm firing and the automatic run stop.
-ALARM_COUNTDOWN_S = 10.0
 
 # The starvation timeout is multiplier × typical inter-product interval, but
 # never below this floor — on very fast lines a scaled timeout of a couple of
@@ -26,10 +22,8 @@ RARE_LABEL_SHARE = 0.15
 
 
 def product_check_enabled(config: DashboardConfig | None) -> bool:
-    """Global env flag AND per-dashboard opt-out."""
-    if config is None or not config.productCheckEnabled:
-        return False
-    return os.getenv("PRODUCT_CHECK_ENABLED", "").lower() in ("true", "1", "yes")
+    """Per-dashboard opt-in; the sole gate for product-switch monitoring."""
+    return config is not None and config.productCheckEnabled
 
 
 @dataclass
@@ -56,6 +50,7 @@ class _RunState:
     alarm_started_wall: str | None = None
     alarm_deadline_mono: float | None = None
     alarm_deadline_epoch_ms: int | None = None
+    alarm_total_s: float | None = None
     snooze_started_mono: float | None = None
     snooze_commits_seen: int = 0
     auto_stop_claimed: bool = False
@@ -139,10 +134,14 @@ class ProductMonitor:
                 if st.last_score >= config.productCheckDivergenceThreshold:
                     st.phase = "mismatch"
                     st.alarm_started_wall = datetime.now(timezone.utc).isoformat()
-                    st.alarm_deadline_mono = now + ALARM_COUNTDOWN_S
+                    st.alarm_deadline_mono = now + config.productCheckAlarmSeconds
                     st.alarm_deadline_epoch_ms = int(
-                        (time.time() + ALARM_COUNTDOWN_S) * 1000
+                        (time.time() + config.productCheckAlarmSeconds) * 1000
                     )
+                    # Stamped rather than read live in status(): a mid-alarm
+                    # settings change must not desync the total from the
+                    # deadline it was derived from.
+                    st.alarm_total_s = config.productCheckAlarmSeconds
 
     def is_suspended(self, config_id: int) -> bool:
         """Evaluation (events, counters, threshold samples) pauses only
@@ -184,6 +183,7 @@ class ProductMonitor:
                 result["deadline_in_s"] = round(
                     max(0.0, st.alarm_deadline_mono - now), 1
                 )
+                result["total_in_s"] = st.alarm_total_s
             elif st.phase == "snoozed":
                 result["snooze_remaining_commits"] = max(
                     0, config.productCheckSnoozeCommits - st.snooze_commits_seen
@@ -218,6 +218,7 @@ class ProductMonitor:
             st.alarm_started_wall = None
             st.alarm_deadline_mono = None
             st.alarm_deadline_epoch_ms = None
+            st.alarm_total_s = None
             return True
 
     def claim_auto_stop(

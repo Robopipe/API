@@ -15,7 +15,7 @@ export const ProductCheckBanner = () => {
   if (!running || status?.state !== "starved") return null;
 
   return (
-    <div className="fixed inset-x-0 top-2 z-40 flex justify-center pointer-events-none">
+    <div className="fixed inset-x-0 bottom-2 z-40 flex justify-center pointer-events-none">
       <div className="py-2 px-4 mx-2 rounded-xl bg-pear-500 text-gray-950 text-sm font-medium shadow-lg">
         No products detected for a while — line stopped or model not
         recognizing the current product.

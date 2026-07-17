@@ -102,10 +102,16 @@ def serve_dashboard(
             "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
             "running": sensor.dashboard_run_session_id is not None,
             "runningSince": running_since,
-            # Effective value: env feature flag AND per-dashboard opt-in, so
-            # the frontend can hide the product-check UI before the first WS
-            # tick arrives.
+            # Per-dashboard opt-in, injected so the frontend can hide the
+            # product-check UI before the first WS tick arrives.
             "productCheckEnabled": product_check_enabled(sensor.dashboard_config),
+            "productCheckAlarmSeconds": sensor.dashboard_config.productCheckAlarmSeconds,
+            "productCheckCalibrationCount": sensor.dashboard_config.productCheckCalibrationCount,
+            "productCheckWindowSize": sensor.dashboard_config.productCheckWindowSize,
+            "productCheckDivergenceThreshold": sensor.dashboard_config.productCheckDivergenceThreshold,
+            "productCheckSnoozeCommits": sensor.dashboard_config.productCheckSnoozeCommits,
+            "productCheckSnoozeSeconds": sensor.dashboard_config.productCheckSnoozeSeconds,
+            "productCheckStarvationMultiplier": sensor.dashboard_config.productCheckStarvationMultiplier,
             "hasMultipleConfigs": has_multiple,
             "awaitingModel": sensor.nn_config is None,
             "userSettings": user_settings.model_dump(),
@@ -193,6 +199,7 @@ def get_dashboard_config_params(sensor: SensorDep):
         "maxMissingFrames": sensor.dashboard_config.maxMissingFrames,
         "maxMatchDistance": sensor.dashboard_config.maxMatchDistance,
         "productCheckEnabled": sensor.dashboard_config.productCheckEnabled,
+        "productCheckAlarmSeconds": sensor.dashboard_config.productCheckAlarmSeconds,
         "productCheckCalibrationCount": sensor.dashboard_config.productCheckCalibrationCount,
         "productCheckWindowSize": sensor.dashboard_config.productCheckWindowSize,
         "productCheckDivergenceThreshold": sensor.dashboard_config.productCheckDivergenceThreshold,
@@ -232,7 +239,9 @@ def update_dashboard_config(
     sensor._dashboard_config = updated
 
     # Tuning changes shift the detection statistics the product-switch
-    # baseline was learned from, so a running monitor must relearn it.
+    # baseline was learned from, so a running monitor must relearn it. The
+    # reset also clears any active mismatch alarm, which is what makes
+    # disabling product check mid-alarm safe (no stale auto-stop can fire).
     if sensor.dashboard_run_session_id is not None:
         _product_monitor.recalibrate(config_id)
 
@@ -243,6 +252,7 @@ def update_dashboard_config(
         "maxMissingFrames": updated.maxMissingFrames,
         "maxMatchDistance": updated.maxMatchDistance,
         "productCheckEnabled": updated.productCheckEnabled,
+        "productCheckAlarmSeconds": updated.productCheckAlarmSeconds,
         "productCheckCalibrationCount": updated.productCheckCalibrationCount,
         "productCheckWindowSize": updated.productCheckWindowSize,
         "productCheckDivergenceThreshold": updated.productCheckDivergenceThreshold,

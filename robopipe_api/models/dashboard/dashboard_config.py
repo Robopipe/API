@@ -62,9 +62,11 @@ class DashboardConfig(BaseModel):
     measurementNoiseSize: float = Field(default=0.01, gt=0.0)
     initialVarPos: float = Field(default=0.01, gt=0.0)
     initialVarVel: float = Field(default=1.0, gt=0.0)
-    # Product-switch monitoring. Effective only when the PRODUCT_CHECK_ENABLED
-    # env flag is on; productCheckEnabled then opts a single dashboard out.
-    productCheckEnabled: bool = True
+    # Product-switch monitoring. Off by default; enabled per dashboard from
+    # the settings modal (persisted as a tuning override) or via
+    # PATCH /dashboard/config.
+    productCheckEnabled: bool = False
+    productCheckAlarmSeconds: float = Field(default=10.0, ge=3.0, le=600.0)
     productCheckCalibrationCount: int = Field(default=30, ge=5, le=500)
     productCheckWindowSize: int = Field(default=20, ge=5, le=200)
     productCheckDivergenceThreshold: float = Field(default=0.35, gt=0.0, le=1.0)
@@ -99,6 +101,7 @@ class DashboardConfigUpdate(BaseModel):
     initialVarPos: float | None = Field(None, gt=0.0)
     initialVarVel: float | None = Field(None, gt=0.0)
     productCheckEnabled: bool | None = None
+    productCheckAlarmSeconds: float | None = Field(None, ge=3.0, le=600.0)
     productCheckCalibrationCount: int | None = Field(None, ge=5, le=500)
     productCheckWindowSize: int | None = Field(None, ge=5, le=200)
     productCheckDivergenceThreshold: float | None = Field(None, gt=0.0, le=1.0)

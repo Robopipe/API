@@ -19,13 +19,9 @@ from robopipe_api.models.dashboard.dashboard_config import DashboardConfig
 from .conftest import make_config
 
 
-@pytest.fixture(autouse=True)
-def _enable_flag(monkeypatch):
-    monkeypatch.setenv("PRODUCT_CHECK_ENABLED", "1")
-
-
 def pc_config(**overrides) -> DashboardConfig:
     params = dict(
+        productCheckEnabled=True,
         productCheckCalibrationCount=5,
         productCheckWindowSize=5,
         productCheckDivergenceThreshold=0.35,
@@ -169,6 +165,7 @@ class TestStateMachine:
         assert st.alarm_started_wall is not None
         assert st.alarm_deadline_mono == pytest.approx(16.0)  # now + 10s
         assert st.alarm_deadline_epoch_ms is not None
+        assert st.alarm_total_s == pytest.approx(10.0)
 
     def test_mismatch_status_reports_deadline(self):
         m, config = ProductMonitor(), pc_config()
@@ -179,6 +176,7 @@ class TestStateMachine:
         status = m.status(config, now=9.0)
         assert status["state"] == "mismatch"
         assert status["deadline_in_s"] == pytest.approx(7.0)
+        assert status["total_in_s"] == pytest.approx(10.0)
         assert status["score"] == pytest.approx(0.4)
         assert status["threshold"] == 0.35
 
@@ -212,6 +210,7 @@ class TestSnooze:
         m, config = ProductMonitor(), pc_config()  # snooze after 3 commits
         self.force_mismatch(m, config)
         assert m.cancel_alarm(config, now=7.0)
+        assert m._runs[config.id].alarm_total_s is None
 
         # Window is still anchor-free-ish; keep pushing the foreign label.
         commit(m, config, 2, now=8.0)
@@ -278,6 +277,28 @@ class TestAutoStopClaim:
         assert before is not None
         assert m.claim_auto_stop(config.id, now=16.0) == before
 
+    def test_configured_alarm_seconds_set_the_deadline(self):
+        m, config = ProductMonitor(), pc_config(productCheckAlarmSeconds=5.0)
+        self.force_mismatch(m, config)  # mismatch at 6.0 → deadline at 11.0
+
+        assert m.status(config, now=6.0)["deadline_in_s"] == pytest.approx(5.0)
+        assert m.status(config, now=6.0)["total_in_s"] == pytest.approx(5.0)
+        assert m.claim_auto_stop(config.id, now=10.9) is None
+        assert m.claim_auto_stop(config.id, now=11.0) is not None
+
+    def test_recalibrate_mid_alarm_prevents_auto_stop(self):
+        """Disabling product check from the settings tab PATCHes the config,
+        which recalibrates a running monitor — the in-flight alarm must die
+        with the old state instead of still stopping the run."""
+        m, config = ProductMonitor(), pc_config()
+        self.force_mismatch(m, config)
+
+        m.recalibrate(config.id)
+        assert m.claim_auto_stop(config.id, now=20.0) is None
+        assert not m.is_suspended(config.id)
+        disabled = config.model_copy(update={"productCheckEnabled": False})
+        assert m.status(disabled, now=20.0) is None
+
 
 class TestStarvation:
     def test_starved_derives_and_clears(self):
@@ -335,9 +356,8 @@ class TestStarvation:
 
 
 class TestFeatureGate:
-    def test_env_flag_off_disables_everything(self, monkeypatch):
-        monkeypatch.delenv("PRODUCT_CHECK_ENABLED")
-        m, config = ProductMonitor(), pc_config()
+    def test_disabled_by_default(self):
+        m, config = ProductMonitor(), make_config()
         assert not product_check_enabled(config)
         commit(m, config, 1, now=0.0)
         assert m._runs == {}

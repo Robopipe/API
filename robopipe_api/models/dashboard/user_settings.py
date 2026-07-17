@@ -44,6 +44,7 @@ TUNING_OVERRIDE_FIELDS: tuple[str, ...] = (
     "initialVarPos",
     "initialVarVel",
     "productCheckEnabled",
+    "productCheckAlarmSeconds",
     "productCheckCalibrationCount",
     "productCheckWindowSize",
     "productCheckDivergenceThreshold",
@@ -84,6 +85,7 @@ class DashboardUserSettings(BaseModel):
     initialVarPos: float | None = Field(None, gt=0.0)
     initialVarVel: float | None = Field(None, gt=0.0)
     productCheckEnabled: bool | None = None
+    productCheckAlarmSeconds: float | None = Field(None, ge=3.0, le=600.0)
     productCheckCalibrationCount: int | None = Field(None, ge=5, le=500)
     productCheckWindowSize: int | None = Field(None, ge=5, le=200)
     productCheckDivergenceThreshold: float | None = Field(None, gt=0.0, le=1.0)

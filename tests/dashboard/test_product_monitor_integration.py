@@ -44,11 +44,6 @@ class StubEventsStore:
         self.counters.append((args, kwargs))
 
 
-@pytest.fixture(autouse=True)
-def _enable_flag(monkeypatch):
-    monkeypatch.setenv("PRODUCT_CHECK_ENABLED", "1")
-
-
 @pytest.fixture()
 def store(monkeypatch):
     stub = StubEventsStore()
@@ -79,6 +74,7 @@ def build_config():
         test_cases=[tc], debounce_frames=1, max_match_distance=0.2
     ).model_copy(
         update=dict(
+            productCheckEnabled=True,
             productCheckCalibrationCount=5,
             productCheckWindowSize=5,
             productCheckDivergenceThreshold=0.35,

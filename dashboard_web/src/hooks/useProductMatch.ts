@@ -38,6 +38,11 @@ export function useProductMatch(): ProductMatchStatus | null {
               : pm.deadline_epoch_ms;
           return { ...pm, deadlineAtMs };
         });
+      } else {
+        // While enabled and running the backend reports status on every
+        // tick, so absence means product check was disabled mid-run — drop
+        // any retained state (e.g. a mismatch that would pin the modal up).
+        setStatus(null);
       }
       if (detections.running === false) {
         setRunning(false); // no-op when already stopped
