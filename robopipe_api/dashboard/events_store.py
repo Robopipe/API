@@ -38,11 +38,13 @@ class EventsStore:
             self.__init_migrations_table(conn)
             self.__run_pending_migrations(conn)
 
-    def start_session(self, dashboard_config_id: int) -> int:
+    def start_session(
+        self, dashboard_config_id: int, model_id: int | None = None
+    ) -> int:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "INSERT INTO dashboard_run_session (dashboard_config_id) VALUES (?)",
-                (dashboard_config_id,),
+                "INSERT INTO dashboard_run_session (dashboard_config_id, model_id) VALUES (?, ?)",
+                (dashboard_config_id, model_id),
             )
             return cursor.lastrowid
 
@@ -99,6 +101,7 @@ class EventsStore:
         passed: bool,
         violated_limits: list[dict] | None = None,
         picture_url: str | None = None,
+        detections: list[dict] | None = None,
     ) -> int:
         """Persist a single test-case verdict at zone-exit commit.
 
@@ -119,6 +122,13 @@ class EventsStore:
         Multiple rows for the same (event, limit) describe different items
         that each violated the limit. Child rows are only meaningful when
         passed is False.
+
+        `detections` is the full commit-frame detection set, one row per
+        detection into dashboard_evaluation_event_detection. Each dict has
+        keys label_id, label_name, confidence, x_min, y_min, x_max, y_max
+        (normalized [0,1]) plus optional display_id, parent_display_id and
+        role ('parent' / 'violated_child' / 'violation'; None for plain
+        detections — see the 20260717000000 migration for semantics).
         """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
@@ -152,6 +162,32 @@ class EventsStore:
                             v.get("parent_display_id"),
                         )
                         for v in violated_limits
+                    ],
+                )
+            if detections:
+                conn.executemany(
+                    """
+                    INSERT INTO dashboard_evaluation_event_detection
+                        (event_id, label_id, label_name, confidence,
+                         x_min, y_min, x_max, y_max,
+                         display_id, parent_display_id, role)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            event_id,
+                            d["label_id"],
+                            d["label_name"],
+                            d["confidence"],
+                            d["x_min"],
+                            d["y_min"],
+                            d["x_max"],
+                            d["y_max"],
+                            d.get("display_id"),
+                            d.get("parent_display_id"),
+                            d.get("role"),
+                        )
+                        for d in detections
                     ],
                 )
             return event_id

@@ -1,9 +1,19 @@
+import json
 import sqlite3
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
 from ..paths import get_data_dir
+
+# Whitelist mapping of events-list sort keys to SQL columns. User input is
+# resolved through this dict and never interpolated into the query.
+EVENT_SORT_COLUMNS = {
+    "timestamp": "e.timestamp",
+    "session_start": "s.start_time",
+    "test_case_name": "e.test_case_name",
+    "passed": "e.passed",
+}
 
 
 def _format_utc_z(value: datetime | str | None) -> str | None:
@@ -58,33 +68,71 @@ class ReportsStore:
             ).fetchone()
             return row is not None
 
-    def dashboard_has_sessions_in_range(
+    def dashboard_has_report_data(
         self,
         dashboard_config_id: int,
         filter_start: datetime | None,
         filter_end: datetime | None,
+        session_id: int | None = None,
+        event_ids: list[int] | None = None,
     ) -> bool:
+        """True when the report selection would produce at least one row.
+
+        With event_ids the check requires a matching event; otherwise a
+        matching completed session is enough (sessions without events still
+        produce CSV rows).
+        """
         start_str = _to_sqlite_timestamp(filter_start)
         end_str = _to_sqlite_timestamp(filter_end)
         with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute(
-                """
-                SELECT 1
-                FROM dashboard_run_session s
-                WHERE s.dashboard_config_id = ?
-                    AND s.end_time IS NOT NULL
-                    AND (? IS NULL OR s.start_time >= ?)
-                    AND (? IS NULL OR s.start_time <= ?)
-                LIMIT 1
-                """,
-                (
-                    dashboard_config_id,
-                    start_str,
-                    start_str,
-                    end_str,
-                    end_str,
-                ),
-            ).fetchone()
+            if event_ids:
+                placeholders = ",".join("?" for _ in event_ids)
+                row = conn.execute(
+                    f"""
+                    SELECT 1
+                    FROM dashboard_evaluation_event e
+                    JOIN dashboard_run_session s ON s.id = e.dashboard_run_session_id
+                    WHERE s.dashboard_config_id = ?
+                        AND s.end_time IS NOT NULL
+                        AND e.id IN ({placeholders})
+                        AND (? IS NULL OR s.id = ?)
+                        AND (? IS NULL OR s.start_time >= ?)
+                        AND (? IS NULL OR s.start_time <= ?)
+                    LIMIT 1
+                    """,
+                    (
+                        dashboard_config_id,
+                        *event_ids,
+                        session_id,
+                        session_id,
+                        start_str,
+                        start_str,
+                        end_str,
+                        end_str,
+                    ),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT 1
+                    FROM dashboard_run_session s
+                    WHERE s.dashboard_config_id = ?
+                        AND s.end_time IS NOT NULL
+                        AND (? IS NULL OR s.id = ?)
+                        AND (? IS NULL OR s.start_time >= ?)
+                        AND (? IS NULL OR s.start_time <= ?)
+                    LIMIT 1
+                    """,
+                    (
+                        dashboard_config_id,
+                        session_id,
+                        session_id,
+                        start_str,
+                        start_str,
+                        end_str,
+                        end_str,
+                    ),
+                ).fetchone()
             return row is not None
 
     def create_report(
@@ -92,18 +140,23 @@ class ReportsStore:
         dashboard_config_id: int,
         filter_start: datetime | None,
         filter_end: datetime | None,
+        session_id: int | None = None,
+        event_ids: list[int] | None = None,
     ) -> int:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO dashboard_report
-                    (dashboard_config_id, filter_start, filter_end, status)
-                VALUES (?, ?, ?, 'pending')
+                    (dashboard_config_id, filter_start, filter_end,
+                     filter_session_id, filter_event_ids, status)
+                VALUES (?, ?, ?, ?, ?, 'pending')
                 """,
                 (
                     dashboard_config_id,
                     _to_sqlite_timestamp(filter_start),
                     _to_sqlite_timestamp(filter_end),
+                    session_id,
+                    json.dumps(event_ids) if event_ids else None,
                 ),
             )
             return cursor.lastrowid
@@ -158,26 +211,80 @@ class ReportsStore:
                 (report_id,),
             )
 
+    @staticmethod
+    def _fetch_violated_limits(
+        conn: sqlite3.Connection, event_ids: list[int]
+    ) -> dict[int, list[dict]]:
+        """Batch-fetch violated limits for a set of events, in display order."""
+        violated_by_event: dict[int, list[dict]] = {}
+        if not event_ids:
+            return violated_by_event
+        placeholders = ",".join("?" for _ in event_ids)
+        limit_rows = conn.execute(
+            f"""
+            SELECT event_id, limit_id, limit_name, display_id, parent_display_id
+            FROM dashboard_evaluation_event_violated_limit
+            WHERE event_id IN ({placeholders})
+            ORDER BY event_id ASC, id ASC
+            """,
+            event_ids,
+        ).fetchall()
+        for r in limit_rows:
+            violated_by_event.setdefault(r["event_id"], []).append(
+                {
+                    "limit_id": r["limit_id"],
+                    "limit_name": r["limit_name"],
+                    "display_id": r["display_id"],
+                    "parent_display_id": r["parent_display_id"],
+                }
+            )
+        return violated_by_event
+
     def query_rows(
         self,
         dashboard_config_id: int,
         filter_start: datetime | str | None,
         filter_end: datetime | str | None,
+        session_id: int | None = None,
+        event_ids: list[int] | None = None,
     ) -> list[dict]:
         """Build the row-per-event payload for the CSV.
 
         Returns one dict per evaluation event, plus one dict per session that
         has no events (with event_id/test_case_name/picture_url all None).
-        Violated limits are fetched in a single batched query and attached
-        to each event row in display order.
+        With event_ids the join is inner-only: sessions without a selected
+        event produce no rows. Violated limits are fetched in a single
+        batched query and attached to each event row in display order.
         """
         start_str = _to_sqlite_timestamp(filter_start)
         end_str = _to_sqlite_timestamp(filter_end)
 
+        # Placeholders bind in SQL-text order: the ON-clause event ids come
+        # before every WHERE parameter.
+        join = "LEFT JOIN"
+        event_clause = ""
+        params: list = []
+        if event_ids:
+            join = "JOIN"
+            placeholders = ",".join("?" for _ in event_ids)
+            event_clause = f"AND e.id IN ({placeholders})"
+            params.extend(event_ids)
+        params.extend(
+            [
+                dashboard_config_id,
+                session_id,
+                session_id,
+                start_str,
+                start_str,
+                end_str,
+                end_str,
+            ]
+        )
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             session_event_rows = conn.execute(
-                """
+                f"""
                 SELECT
                     s.id AS session_id,
                     s.start_time AS session_start,
@@ -187,48 +294,25 @@ class ReportsStore:
                     e.timestamp AS event_timestamp,
                     e.picture_url AS picture_url
                 FROM dashboard_run_session s
-                LEFT JOIN dashboard_evaluation_event e
+                {join} dashboard_evaluation_event e
                     ON e.dashboard_run_session_id = s.id
+                    {event_clause}
                 WHERE s.dashboard_config_id = ?
                     AND s.end_time IS NOT NULL
+                    AND (? IS NULL OR s.id = ?)
                     AND (? IS NULL OR s.start_time >= ?)
                     AND (? IS NULL OR s.start_time <= ?)
                 ORDER BY s.start_time ASC, s.id ASC, e.id ASC
                 """,
-                (
-                    dashboard_config_id,
-                    start_str,
-                    start_str,
-                    end_str,
-                    end_str,
-                ),
+                params,
             ).fetchall()
 
-            event_ids = [
+            found_event_ids = [
                 row["event_id"]
                 for row in session_event_rows
                 if row["event_id"] is not None
             ]
-            violated_by_event: dict[int, list[dict]] = {}
-            if event_ids:
-                placeholders = ",".join("?" for _ in event_ids)
-                limit_rows = conn.execute(
-                    f"""
-                    SELECT event_id, limit_name, display_id, parent_display_id
-                    FROM dashboard_evaluation_event_violated_limit
-                    WHERE event_id IN ({placeholders})
-                    ORDER BY event_id ASC, id ASC
-                    """,
-                    event_ids,
-                ).fetchall()
-                for r in limit_rows:
-                    violated_by_event.setdefault(r["event_id"], []).append(
-                        {
-                            "limit_name": r["limit_name"],
-                            "display_id": r["display_id"],
-                            "parent_display_id": r["parent_display_id"],
-                        }
-                    )
+            violated_by_event = self._fetch_violated_limits(conn, found_event_ids)
 
         result: list[dict] = []
         for row in session_event_rows:
@@ -250,6 +334,229 @@ class ReportsStore:
                 }
             )
         return result
+
+    def list_sessions(
+        self,
+        dashboard_config_id: int,
+        filter_start: datetime | None = None,
+        filter_end: datetime | None = None,
+    ) -> list[dict]:
+        """Sessions with event aggregates, newest first.
+
+        Running sessions (end_time NULL) are included so the reports UI can
+        browse the run in progress.
+        """
+        start_str = _to_sqlite_timestamp(filter_start)
+        end_str = _to_sqlite_timestamp(filter_end)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT
+                    s.id,
+                    s.start_time,
+                    s.end_time,
+                    s.end_reason,
+                    COUNT(e.id) AS event_count,
+                    COALESCE(SUM(CASE WHEN e.passed = 0 THEN 1 ELSE 0 END), 0)
+                        AS failed_count
+                FROM dashboard_run_session s
+                LEFT JOIN dashboard_evaluation_event e
+                    ON e.dashboard_run_session_id = s.id
+                WHERE s.dashboard_config_id = ?
+                    AND (? IS NULL OR s.start_time >= ?)
+                    AND (? IS NULL OR s.start_time <= ?)
+                GROUP BY s.id
+                ORDER BY s.start_time DESC, s.id DESC
+                """,
+                (
+                    dashboard_config_id,
+                    start_str,
+                    start_str,
+                    end_str,
+                    end_str,
+                ),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    @staticmethod
+    def _events_filter(
+        dashboard_config_id: int,
+        session_id: int | None,
+        filter_start: datetime | None,
+        filter_end: datetime | None,
+        test_case_id: str | None,
+        passed: bool | None,
+    ) -> tuple[str, list]:
+        start_str = _to_sqlite_timestamp(filter_start)
+        end_str = _to_sqlite_timestamp(filter_end)
+        clauses = ["s.dashboard_config_id = ?"]
+        params: list = [dashboard_config_id]
+        if session_id is not None:
+            clauses.append("e.dashboard_run_session_id = ?")
+            params.append(session_id)
+        if start_str is not None:
+            clauses.append("e.timestamp >= ?")
+            params.append(start_str)
+        if end_str is not None:
+            clauses.append("e.timestamp <= ?")
+            params.append(end_str)
+        if test_case_id is not None:
+            clauses.append("e.test_case_id = ?")
+            params.append(test_case_id)
+        if passed is not None:
+            clauses.append("e.passed = ?")
+            params.append(1 if passed else 0)
+        return " AND ".join(clauses), params
+
+    def count_events(
+        self,
+        dashboard_config_id: int,
+        session_id: int | None = None,
+        filter_start: datetime | None = None,
+        filter_end: datetime | None = None,
+        test_case_id: str | None = None,
+        passed: bool | None = None,
+    ) -> int:
+        where, params = self._events_filter(
+            dashboard_config_id,
+            session_id,
+            filter_start,
+            filter_end,
+            test_case_id,
+            passed,
+        )
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM dashboard_evaluation_event e
+                JOIN dashboard_run_session s ON s.id = e.dashboard_run_session_id
+                WHERE {where}
+                """,
+                params,
+            ).fetchone()
+            return row[0]
+
+    def list_events(
+        self,
+        dashboard_config_id: int,
+        session_id: int | None = None,
+        filter_start: datetime | None = None,
+        filter_end: datetime | None = None,
+        test_case_id: str | None = None,
+        passed: bool | None = None,
+        sort_by: str = "timestamp",
+        order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        """One page of evaluation events with their violated limits attached."""
+        where, params = self._events_filter(
+            dashboard_config_id,
+            session_id,
+            filter_start,
+            filter_end,
+            test_case_id,
+            passed,
+        )
+        sort_column = EVENT_SORT_COLUMNS[sort_by]
+        direction = "DESC" if order == "desc" else "ASC"
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT
+                    e.id,
+                    e.dashboard_run_session_id AS session_id,
+                    s.start_time AS session_start,
+                    s.end_time AS session_end,
+                    e.timestamp,
+                    e.test_case_id,
+                    e.test_case_name,
+                    e.passed,
+                    e.picture_url
+                FROM dashboard_evaluation_event e
+                JOIN dashboard_run_session s ON s.id = e.dashboard_run_session_id
+                WHERE {where}
+                ORDER BY {sort_column} {direction}, e.id {direction}
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            ).fetchall()
+            events = [dict(row) for row in rows]
+            violated_by_event = self._fetch_violated_limits(
+                conn, [e["id"] for e in events]
+            )
+        for event in events:
+            event["violated_limits"] = violated_by_event.get(event["id"], [])
+        return events
+
+    @staticmethod
+    def _fetch_detections(
+        conn: sqlite3.Connection, event_ids: list[int]
+    ) -> dict[int, list[dict]]:
+        detections_by_event: dict[int, list[dict]] = {}
+        if not event_ids:
+            return detections_by_event
+        placeholders = ",".join("?" for _ in event_ids)
+        rows = conn.execute(
+            f"""
+            SELECT event_id, label_id, label_name, confidence,
+                   x_min, y_min, x_max, y_max,
+                   display_id, parent_display_id, role
+            FROM dashboard_evaluation_event_detection
+            WHERE event_id IN ({placeholders})
+            ORDER BY event_id ASC, id ASC
+            """,
+            event_ids,
+        ).fetchall()
+        for r in rows:
+            d = dict(r)
+            detections_by_event.setdefault(d.pop("event_id"), []).append(d)
+        return detections_by_event
+
+    def get_event(self, dashboard_config_id: int, event_id: int) -> dict | None:
+        """Full event detail: session columns, violated limits, detections.
+
+        None when the event does not exist or belongs to another dashboard.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT
+                    e.id,
+                    e.dashboard_run_session_id AS session_id,
+                    s.start_time AS session_start,
+                    s.end_time AS session_end,
+                    e.timestamp,
+                    e.test_case_id,
+                    e.test_case_name,
+                    e.passed,
+                    e.picture_url
+                FROM dashboard_evaluation_event e
+                JOIN dashboard_run_session s ON s.id = e.dashboard_run_session_id
+                WHERE e.id = ? AND s.dashboard_config_id = ?
+                """,
+                (event_id, dashboard_config_id),
+            ).fetchone()
+            if row is None:
+                return None
+            event = dict(row)
+            event["violated_limits"] = self._fetch_violated_limits(
+                conn, [event_id]
+            ).get(event_id, [])
+            event["detections"] = self._fetch_detections(conn, [event_id]).get(
+                event_id, []
+            )
+            return event
+
+    def get_event_detections(self, event_ids: list[int]) -> dict[int, list[dict]]:
+        """Batch detections per event, for the export renderer."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            return self._fetch_detections(conn, event_ids)
 
 
 @lru_cache(maxsize=1)

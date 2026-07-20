@@ -369,8 +369,10 @@ def start_dashboard(sensor: SensorDep, events_store: EventsStoreDep):
             detail="No dashboard configured for this stream",
         )
     reset_zone_tracking(sensor.dashboard_config.id)
+    nn_config = sensor.nn_config
     sensor.dashboard_run_session_id = events_store.start_session(
-        sensor.dashboard_config.id
+        sensor.dashboard_config.id,
+        model_id=nn_config.model_id if nn_config is not None else None,
     )
     return {"running": True}
 

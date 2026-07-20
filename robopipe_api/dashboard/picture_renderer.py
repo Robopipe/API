@@ -3,7 +3,7 @@ from typing import Literal
 
 import av
 import cv2
-
+import numpy as np
 
 HighlightRole = Literal["child", "parent"]
 
@@ -17,40 +17,44 @@ _FONT_THICKNESS = 1
 _LABEL_PAD = 2
 
 
-def hex_to_bgr(hex_color: str) -> tuple[int, int, int]:
-    """Convert a CSS hex color string (#RRGGBB) to an OpenCV BGR tuple."""
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return (b, g, r)
+def encode_frame_jpeg(video_frame: av.VideoFrame) -> bytes:
+    """Encode the frame exactly as received (no annotations) to JPEG q90.
+
+    Event pictures are saved clean; the detections that used to be drawn
+    onto them live in dashboard_evaluation_event_detection instead.
+    """
+    img = video_frame.to_ndarray(format="bgr24")
+    success, jpeg = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+    if not success:
+        raise RuntimeError("cv2.imencode failed for event picture")
+    return bytes(jpeg)
 
 
 @dataclass(frozen=True)
 class Highlight:
     role: HighlightRole
-    display_id: int
+    display_id: int | None
     coords: tuple[float, float, float, float]
     color: tuple[int, int, int] | None = None
 
 
-def render_violation_picture(
-    video_frame: av.VideoFrame,
-    highlights: list[Highlight],
-) -> bytes:
-    """Draw the violating bboxes onto a copy of `video_frame` and return JPEG bytes.
+def _draw_highlights(img: np.ndarray, highlights: list[Highlight]) -> None:
+    """Draw highlight bboxes onto `img` in place.
 
-    `coords` are normalized [0,1] xmin/ymin/xmax/ymax. Children draw red,
-    parents draw blue; each box is annotated with `#<display_id>`. Duplicate
-    (role, display_id) entries are skipped — a parent referenced by multiple
-    child rows is drawn once.
+    `coords` are normalized [0,1] xmin/ymin/xmax/ymax. Each box is tagged
+    `#<display_id>` (untagged when display_id is None). Duplicate
+    (role, display_id, coords) entries are skipped — a parent referenced by
+    multiple child rows is drawn once.
     """
-    img = video_frame.to_ndarray(format="bgr24").copy()
     h, w = img.shape[:2]
 
-    seen: set[tuple[HighlightRole, int]] = set()
+    seen: set[tuple[HighlightRole, int | None, tuple[float, float, float, float]]] = (
+        set()
+    )
     # Draw parents first so child outlines sit on top when they overlap.
     ordered = sorted(highlights, key=lambda hl: 0 if hl.role == "parent" else 1)
     for hl in ordered:
-        key = (hl.role, hl.display_id)
+        key = (hl.role, hl.display_id, hl.coords)
         if key in seen:
             continue
         seen.add(key)
@@ -65,6 +69,9 @@ def render_violation_picture(
 
         color = _RED_BGR if hl.role == "parent" else (hl.color or _RED_BGR)
         cv2.rectangle(img, (px1, py1), (px2, py2), color, _BBOX_THICKNESS)
+
+        if hl.display_id is None:
+            continue
 
         text = f"#{hl.display_id}"
         (tw, th), baseline = cv2.getTextSize(text, _FONT, _FONT_SCALE, _FONT_THICKNESS)
@@ -89,7 +96,31 @@ def render_violation_picture(
             cv2.LINE_AA,
         )
 
+
+def render_event_picture(jpeg_bytes: bytes, detections: list[dict]) -> bytes:
+    """Draw an event's highlighted detections onto its clean stored JPEG.
+
+    Used by the report export to reproduce the pre-migration burned-in
+    pictures. Only rows with a role are drawn: 'parent' as parent,
+    'violated_child' and 'violation' as children; plain detections
+    (role None) are ignored, matching what the live renderer used to burn in.
+    """
+    img = cv2.imdecode(np.frombuffer(jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise RuntimeError("cv2.imdecode failed for event picture")
+
+    highlights = [
+        Highlight(
+            role="parent" if d["role"] == "parent" else "child",
+            display_id=d.get("display_id"),
+            coords=(d["x_min"], d["y_min"], d["x_max"], d["y_max"]),
+        )
+        for d in detections
+        if d.get("role") is not None
+    ]
+    _draw_highlights(img, highlights)
+
     success, jpeg = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
     if not success:
-        raise RuntimeError("cv2.imencode failed for violation picture")
+        raise RuntimeError("cv2.imencode failed for event picture")
     return bytes(jpeg)
