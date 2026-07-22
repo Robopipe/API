@@ -123,12 +123,15 @@ class EventsStore:
         that each violated the limit. Child rows are only meaningful when
         passed is False.
 
-        `detections` is the full commit-frame detection set, one row per
-        detection into dashboard_evaluation_event_detection. Each dict has
-        keys label_id, label_name, confidence, x_min, y_min, x_max, y_max
-        (normalized [0,1]) plus optional display_id, parent_display_id and
-        role ('parent' / 'violated_child' / 'violation'; None for plain
-        detections — see the 20260717000000 migration for semantics).
+        `detections` is the event-related (role-marked) detection set, one
+        row per detection into dashboard_evaluation_event_detection. Each
+        dict has keys label_id, label_name, confidence, x_min, y_min, x_max,
+        y_max (normalized [0,1]) plus optional display_id, parent_display_id
+        and role ('parent' / 'violated_child' / 'violation' — see the
+        20260717000000 migration for semantics). Events saved before the
+        related-only restriction also stored plain commit-frame detections
+        with role NULL; such rows remain in the table but no new ones are
+        written.
         """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(

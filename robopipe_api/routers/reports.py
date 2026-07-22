@@ -396,10 +396,12 @@ def list_sessions(
 def list_events(
     dashboard_id: DashboardId,
     store: ReportsStoreDep,
-    session_id: Annotated[int | None, Query(ge=1)] = None,
+    session_id: Annotated[list[int] | None, Query()] = None,
+    model_id: Annotated[list[int] | None, Query()] = None,
     start: datetime | None = None,
     end: datetime | None = None,
-    test_case_id: str | None = None,
+    test_case_id: Annotated[list[str] | None, Query()] = None,
+    limit_id: Annotated[list[str] | None, Query()] = None,
     passed: bool | None = None,
     sort_by: Literal["timestamp", "session_start", "test_case_name", "passed"] = (
         "timestamp"
@@ -409,16 +411,21 @@ def list_events(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> EventListResponse:
     """Evaluation events of a dashboard, paginated. start/end filter on the
-    event timestamp; each item carries its violated limits."""
+    event timestamp; each item carries its violated limits. session_id,
+    model_id, test_case_id and limit_id may be repeated to match any of the
+    given values; limit_id matches events with at least one matching violated
+    limit; model_id filters on the session's model."""
     total = store.count_events(
-        dashboard_id, session_id, start, end, test_case_id, passed
+        dashboard_id, session_id, model_id, start, end, test_case_id, limit_id, passed
     )
     rows = store.list_events(
         dashboard_id,
         session_id,
+        model_id,
         start,
         end,
         test_case_id,
+        limit_id,
         passed,
         sort_by,
         order,
@@ -439,9 +446,10 @@ def get_event(
     event_id: int,
     store: ReportsStoreDep,
 ) -> EventDetail:
-    """One evaluation event with its violated limits and the full
-    commit-frame detection set. Pre-migration events have no detection rows;
-    their picture carries the boxes burned in instead."""
+    """One evaluation event with its violated limits and its event-related
+    detections (the exiting parent, violated children, violating items).
+    Pre-migration events have no detection rows; their picture carries the
+    boxes burned in instead."""
     row = store.get_event(dashboard_id, event_id)
     if row is None:
         raise HTTPException(

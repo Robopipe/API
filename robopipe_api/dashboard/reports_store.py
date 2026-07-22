@@ -382,28 +382,45 @@ class ReportsStore:
     @staticmethod
     def _events_filter(
         dashboard_config_id: int,
-        session_id: int | None,
+        session_ids: list[int] | None,
+        model_ids: list[int] | None,
         filter_start: datetime | None,
         filter_end: datetime | None,
-        test_case_id: str | None,
+        test_case_ids: list[str] | None,
+        limit_ids: list[str] | None,
         passed: bool | None,
     ) -> tuple[str, list]:
         start_str = _to_sqlite_timestamp(filter_start)
         end_str = _to_sqlite_timestamp(filter_end)
         clauses = ["s.dashboard_config_id = ?"]
         params: list = [dashboard_config_id]
-        if session_id is not None:
-            clauses.append("e.dashboard_run_session_id = ?")
-            params.append(session_id)
+        if session_ids:
+            placeholders = ", ".join("?" * len(session_ids))
+            clauses.append(f"e.dashboard_run_session_id IN ({placeholders})")
+            params.extend(session_ids)
+        if model_ids:
+            placeholders = ", ".join("?" * len(model_ids))
+            clauses.append(f"s.model_id IN ({placeholders})")
+            params.extend(model_ids)
         if start_str is not None:
             clauses.append("e.timestamp >= ?")
             params.append(start_str)
         if end_str is not None:
             clauses.append("e.timestamp <= ?")
             params.append(end_str)
-        if test_case_id is not None:
-            clauses.append("e.test_case_id = ?")
-            params.append(test_case_id)
+        if test_case_ids:
+            placeholders = ", ".join("?" * len(test_case_ids))
+            clauses.append(f"e.test_case_id IN ({placeholders})")
+            params.extend(test_case_ids)
+        if limit_ids:
+            placeholders = ", ".join("?" * len(limit_ids))
+            clauses.append(
+                "EXISTS ("
+                "SELECT 1 FROM dashboard_evaluation_event_violated_limit vl "
+                f"WHERE vl.event_id = e.id AND vl.limit_id IN ({placeholders})"
+                ")"
+            )
+            params.extend(limit_ids)
         if passed is not None:
             clauses.append("e.passed = ?")
             params.append(1 if passed else 0)
@@ -412,18 +429,22 @@ class ReportsStore:
     def count_events(
         self,
         dashboard_config_id: int,
-        session_id: int | None = None,
+        session_ids: list[int] | None = None,
+        model_ids: list[int] | None = None,
         filter_start: datetime | None = None,
         filter_end: datetime | None = None,
-        test_case_id: str | None = None,
+        test_case_ids: list[str] | None = None,
+        limit_ids: list[str] | None = None,
         passed: bool | None = None,
     ) -> int:
         where, params = self._events_filter(
             dashboard_config_id,
-            session_id,
+            session_ids,
+            model_ids,
             filter_start,
             filter_end,
-            test_case_id,
+            test_case_ids,
+            limit_ids,
             passed,
         )
         with sqlite3.connect(self.db_path) as conn:
@@ -441,10 +462,12 @@ class ReportsStore:
     def list_events(
         self,
         dashboard_config_id: int,
-        session_id: int | None = None,
+        session_ids: list[int] | None = None,
+        model_ids: list[int] | None = None,
         filter_start: datetime | None = None,
         filter_end: datetime | None = None,
-        test_case_id: str | None = None,
+        test_case_ids: list[str] | None = None,
+        limit_ids: list[str] | None = None,
         passed: bool | None = None,
         sort_by: str = "timestamp",
         order: str = "desc",
@@ -454,10 +477,12 @@ class ReportsStore:
         """One page of evaluation events with their violated limits attached."""
         where, params = self._events_filter(
             dashboard_config_id,
-            session_id,
+            session_ids,
+            model_ids,
             filter_start,
             filter_end,
-            test_case_id,
+            test_case_ids,
+            limit_ids,
             passed,
         )
         sort_column = EVENT_SORT_COLUMNS[sort_by]
@@ -471,6 +496,7 @@ class ReportsStore:
                     e.dashboard_run_session_id AS session_id,
                     s.start_time AS session_start,
                     s.end_time AS session_end,
+                    s.model_id,
                     e.timestamp,
                     e.test_case_id,
                     e.test_case_name,
@@ -496,6 +522,13 @@ class ReportsStore:
     def _fetch_detections(
         conn: sqlite3.Connection, event_ids: list[int]
     ) -> dict[int, list[dict]]:
+        """Event-related (role-marked) detections per event.
+
+        Events saved before the related-only restriction also stored plain
+        commit-frame detections with role NULL; those rows stay in the table
+        but are filtered out here so old and new events return the same
+        payload shape.
+        """
         detections_by_event: dict[int, list[dict]] = {}
         if not event_ids:
             return detections_by_event
@@ -507,6 +540,7 @@ class ReportsStore:
                    display_id, parent_display_id, role
             FROM dashboard_evaluation_event_detection
             WHERE event_id IN ({placeholders})
+                AND role IS NOT NULL
             ORDER BY event_id ASC, id ASC
             """,
             event_ids,
@@ -530,6 +564,7 @@ class ReportsStore:
                     e.dashboard_run_session_id AS session_id,
                     s.start_time AS session_start,
                     s.end_time AS session_end,
+                    s.model_id,
                     e.timestamp,
                     e.test_case_id,
                     e.test_case_name,

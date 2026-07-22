@@ -1037,7 +1037,7 @@ class DashboardEvaluator:
 
         `video_frame` is the latest camera frame; if provided, the commit
         branch writes it as-is (no annotations) to ``event_pictures/`` before
-        persisting the event — the commit-frame detections and their roles
+        persisting the event — the event-related (role-marked) detections
         are stored relationally alongside the event instead of being drawn.
         """
         events_store = events_store_factory()
@@ -1469,10 +1469,11 @@ class DashboardEvaluator:
                                 }
                             )
 
-                # Full commit-frame detection set for the event. Role markers
-                # record what the old renderer used to burn into the picture:
-                # the exiting parent, violating children inside it, and
-                # parentless-limit violators. Precedence parent >
+                # Event-related detections only. Role markers record what the
+                # old renderer used to burn into the picture: the exiting
+                # parent, violating children inside it, and parentless-limit
+                # violators; commit-frame detections with no role (plain
+                # background) are not persisted. Precedence parent >
                 # violated_child > violation matches the old draw layering;
                 # overlaps only occur in degenerate configs (a label that is
                 # both parent and violation target). Computed regardless of
@@ -1541,6 +1542,8 @@ class DashboardEvaluator:
                         det_parent_did = exit_did
                     elif did is not None and (det_label_id, did) in violation_keys:
                         role = "violation"
+                    if role is None:
+                        continue
                     x_min, y_min, x_max, y_max = det.coords
                     event_detections.append(
                         {

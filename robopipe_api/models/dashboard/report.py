@@ -78,6 +78,7 @@ class EventListItem(BaseModel):
     session_id: int
     session_start: UtcTimestamp
     session_end: UtcTimestamp | None = None
+    model_id: int | None = None
     timestamp: UtcTimestamp
     test_case_id: str
     test_case_name: str
