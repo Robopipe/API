@@ -23,8 +23,9 @@ from .error import (
     CameraNotFoundException,
     SensorNotFoundException,
 )
-from .routers import cameras, controller, reports, streams
+from .routers import cameras, controller, recording, reports, streams
 from .discovery import DEFAULT_API_PORT, discovery_manager_factory
+from .recording.recorder import recorder_manager_factory
 from .stream import stream_service_factory
 from .webrtc_manager import webrtc_manager_factory
 from . import __version__
@@ -50,6 +51,7 @@ async def lifespan(app: FastAPI):
     reports_store_factory().reset_stuck_reports()
     sync_task = sync_task_factory()
     cleanup_task = cleanup_task_factory()
+    recorder_manager = recorder_manager_factory()
 
     discovery_manager = discovery_manager_factory()
     await discovery_manager.start()
@@ -58,6 +60,9 @@ async def lifespan(app: FastAPI):
         tg.start_soon(sync_task.run)
         tg.start_soon(cleanup_task.run)
         tg.start_soon(discovery_manager.run_udp)
+
+        if recorder_manager.enabled:
+            tg.start_soon(recorder_manager.run)
 
         if controller_config_path is not None and os.path.exists(controller_config_path):
             hw_dict = HWDict([f"{controller_config_path}/hw_definitions/"])
@@ -129,6 +134,7 @@ if os.getenv("GITHUB_ACTIONS") is not None:
 
 app.include_router(cameras.router)
 app.include_router(streams.router)
+app.include_router(recording.router)
 app.include_router(reports.router)
 controller.register_device_endpoints(controller.DEVICE_ENDPOINTS)
 app.include_router(controller.router)
