@@ -7,8 +7,8 @@ av==16.1.0
 build==1.2.2.post1
 certifi==2025.4.26
 click==8.1.8
-depthai==3.3.0
-depthai-nodes==0.3.7
+depthai==3.8.0
+depthai-nodes==0.6.0
 dnspython==2.7.0
 email_validator==2.2.0
 fastapi==0.115.5
