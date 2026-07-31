@@ -9,6 +9,8 @@ from ..models.dashboard.user_settings import (
 )
 from ..models.detection.bbox_detection import BBoxDetection
 from ..models.detection.detection import BaseNNDetections
+from ..models.detection.segmentation_detection import SegmentationDetections
+from ..utils.detections_parser import reindex_segmentation_masks
 from .evaluators import DashboardEvaluator, EvaluationResult
 from .product_monitor import ProductMonitor
 from .zone_tracker import ZoneTracker
@@ -152,6 +154,14 @@ def handle_detections(
 
     # Build after evaluate — line crossing sorts filtered in-place for stable ID assignment
     result["detections"] = [d.model_dump() for d in filtered]
+
+    # The segmentation mask encodes positions into the pre-filter detections
+    # list; re-encode it against the filtered/reordered list or every mask
+    # pixel resolves to the wrong detection on the client.
+    if isinstance(detections, SegmentationDetections):
+        mask_fields = reindex_segmentation_masks(detections, filtered)
+        if mask_fields is not None:
+            result.update(mask_fields)
 
     # Build dashboard_detections from evaluation results (one per unique test case)
     seen_tc_ids: set[str] = set()

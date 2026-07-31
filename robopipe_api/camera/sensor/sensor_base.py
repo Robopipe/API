@@ -3,7 +3,7 @@ import threading
 from collections import OrderedDict
 
 import depthai as dai
-from depthai_nodes import Classifications, ImgDetectionsExtended
+from depthai_nodes import Classifications
 import numpy as np
 from PIL import Image
 
@@ -240,7 +240,7 @@ class SensorBase(ABC):
 
     def get_nn_detections(
         self,
-    ) -> dai.ImgDetections | Classifications | ImgDetectionsExtended:
+    ) -> dai.ImgDetections | Classifications | dai.SegmentationMask:
         # Soft fail when the NN pipeline has been removed (e.g. DELETE /nn
         # while a detections WS is still connected). Raising ProducerTerminated
         # instead of KeyError lets ws_relay's _produce loop exit cleanly
