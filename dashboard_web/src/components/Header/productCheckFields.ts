@@ -61,4 +61,13 @@ export const PRODUCT_CHECK_FIELDS: SettingsField[] = [
     max: 100,
     step: 0.1,
   },
+  {
+    key: "productCheckIdleTimeoutSeconds",
+    label: "Idle Timeout",
+    description:
+      "Seconds without a commit before the idle warning shows; also the minimum for the learned timeout",
+    min: 3,
+    max: 600,
+    step: 1,
+  },
 ];

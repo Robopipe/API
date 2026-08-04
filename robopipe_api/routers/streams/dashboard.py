@@ -112,6 +112,7 @@ def serve_dashboard(
             "productCheckSnoozeCommits": sensor.dashboard_config.productCheckSnoozeCommits,
             "productCheckSnoozeSeconds": sensor.dashboard_config.productCheckSnoozeSeconds,
             "productCheckStarvationMultiplier": sensor.dashboard_config.productCheckStarvationMultiplier,
+            "productCheckIdleTimeoutSeconds": sensor.dashboard_config.productCheckIdleTimeoutSeconds,
             "hasMultipleConfigs": has_multiple,
             "awaitingModel": sensor.nn_config is None,
             "userSettings": user_settings.model_dump(),
@@ -206,6 +207,7 @@ def get_dashboard_config_params(sensor: SensorDep):
         "productCheckSnoozeCommits": sensor.dashboard_config.productCheckSnoozeCommits,
         "productCheckSnoozeSeconds": sensor.dashboard_config.productCheckSnoozeSeconds,
         "productCheckStarvationMultiplier": sensor.dashboard_config.productCheckStarvationMultiplier,
+        "productCheckIdleTimeoutSeconds": sensor.dashboard_config.productCheckIdleTimeoutSeconds,
     }
 
 
@@ -259,6 +261,7 @@ def update_dashboard_config(
         "productCheckSnoozeCommits": updated.productCheckSnoozeCommits,
         "productCheckSnoozeSeconds": updated.productCheckSnoozeSeconds,
         "productCheckStarvationMultiplier": updated.productCheckStarvationMultiplier,
+        "productCheckIdleTimeoutSeconds": updated.productCheckIdleTimeoutSeconds,
     }
 
 
@@ -373,6 +376,7 @@ def start_dashboard(sensor: SensorDep, events_store: EventsStoreDep):
     sensor.dashboard_run_session_id = events_store.start_session(
         sensor.dashboard_config.id,
         model_id=nn_config.model_id if nn_config is not None else None,
+        model_name=nn_config.model_name if nn_config is not None else None,
     )
     return {"running": True}
 

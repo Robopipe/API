@@ -88,6 +88,7 @@ export interface DashboardConfig {
   productCheckSnoozeCommits: number;
   productCheckSnoozeSeconds: number;
   productCheckStarvationMultiplier: number;
+  productCheckIdleTimeoutSeconds: number;
   hasMultipleConfigs: boolean;
   awaitingModel: boolean;
   userSettings: UserSettings;
