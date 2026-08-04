@@ -1,6 +1,5 @@
 import datetime
 import threading
-from collections import OrderedDict
 
 import depthai as dai
 from depthai_nodes import Classifications
@@ -12,7 +11,6 @@ from typing import Callable
 import av
 
 
-from ...models.dashboard.dashboard_config import DashboardConfig
 from ...models.detection.bbox_detection import BBoxDetection, BBoxDetections
 from ...models.nn_config import NNConfig
 from ...models.sahi_config import SAHIConfig
@@ -39,15 +37,9 @@ class SensorBase(ABC):
         self.output_queues = output_queues
         self.restart_pipeline = restart_pipeline
         self._nn_config = None
-        self._dashboard_config = None
-        self._dashboard_run_session_id: int | None = None
-        self._active_config_id = None
         self.last_frame: av.VideoFrame | None = None
         self._video_seq: int = -1
         self._video_seq_cond = threading.Condition()
-        self._frame_buffer: OrderedDict[int, av.VideoFrame] = OrderedDict()
-        self._frame_buffer_lock = threading.Lock()
-        self._frame_buffer_max = 60
 
         # SAHI state
         self._sahi_tile_queue: dai.MessageQueue | None = None
@@ -87,28 +79,6 @@ class SensorBase(ABC):
         self._nn_config = value
         return self._nn_config
 
-    @property
-    def dashboard_config(self) -> DashboardConfig | None:
-        return self._dashboard_config
-
-    @dashboard_config.setter
-    def dashboard_config(self, value: DashboardConfig | None):
-        self._dashboard_config = value
-        self._dashboard_run_session_id = None
-        self._active_config_id = value.id if value else None
-
-    @property
-    def active_config_id(self) -> int | None:
-        return self._active_config_id
-
-    @property
-    def dashboard_run_session_id(self) -> int | None:
-        return self._dashboard_run_session_id
-
-    @dashboard_run_session_id.setter
-    def dashboard_run_session_id(self, value: int | None):
-        self._dashboard_run_session_id = value
-
     def on_frame(self, img: dai.ImgFrame) -> None:
         pass
 
@@ -136,7 +106,6 @@ class SensorBase(ABC):
             if self.nn_config is not None:
                 video_frame = burn_timestamp(video_frame, ts_us)
             self.last_frame = video_frame
-            self._buffer_frame(ts_us, self.last_frame)
         elif self.last_frame is None:
             try:
                 img_frame = video_queue.get(
@@ -152,7 +121,6 @@ class SensorBase(ABC):
             if self.nn_config is not None:
                 video_frame = burn_timestamp(video_frame, ts_us)
             self.last_frame = video_frame
-            self._buffer_frame(ts_us, self.last_frame)
         else:
             ret = self.last_frame
             self.last_frame = None
@@ -169,44 +137,6 @@ class SensorBase(ABC):
             if seq > self._video_seq:
                 self._video_seq = seq
                 self._video_seq_cond.notify_all()
-
-    def _buffer_frame(self, ts_us: int, frame: av.VideoFrame) -> None:
-        with self._frame_buffer_lock:
-            self._frame_buffer[ts_us] = frame
-            while len(self._frame_buffer) > self._frame_buffer_max:
-                self._frame_buffer.popitem(last=False)
-
-    def get_frame_by_ts(self, ts_us: int) -> av.VideoFrame | None:
-        """Return the buffered frame whose ts_us matches exactly, else last_frame."""
-        with self._frame_buffer_lock:
-            frame = self._frame_buffer.get(ts_us)
-        return frame if frame is not None else self.last_frame
-
-    def _try_pull_passthrough(self, ts_us_hint: int) -> None:
-        """Drain the VIDEO queue, buffering each frame, until the frame matching
-        ``ts_us_hint`` is found or the queue is empty.
-
-        Called by the NN WS producer right after reading a detection so the
-        commit-picture renderer can get the exact passthrough frame via
-        ``get_frame_by_ts``. Does NOT call ``on_frame`` — that side-effect is
-        reserved for the encoder's ``get_video_frame`` path.
-        """
-        video_queue = self.output_queues.get(PipelineQueueType.VIDEO)
-        if video_queue is None:
-            return
-        for _ in range(8):  # VIDEO queue maxSize=4; 8 is a generous safety cap
-            try:
-                img_frame = video_queue.tryGet()
-            except Exception:
-                return
-            if img_frame is None:
-                return
-            ts_us = int(img_frame.getTimestampDevice().total_seconds() * 1_000_000)
-            frame = burn_timestamp(img_frame_to_video_frame(img_frame), ts_us)
-            self.last_frame = frame
-            self._buffer_frame(ts_us, frame)
-            if ts_us == ts_us_hint:
-                return
 
     def get_nn_frame(self):
         try:

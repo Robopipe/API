@@ -22,7 +22,6 @@ from . import lifecycle  # noqa: E402, F401
 from . import still  # noqa: E402, F401
 from . import nn  # noqa: E402, F401
 from . import video  # noqa: E402, F401
-from . import dashboard  # noqa: E402, F401
 from . import replay  # noqa: E402, F401
 
 router.include_router(stream_router)

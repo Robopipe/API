@@ -5,11 +5,6 @@ import time
 import depthai as dai
 from fastapi import UploadFile, WebSocket, status
 
-from robopipe_api.dashboard.dashboard_handler import (
-    handle_detections,
-    maybe_auto_stop_product_switch,
-)
-
 from ..common import (
     CameraDep,
     Mxid,
@@ -39,17 +34,6 @@ def _load_model_blob_from_bytes(
             os.unlink(tmp_path)
     else:
         return dai.OpenVINO.Blob(list(model_bytes))
-
-
-def _load_model_blob_from_path(
-    model_path: str,
-) -> "dai.OpenVINO.Blob | dai.NNArchive":
-    """Load a model blob from a file path on disk."""
-    if model_path.endswith(".tar.xz") or model_path.endswith(".tar.gz"):
-        return dai.NNArchive(model_path)
-    else:
-        with open(model_path, "rb") as f:
-            return dai.OpenVINO.Blob(list(f.read()))
 
 
 @stream_router.get("/nn", tags=["nn"])
@@ -106,33 +90,9 @@ async def get_sensor_detections(
         parsed_detections = parse_detections(
             detections, mask_max_dim=nn_config.mask_max_dim
         )
-        # Drain the VIDEO queue in the NN producer so the frame matching this
-        # detection's ts is in the buffer before the lookup below. The NN node
-        # pushes the passthrough frame and the detection simultaneously, so the
-        # passthrough is available in the VIDEO queue right now. Without this
-        # pull the encoder thread might not have had a chance to read it yet,
-        # causing get_frame_by_ts to miss and fall back to an older last_frame.
-        sensor._try_pull_passthrough(ts_us)
-        # handle_detections() runs every tick: it updates zone tracking,
-        # threshold accumulators and the events store. Throttling skips
-        # only the network broadcast, not the evaluation. The frame whose
-        # device timestamp matches this detection is looked up from the
-        # buffer populated above.
-        result = handle_detections(
-            sensor.dashboard_config,
-            parsed_detections,
-            sensor.dashboard_run_session_id,
-            video_frame=sensor.get_frame_by_ts(ts_us),
-        )
+        result = parsed_detections.model_dump()
         result["seq"] = seq
         result["ts_us"] = ts_us
-        # Backend-owned product-switch countdown: enforced here because
-        # evaluation (and thus the alarm) only advances while a producer
-        # ticks. `running` flipping false is how clients learn the run was
-        # auto-stopped.
-        maybe_auto_stop_product_switch(sensor)
-        if sensor.dashboard_config is not None:
-            result["running"] = sensor.dashboard_run_session_id is not None
 
         throttle_hz = nn_config.throttle_hz
         if throttle_hz and throttle_hz > 0:

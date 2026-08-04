@@ -13,20 +13,6 @@ prepare_container = [
     { type = "RUN", command = "pip3 install -r /app/requirements.txt --break-system-packages" },
 ]
 
-# (Optional) Prepare build dependencies
-# Here is the place where you can install all the dependencies that are needed at build-time
-prepare_build_container = [
-    { type = "RUN", command = "bash -c 'sed -i /messagebus/d /var/lib/dpkg/statoverride 2>/dev/null || true'" },
-    { type = "RUN", command = "apt-get update" },
-    { type = "RUN", command = "apt-get install -y curl" },
-    { type = "RUN", command = "bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash && . \"$HOME/.nvm/nvm.sh\" && nvm install 24'" },
-]
-
-# (Optional) Additional commands after all the app files are copied to the container
-build_steps = [
-    "bash -c 'cd app/dashboard_web && source $HOME/.nvm/nvm.sh && npm install && npm run build'",
-]
-
 required_mounts = ["/data/robopipe:/app/data:rw,rbind"]
 
 [env]

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..dashboard.geometry import bbox_iou
 from ..models.detection.bbox_detection import BBoxDetection, BBoxDetections
 from ..models.sahi_config import SAHIConfig
 
@@ -13,6 +12,30 @@ class Tile:
     y1: float
     x2: float
     y2: float
+
+
+def bbox_area(coords: tuple[float, float, float, float]) -> float:
+    x1, y1, x2, y2 = coords
+    return max(0, x2 - x1) * max(0, y2 - y1)
+
+
+def bbox_iou(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+) -> float:
+    inter_x1 = max(a[0], b[0])
+    inter_y1 = max(a[1], b[1])
+    inter_x2 = min(a[2], b[2])
+    inter_y2 = min(a[3], b[3])
+    inter_area = max(0, inter_x2 - inter_x1) * max(0, inter_y2 - inter_y1)
+
+    area_a = bbox_area(a)
+    area_b = bbox_area(b)
+    union = area_a + area_b - inter_area
+
+    if union <= 0:
+        return 0.0
+    return inter_area / union
 
 
 def compute_tiles(config: SAHIConfig) -> list[Tile]:

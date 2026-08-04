@@ -109,35 +109,7 @@ def _build_segmentation_detections(
     mask: np.ndarray,
 ) -> SegmentationDetections:
     """Package detections plus a detection-index mask (-1 = background)."""
-    res = SegmentationDetections(detections=detections, **_mask_fields(mask))
-    res._index_mask = mask
-    return res
-
-
-def reindex_segmentation_masks(
-    detections: SegmentationDetections,
-    kept: list[SegmentationDetection],
-) -> dict | None:
-    """Re-encode the wire mask fields so values reference `kept`.
-
-    The mask encodes 1-based positions into the detections list; when the
-    dashboard handler filters or reorders that list, the mask must be
-    remapped or every pixel resolves to the wrong detection. `kept` must
-    contain object-identical members of `detections.detections`. Pixels of
-    dropped detections become background. Returns None when there is no
-    mask to remap.
-    """
-    mask = detections._index_mask
-    if mask is None:
-        return None
-    new_pos = {id(d): i for i, d in enumerate(kept)}
-    # One extra slot at the end: the -1 background sentinel indexes it,
-    # mapping background to background.
-    lut = np.full(len(detections.detections) + 1, -1, dtype=np.int16)
-    for i, detection in enumerate(detections.detections):
-        lut[i] = new_pos.get(id(detection), -1)
-
-    return _mask_fields(lut[mask])
+    return SegmentationDetections(detections=detections, **_mask_fields(mask))
 
 
 def parse_img_detections(
@@ -194,8 +166,7 @@ def parse_segmentation_mask(
             continue
         class_to_detection[class_idx] = len(detections)
         for rect in rects:
-            # A semantic mask carries no per-object confidence; 1.0 keeps the
-            # detections visible through the dashboard confidence filter.
+            # A semantic mask carries no per-object confidence; report 1.0.
             detections.append(
                 SegmentationDetection(
                     label=class_idx,

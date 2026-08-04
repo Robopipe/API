@@ -138,7 +138,6 @@ class Camera:
                     existing_sensor = existing_sensors[sensor_name]
                     sensor.control = existing_sensor.control
                     sensor.nn_config = existing_sensor.nn_config
-                    sensor.dashboard_config = existing_sensor.dashboard_config
 
         if (
             not any(map(lambda x: x.startswith(DEPTH_NAME), self.all_sensors.keys()))

@@ -4,11 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Robopipe API is an edge-based machine vision platform for industrial automation. It connects Luxonis OAK cameras (via DepthAI SDK) with UniPi PLCs, runs AI inference on-device, and streams results to a React dashboard.
+Robopipe API is an edge-based machine vision platform for industrial automation. It connects Luxonis OAK cameras (via DepthAI SDK) with UniPi PLCs, runs AI inference on-device, and streams results over WebRTC and WebSockets.
 
 ## Commands
-
-### Backend
 
 ```bash
 # Run the API
@@ -19,17 +17,8 @@ robopipe-api
 # Custom env file
 ROBOPIPE_API_ENV=/path/to/.env python3 -m robopipe_api
 
-# Build Python wheel (auto-builds frontend first via build_backend.py)
+# Build Python wheel
 pip install build && python -m build --wheel
-```
-
-### Frontend (`dashboard_web/`)
-
-```bash
-npm install
-npm run dev      # Dev server
-npm run build    # Compile to dist/ (copied to robopipe_api/static/)
-npm run lint     # ESLint
 ```
 
 ### No automated tests exist in this repo.
@@ -56,19 +45,13 @@ Sensors (RGB, stereo, depth) are individually configurable and can be activated/
 - **WebSocket Relay** (`robopipe_api/ws_relay.py`) — generic producer/consumer broadcast to multiple clients; lazily creates producer tasks
 - Detection results are parsed in `robopipe_api/utils/detections_parser.py` and sent over WebSocket alongside video frames
 
-### Dashboard
-
-- **Backend** (`robopipe_api/dashboard/dashboard_handler.py`) — filters detections by region constraints, line crossing, area, aspect ratio, and confidence
-- **Frontend** (`dashboard_web/`) — React 19 + Vite + Tailwind CSS; renders video + detection overlays from WebSocket stream
-- The compiled frontend is bundled into the Python package under `robopipe_api/static/`
-
 ### Controller System (`robopipe_api/controller/`)
 
 Configuration-driven UniPi PLC integration over 1-Wire, TCP, Serial, and Modbus. Loaded via `CONTROLLER_CONFIG` env var pointing to a config directory.
 
 ### Models (`robopipe_api/models/`)
 
-Pydantic v2 models for detections (bounding box, segmentation), sensors, streams, and dashboard config.
+Pydantic v2 models for detections (bounding box, segmentation), sensors, and streams.
 
 ## Environment Variables
 

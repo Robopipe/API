@@ -190,7 +190,6 @@ pip-selfcheck.json
 **/_version.pyi
 **/.version
 
-robopipe_api/static/dashboard
 *.oakapp
 crashdumps/
 

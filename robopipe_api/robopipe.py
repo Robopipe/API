@@ -15,15 +15,11 @@ from pathlib import Path
 from .camera.camera_manager import camera_manager_factory
 from .controller.config import EvokConfig, HWDict, create_devices
 from .controller.devices import Devices, RUN, OWBUS, TCPBUS, SERIALBUS, MODBUS_SLAVE
-from .dashboard.cleanup_task import cleanup_task_factory
-from .dashboard.events_store import events_store_factory
-from .dashboard.reports_store import reports_store_factory
-from .dashboard.sync_task import sync_task_factory
 from .error import (
     CameraNotFoundException,
     SensorNotFoundException,
 )
-from .routers import cameras, controller, recording, reports, streams
+from .routers import cameras, controller, recording, streams
 from .discovery import DEFAULT_API_PORT, discovery_manager_factory
 from .recording.recorder import recorder_manager_factory
 from .stream import stream_service_factory
@@ -46,19 +42,12 @@ async def lifespan(app: FastAPI):
     webrtc_manager = webrtc_manager_factory()
     controller_config_path = os.getenv("CONTROLLER_CONFIG")
 
-    events_store = events_store_factory()
-    events_store.init()
-    reports_store_factory().reset_stuck_reports()
-    sync_task = sync_task_factory()
-    cleanup_task = cleanup_task_factory()
     recorder_manager = recorder_manager_factory()
 
     discovery_manager = discovery_manager_factory()
     await discovery_manager.start()
 
     async with anyio.create_task_group() as tg:
-        tg.start_soon(sync_task.run)
-        tg.start_soon(cleanup_task.run)
         tg.start_soon(discovery_manager.run_udp)
 
         if recorder_manager.enabled:
@@ -135,7 +124,6 @@ if os.getenv("GITHUB_ACTIONS") is not None:
 app.include_router(cameras.router)
 app.include_router(streams.router)
 app.include_router(recording.router)
-app.include_router(reports.router)
 controller.register_device_endpoints(controller.DEVICE_ENDPOINTS)
 app.include_router(controller.router)
 
