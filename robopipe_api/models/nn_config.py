@@ -1,47 +1,32 @@
-from pydantic import model_validator
-
 from enum import Enum
-from typing import Any
 
 from .base_model import BaseModel
+from .sahi_config import SAHIConfig
 
 
 class NNType(Enum):
     Generic = "Generic"
-    YOLO = "YOLO"
-    MobileNet = "MobileNet"
+    Detection = "Detection"
+    SpatialDetection = "SpatialDetection"
 
 
-class NNYoloConfig(BaseModel):
-    anchor_masks: dict[str, list[int]] | None = None
-    anchors: list[float] | None = None
-    coordinate_size: int | None = None
-    confidence_threshold: float | None = None
-    iou_threshold: float | None = None
-    num_classes: int | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def check_nn_type(cls, data: Any, info: Any) -> Any:
-        if info.data.get("type") != NNType.YOLO:
-            raise ValueError("nn type and nn config mismatch")
-
-        return data
-
-
-class NNMobileNetConfig(BaseModel):
-    confidence_threshold: float | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def check_nn_type(cls, data: Any, info: Any) -> Any:
-        if info.data.get("type") != NNType.MobileNet:
-            raise ValueError("nn type and nn config mismatch")
-
-        return data
+class NNGenericConfig(BaseModel):
+    use_parser: bool = True
+    sahi_config: SAHIConfig | None = None
 
 
 class NNConfig(BaseModel):
     type: NNType
+    model_id: int | None = None
+    model_name: str | None = None
     num_inference_threads: int = 2
-    nn_config: NNYoloConfig | NNMobileNetConfig | None = None
+    nn_config: NNGenericConfig | None = None
+    # Cap segmentation mask resolution before JSON-serializing to the client.
+    # Frontend upscales smoothly with bilinear filtering, so 256 looks fine
+    # even on 1080p displays. Set to None to disable (send native resolution).
+    mask_max_dim: int | None = 256
+    # Optional cap on WS detection emit rate. handle_detections() still runs
+    # every frame (so dashboard counters/thresholds stay correct); only the
+    # network send is throttled. Frames carrying newly-fired violation events
+    # are always sent regardless of the throttle. None = no throttle.
+    throttle_hz: float | None = None

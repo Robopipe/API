@@ -1,6 +1,33 @@
-import depthai as dai
+from __future__ import annotations
 
-import pathlib
+import depthai as dai
+from depthai_nodes.node import ParsingNeuralNetwork
+
+from ..models.sahi_config import SAHIConfig
+from .sahi import Tile, compute_tiles
+
+# Type alias for supported model formats
+ModelType = dai.NNArchive
+
+
+class SAHINodes:
+    """Result of building a SAHI pipeline: one full-frame NN plus a single
+    tile NN whose ImageManip crop is reconfigured at runtime to cycle
+    through tiles."""
+
+    def __init__(
+        self,
+        full_frame_nn: dai.node.NeuralNetwork | ParsingNeuralNetwork,
+        tile_nn: dai.node.NeuralNetwork | ParsingNeuralNetwork,
+        tile_manip_cfg: dai.InputQueue,
+        tiles: list[Tile],
+        model_input_size: tuple[int, int],
+    ):
+        self.full_frame_nn = full_frame_nn
+        self.tile_nn = tile_nn
+        self.tile_manip_cfg = tile_manip_cfg
+        self.tiles = tiles
+        self.model_input_size = model_input_size
 
 
 class CameraNNConfig:
@@ -8,109 +35,75 @@ class CameraNNConfig:
         self,
         sensor_name: str,
         sensor: dai.CameraFeatures,
-        blob: dai.OpenVINO.Blob | pathlib.Path,
+        model: ModelType,
         num_inference_threads: int = 2,
+        use_parser: bool = True,
+        sahi_config: SAHIConfig | dict | None = None,
     ):
         self.sensor_name = sensor_name
         self.sensor = sensor
-        self.blob = (
-            blob if isinstance(blob, dai.OpenVINO.Blob) else dai.OpenVINO.Blob(blob)
-        )
-        self.input_shape = list(self.blob.networkInputs.values())[0].dims
-        self.output_shape = list(self.blob.networkOutputs.values())[0].dims
         self.num_inference_threads = num_inference_threads
+        self.use_parser = use_parser
+        self.model = model
+        if isinstance(sahi_config, dict):
+            sahi_config = SAHIConfig(**sahi_config)
+        self.sahi_config = sahi_config
 
-    def create_node(
-        self, pipeline: dai.Pipeline, with_depth: bool = False
-    ) -> dai.node.NeuralNetwork:
-        node = pipeline.createNeuralNetwork()
-
-        return self.configure_node(node)
-
-    def configure_node(self, node: dai.node.NeuralNetwork):
-        if isinstance(self.blob, dai.OpenVINO.Blob):
-            node.setBlob(self.blob)
+    def _create_nn_node(
+        self,
+        pipeline: dai.Pipeline,
+        num_threads: int,
+    ) -> dai.node.NeuralNetwork | ParsingNeuralNetwork:
+        if self.use_parser:
+            node = pipeline.create(ParsingNeuralNetwork)
         else:
-            node.setBlobPath(self.blob)
+            node = pipeline.create(dai.node.NeuralNetwork)
 
         node.input.setBlocking(False)
-        node.input.setQueueSize(1)
-        node.setNumInferenceThreads(self.num_inference_threads)
-
+        node.setNumInferenceThreads(num_threads)
         return node
 
-
-class CameraNNYoloConfig(CameraNNConfig):
-    def __init__(
+    def create_node(
         self,
-        sensor_name: str,
-        sensor: dai.CameraFeatures,
-        blob: dai.OpenVINO.Blob | pathlib.Path,
-        num_inference_threads: int = 2,
-        anchor_masks: dict[str, list[int]] | None = None,
-        anchors: list[float] | None = None,
-        coordinate_size: int | None = None,
-        confidence_threshold: float | None = None,
-        iou_threshold: float | None = None,
-        num_classes: int | None = None,
-    ):
-        super().__init__(sensor_name, sensor, blob, num_inference_threads)
+        pipeline: dai.Pipeline,
+        camera: dai.node.Camera,
+    ) -> dai.node.NeuralNetwork | ParsingNeuralNetwork:
+        node = self._create_nn_node(pipeline, self.num_inference_threads)
+        node.build(camera, self.model)
+        return node
 
-        self.anchor_masks = anchor_masks
-        self.anchors = anchors
-        self.coordinate_size = coordinate_size
-        self.confidence_threshold = confidence_threshold
-        self.iou_threshold = iou_threshold
-        self.num_classes = num_classes
-
-    def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
-        if with_depth:
-            node = pipeline.createYoloSpatialDetectionNetwork()
-        else:
-            node = pipeline.createYoloDetectionNetwork()
-
-        return self.configure_node(node)
-
-    def configure_node(self, node: dai.node.YoloDetectionNetwork):
-        if self.anchor_masks is not None:
-            node.setAnchorMasks(self.anchor_masks)
-        if self.anchors is not None:
-            node.setAnchors(self.anchors)
-        if self.coordinate_size is not None:
-            node.setCoordinateSize(self.coordinate_size)
-        if self.confidence_threshold is not None:
-            node.setConfidenceThreshold(self.confidence_threshold)
-        if self.iou_threshold is not None:
-            node.setIouThreshold(self.iou_threshold)
-        if self.num_classes is not None:
-            node.setNumClasses(self.num_classes)
-
-        return super().configure_node(node)
-
-
-class CameraNNMobileNetConfig(CameraNNConfig):
-    def __init__(
+    def create_sahi_nodes(
         self,
-        sensor_name: str,
-        sensor: dai.CameraFeatures,
-        blob: dai.OpenVINO.Blob | pathlib.Path,
-        num_inference_threads: int = 2,
-        confidence_threshold: float | None = None,
-    ):
-        super().__init__(sensor_name, sensor, blob, num_inference_threads)
+        pipeline: dai.Pipeline,
+        camera: dai.node.Camera,
+    ) -> SAHINodes:
+        # Full-frame NN (unchanged)
+        full_frame_nn = self.create_node(pipeline, camera)
 
-        self.confidence_threshold = confidence_threshold
+        tiles = compute_tiles(self.sahi_config)
+        model_input_size = self.model.getInputSize()
 
-    def create_node(self, pipeline: dai.Pipeline, with_depth: bool = False):
-        if with_depth:
-            node = pipeline.createMobileNetSpatialDetectionNetwork()
-        else:
-            node = pipeline.createMobileNetDetectionNetwork()
+        # Shared camera output for tile crops
+        cam_output = camera.requestOutput(model_input_size)
 
-        return self.configure_node(node)
+        # Single ImageManip — crop is reconfigured at runtime to cycle tiles
+        manip = pipeline.create(dai.node.ImageManip)
+        first_tile = tiles[0]
+        crop_rect = dai.Rect(
+            dai.Point2f(first_tile.x1, first_tile.y1),
+            dai.Point2f(first_tile.x2, first_tile.y2),
+        )
+        manip.initialConfig.addCrop(crop_rect, True)
+        manip.initialConfig.setOutputSize(model_input_size[0], model_input_size[1])
+        manip.initialConfig.setFrameType(dai.ImgFrame.Type.BGR888i)
+        manip.setMaxOutputFrameSize(model_input_size[0] * model_input_size[1] * 3)
+        cam_output.link(manip.inputImage)
 
-    def configure_node(self, node: dai.node.MobileNetDetectionNetwork):
-        if self.confidence_threshold is not None:
-            node.setConfidenceThreshold(self.confidence_threshold)
+        # Host input queue for dynamic crop reconfiguration
+        manip_cfg = manip.inputConfig.createInputQueue()
 
-        return super().configure_node(node)
+        # Single tile NN
+        tile_nn = self._create_nn_node(pipeline, 1)
+        tile_nn.build(manip.out, self.model)
+
+        return SAHINodes(full_frame_nn, tile_nn, manip_cfg, tiles, model_input_size)

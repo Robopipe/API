@@ -2,6 +2,7 @@ import depthai as dai
 from pydantic import Field, ConfigDict
 
 from enum import Enum
+import math
 from typing import Annotated
 
 from ...models.base_model import BaseModel
@@ -15,12 +16,33 @@ class AutoFocusMode(Enum):
     CONTINUOUS_PICTURE = dai.CameraControl.AutoFocusMode.CONTINUOUS_PICTURE.name
     EDOF = dai.CameraControl.AutoFocusMode.EDOF.name
 
-    @classmethod
-    def from_dai_af_mode(cls, af_mode: dai.CameraControl.AutoFocusMode):
-        return cls(af_mode.name)
-
-    def to_dai_af_mode(self) -> dai.CameraControl.AutoFocusMode:
+    def to_dai(self) -> dai.CameraControl.AutoFocusMode:
         return dai.CameraControl.AutoFocusMode.__members__[self.name]
+
+
+class AutoWhiteBalanceMode(Enum):
+    OFF = dai.CameraControl.AutoWhiteBalanceMode.OFF.name
+    AUTO = dai.CameraControl.AutoWhiteBalanceMode.AUTO.name
+    INCANDESCENT = dai.CameraControl.AutoWhiteBalanceMode.INCANDESCENT.name
+    FLUORESCENT = dai.CameraControl.AutoWhiteBalanceMode.FLUORESCENT.name
+    WARM_FLUORESCENT = dai.CameraControl.AutoWhiteBalanceMode.WARM_FLUORESCENT.name
+    DAYLIGHT = dai.CameraControl.AutoWhiteBalanceMode.DAYLIGHT.name
+    CLOUDY_DAYLIGHT = dai.CameraControl.AutoWhiteBalanceMode.CLOUDY_DAYLIGHT.name
+    TWILIGHT = dai.CameraControl.AutoWhiteBalanceMode.TWILIGHT.name
+    SHADE = dai.CameraControl.AutoWhiteBalanceMode.SHADE.name
+
+    def to_dai(self) -> dai.CameraControl.AutoWhiteBalanceMode:
+        return dai.CameraControl.AutoWhiteBalanceMode.__members__[self.name]
+
+
+class AntiBandingMode(Enum):
+    OFF = dai.CameraControl.AntiBandingMode.OFF.name
+    MAINS_50_HZ = dai.CameraControl.AntiBandingMode.MAINS_50_HZ.name
+    MAINS_60_HZ = dai.CameraControl.AntiBandingMode.MAINS_60_HZ.name
+    AUTO = dai.CameraControl.AntiBandingMode.AUTO.name
+
+    def to_dai(self) -> dai.CameraControl.AntiBandingMode:
+        return dai.CameraControl.AntiBandingMode.__members__[self.name]
 
 
 class SensorFocus(BaseModel):
@@ -28,110 +50,117 @@ class SensorFocus(BaseModel):
         AutoFocusMode, Field(default=AutoFocusMode.CONTINUOUS_VIDEO)
     ]
     auto_focus_trigger: Annotated[bool, Field(default=False)]
-    lens_position: Annotated[float, Field(ge=0.0, le=1.0, default=0.0)]
-
-
-class AutoWhiteBalanceMode(Enum):
-    AUTO = dai.RawCameraControl.AutoWhiteBalanceMode.AUTO.name
-    CLOUDY_DAYLIGHT = dai.RawCameraControl.AutoWhiteBalanceMode.CLOUDY_DAYLIGHT.name
-    DAYLIGHT = dai.RawCameraControl.AutoWhiteBalanceMode.DAYLIGHT.name
-    FLUORESCENT = dai.RawCameraControl.AutoWhiteBalanceMode.FLUORESCENT.name
-    INCANDESCENT = dai.RawCameraControl.AutoWhiteBalanceMode.INCANDESCENT.name
-    OFF = dai.RawCameraControl.AutoWhiteBalanceMode.OFF.name
-    SHADE = dai.RawCameraControl.AutoWhiteBalanceMode.SHADE.name
-    TWILIGHT = dai.RawCameraControl.AutoWhiteBalanceMode.TWILIGHT.name
-    WARM_FLUORESCENT = dai.RawCameraControl.AutoWhiteBalanceMode.WARM_FLUORESCENT.name
+    lens_position: Annotated[float, Field(ge=0.0, le=1.0, default=0.5)]
 
 
 class SensorControl(BaseModel):
+    # Exposure
+    auto_exposure_enable: Annotated[bool, Field(default=True)]
     exposure_time: Annotated[
         int,
         Field(
-            description="Exposure time in microseconds. Ignored if auto_exposure_enable is set to true.",
             ge=1,
-            le=33000,
+            le=33_000_000,
+            default=20_000,
+            description="Manual exposure time in microseconds. Applied only when auto_exposure_enable is False.",
         ),
     ]
     sensitivity_iso: Annotated[
         int,
-        Field(ge=100, le=5000),
+        Field(
+            ge=100,
+            le=1600,
+            default=800,
+            description="Manual ISO. Applied only when auto_exposure_enable is False.",
+        ),
     ]
-    auto_exposure_enable: bool
-    auto_exposure_compensation: Annotated[int, Field(ge=-9, le=9)]
+    auto_exposure_compensation: Annotated[int, Field(ge=-9, le=9, default=0)]
     auto_exposure_limit: Annotated[
         int,
         Field(
-            description="Maximum exposure time limit for auto-exposure in microseconds"
+            ge=1,
+            le=33_000_000,
+            default=33_000,
+            description="Max exposure time (µs) used by auto-exposure.",
         ),
     ]
-    auto_exposure_lock: bool
-    contrast: Annotated[int, Field(ge=-10, le=10)]
-    brightness: Annotated[int, Field(ge=-10, le=10)]
-    saturation: Annotated[int, Field(ge=-10, le=10)]
-    chroma_denoise: Annotated[int, Field(ge=0, le=4)]
-    luma_denoise: Annotated[int, Field(ge=0, le=4)]
-    auto_whitebalance_lock: bool
-    auto_whitebalance_mode: AutoWhiteBalanceMode = AutoWhiteBalanceMode.AUTO
-    manual_whitebalance: Annotated[int, Field(ge=1000, le=12000)]
+    auto_exposure_lock: Annotated[bool, Field(default=False)]
+
+    # ISP
+    contrast: Annotated[int, Field(ge=-10, le=10, default=0)]
+    saturation: Annotated[int, Field(ge=-10, le=10, default=0)]
+    sharpness: Annotated[int, Field(ge=0, le=4, default=1)]
+    luma_denoise: Annotated[int, Field(ge=0, le=4, default=1)]
+    chroma_denoise: Annotated[int, Field(ge=0, le=4, default=1)]
+
+    # White balance (COLOR sensors only)
+    auto_whitebalance_mode: Annotated[
+        AutoWhiteBalanceMode, Field(default=AutoWhiteBalanceMode.AUTO)
+    ]
+    auto_whitebalance_lock: Annotated[bool, Field(default=False)]
+    manual_whitebalance: Annotated[int, Field(ge=1000, le=12000, default=6500)]
+
+    # Focus (sensors with hasAutofocusIC)
     focus: Annotated[SensorFocus | None, Field(default=None)]
+
+    # Misc
+    anti_banding_mode: Annotated[
+        AntiBandingMode, Field(default=AntiBandingMode.MAINS_50_HZ)
+    ]
 
     model_config = ConfigDict(revalidate_instances="always")
 
     @classmethod
-    def from_camera_control(cls, ctrl: dai.CameraControl, has_af: bool):
-        raw_ctrl = ctrl.get()
-        properties = {
-            "contrast": raw_ctrl.contrast,
-            "brightness": raw_ctrl.brightness,
-            "saturation": raw_ctrl.saturation,
-            "chroma_denoise": raw_ctrl.chromaDenoise,
-            "luma_denoise": raw_ctrl.lumaDenoise,
-            "exposure_time": 1,
-            "sensitivity_iso": 850,
-            "auto_exposure_enable": ctrl.getExposureTime().total_seconds() == 0,
-            "auto_exposure_limit": raw_ctrl.aeMaxExposureTimeUs,
-            "auto_exposure_compensation": raw_ctrl.expCompensation,
-            "auto_exposure_lock": raw_ctrl.aeLockMode,
-            "auto_whitebalance_lock": raw_ctrl.awbLockMode,
-            "manual_whitebalance": 6500,
-            "focus": SensorFocus() if has_af else None,
-        }
+    def default_for(cls, features: dai.CameraFeatures) -> "SensorControl":
+        return cls(focus=SensorFocus() if features.hasAutofocusIC else None)
 
-        return cls.model_validate(properties)
+    def update_from_frame(self, img: dai.ImgFrame) -> None:
+        self.exposure_time = max(
+            1, math.floor(img.getExposureTime().total_seconds() * 1_000_000)
+        )
+        sensitivity = img.getSensitivity()
+        if sensitivity > 0:
+            self.sensitivity_iso = max(100, min(1600, sensitivity))
+        color_temp = img.getColorTemperature()
+        if 1000 <= color_temp <= 12000:
+            self.manual_whitebalance = color_temp
+        if self.focus is not None:
+            lens_position_raw = img.getLensPositionRaw()
+            if 0.0 <= lens_position_raw <= 1.0:
+                self.focus.lens_position = lens_position_raw
 
-    def to_camera_control(self) -> dai.CameraControl:
+    def to_camera_control(self, features: dai.CameraFeatures) -> dai.CameraControl:
         ctrl = dai.CameraControl()
+        is_color = dai.CameraSensorType.COLOR in features.supportedTypes
+
         ctrl.setContrast(self.contrast)
-        ctrl.setBrightness(self.brightness)
-        ctrl.setSaturation(self.saturation)
-        ctrl.setChromaDenoise(self.chroma_denoise)
+        ctrl.setSharpness(self.sharpness)
         ctrl.setLumaDenoise(self.luma_denoise)
+        if is_color:
+            ctrl.setSaturation(self.saturation)
+            ctrl.setChromaDenoise(self.chroma_denoise)
 
         if self.auto_exposure_enable:
             ctrl.setAutoExposureEnable()
             ctrl.setAutoExposureLimit(self.auto_exposure_limit)
             ctrl.setAutoExposureCompensation(self.auto_exposure_compensation)
             ctrl.setAutoExposureLock(self.auto_exposure_lock)
-        elif self.exposure_time > 0:
+        else:
             ctrl.setManualExposure(self.exposure_time, self.sensitivity_iso)
 
-        if self.auto_whitebalance_mode != AutoWhiteBalanceMode.OFF:
-            ctrl.setAutoWhiteBalanceLock(self.auto_whitebalance_lock)
-            ctrl.setAutoWhiteBalanceMode(
-                dai.RawCameraControl.AutoWhiteBalanceMode.__members__[
-                    self.auto_whitebalance_mode.name
-                ]
-            )
-        else:
-            ctrl.setManualWhiteBalance(self.manual_whitebalance)
+        if is_color:
+            if self.auto_whitebalance_mode != AutoWhiteBalanceMode.OFF:
+                ctrl.setAutoWhiteBalanceMode(self.auto_whitebalance_mode.to_dai())
+                ctrl.setAutoWhiteBalanceLock(self.auto_whitebalance_lock)
+            else:
+                ctrl.setManualWhiteBalance(self.manual_whitebalance)
 
-        if self.focus is not None:
-            ctrl.setAutoFocusMode(self.focus.auto_focus_mode.to_dai_af_mode())
-
-            if self.focus.auto_focus_trigger:
-                ctrl.setAutoFocusTrigger()
-
+        if self.focus is not None and features.hasAutofocusIC:
+            ctrl.setAutoFocusMode(self.focus.auto_focus_mode.to_dai())
             if self.focus.auto_focus_mode == AutoFocusMode.OFF:
                 ctrl.setManualFocusRaw(self.focus.lens_position)
+            elif self.focus.auto_focus_trigger:
+                ctrl.setAutoFocusTrigger()
 
+        ctrl.setAntiBandingMode(self.anti_banding_mode.to_dai())
         return ctrl

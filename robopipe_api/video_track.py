@@ -1,0 +1,210 @@
+import asyncio
+import fractions
+import json
+import time
+from collections import deque
+
+import av
+from aiortc import VideoStreamTrack, MediaStreamError
+from aiortc.contrib.media import MediaRelay
+import anyio.to_thread
+
+from .camera.camera import Camera
+from .camera.exceptions import VideoStreamEnded
+from .log import logger
+from .webrtc_manager import webrtc_manager_factory
+
+VIDEO_CLOCK_RATE = 90000
+VIDEO_TIME_BASE = fractions.Fraction(1, VIDEO_CLOCK_RATE)
+DEFAULT_BIT_RATE = 2_000_000  # 2 Mbps — comfortable for 1080p WebRTC
+
+
+class VideoTrack(VideoStreamTrack):
+    """Single source track shared across all WebRTC subscribers via
+    MediaRelay. Encodes raw frames *once* with a host libav x264 codec
+    and yields ``av.Packet``. aiortc's RTCRtpSender detects the Packet
+    (vs a Frame) and routes through ``H264Encoder.pack()`` — RTP
+    packetization only, no per-PC re-encoding. So adding viewers stays
+    cheap, and the timestamp burnin applied in ``get_video_frame`` is
+    preserved through encode → decode."""
+
+    def __init__(self, camera: Camera, sensor_name: str):
+        super().__init__()
+        self.camera = camera
+        self.sensor_name = sensor_name
+        self._codec: av.CodecContext | None = None
+        self._packet_buffer: deque[av.Packet] = deque()
+        self._start_time: float | None = None
+        self._last_pts: int = -1
+
+    def _ensure_codec(self, frame: av.VideoFrame) -> av.CodecContext:
+        if (
+            self._codec is not None
+            and self._codec.width == frame.width
+            and self._codec.height == frame.height
+        ):
+            return self._codec
+
+        # Frame size changed (or first frame) — (re)create the encoder.
+        # libvpx (VP8) chosen over libx264 to avoid H.264 royalty exposure.
+        # aiortc only supports VP8 and H.264 for the pre-encoded pack()
+        # path; VP9 isn't available in this version.
+        codec = av.CodecContext.create("libvpx", "w")
+        codec.width = frame.width
+        codec.height = frame.height
+        codec.pix_fmt = "yuv420p"
+        codec.framerate = fractions.Fraction(30, 1)
+        codec.time_base = VIDEO_TIME_BASE
+        codec.bit_rate = DEFAULT_BIT_RATE
+        codec.options = {
+            "deadline": "realtime",
+            "cpu-used": "8",  # 0..16, higher = faster + lower quality. 8 is a good edge default
+            "g": "30",  # one keyframe per ~second so new subscribers attach quickly
+            "error-resilient": "1",
+        }
+        self._codec = codec
+        return codec
+
+    def _encode_one(self, frame: av.VideoFrame) -> list[av.Packet]:
+        codec = self._ensure_codec(frame)
+        # libx264 only encodes its configured pix_fmt (yuv420p). The source
+        # is nv12 (streaming pipeline) or bgr24 (NN passthrough); reformat
+        # explicitly — libav does NOT auto-convert at codec.encode() time
+        # and frames silently get dropped on mismatch (blank stream).
+        # nv12 → yuv420p is plane re-arrangement (Y plane unchanged), so
+        # the timestamp burnin in the Y strip survives.
+        if frame.format.name != "yuv420p":
+            frame = frame.reformat(format="yuv420p")
+        # PTS from wall clock (90 kHz). Pacing at a fixed 30 fps stride
+        # makes the stream jumpy under variable source rate (NN load
+        # slows the camera below 30 fps): the receiver paces playback to
+        # PTS-implied 30 fps, but real frames arrive slower, so its
+        # buffer drains → freeze → fills on burst → jumpy. Wall-clock
+        # PTS reflects actual arrival cadence, so the receiver paces
+        # playback correctly.
+        now = time.monotonic()
+        if self._start_time is None:
+            self._start_time = now
+        pts = int((now - self._start_time) * VIDEO_CLOCK_RATE)
+        # libav requires strictly increasing PTS — guard against rare
+        # same-microsecond ticks (would crash the encoder).
+        if pts <= self._last_pts:
+            pts = self._last_pts + 1
+        self._last_pts = pts
+        frame.pts = pts
+        frame.time_base = VIDEO_TIME_BASE
+        packets = list(codec.encode(frame))
+        for pkt in packets:
+            # H264Encoder.pack() reads pkt.pts / pkt.time_base via
+            # convert_timebase() — make sure they're set so the receiver
+            # gets sensible RTP timestamps.
+            if pkt.time_base is None:
+                pkt.time_base = VIDEO_TIME_BASE
+        return packets
+
+    async def recv(self) -> av.Packet:
+        # Mirror aiortc's own VideoStreamTrack.recv: bail out as soon as
+        # the track has been stopped. Without this, MediaRelay's
+        # __run_track loop keeps calling recv() on a "stopped" track
+        # forever (it only stops on MediaStreamError), pinning a CPU
+        # core polling the (now-dead) source sensor and leaving zombie
+        # tasks behind every time the camera is swapped or invalidated.
+        if self.readyState != "live":
+            raise MediaStreamError()
+
+        # If a previous frame produced more than one packet (SPS+PPS+IDR
+        # on keyframes), drain them one-per-recv before pulling the next.
+        if self._packet_buffer:
+            return self._packet_buffer.popleft()
+
+        sensor = self.camera.sensors.get(self.sensor_name)
+        if sensor is None:
+            await asyncio.sleep(0.01)
+            sensor = self.camera.sensors.get(self.sensor_name)
+            if sensor is None:
+                self.stop()
+                _drop_track(self.camera.mxid, self.sensor_name)
+                raise MediaStreamError()
+
+        # Pull frames + encode in a thread until we get at least one packet.
+        # libx264 with tune=zerolatency emits a packet on every input frame,
+        # so this normally runs once.
+        def _pull_and_encode() -> list[av.Packet]:
+            frame = sensor.get_video_frame()
+            return self._encode_one(frame)
+
+        try:
+            while not self._packet_buffer:
+                packets = await anyio.to_thread.run_sync(
+                    _pull_and_encode, abandon_on_cancel=True
+                )
+                self._packet_buffer.extend(packets)
+        except VideoStreamEnded:
+            # Distinguish natural replay EOF from camera-restart teardown.
+            # add_replay_video (and other lifecycle calls) close/reopen the
+            # device, which replaces sensor objects in camera.sensors.  If the
+            # sensor we were reading from is no longer the current one, the
+            # exception was triggered by a device restart, not a real EOF —
+            # skip the EOF event so we don't mislead connected clients.
+            current_sensor = self.camera.sensors.get(self.sensor_name)
+            is_natural_replay_eof = (
+                current_sensor is sensor
+                and self.camera.get_replay_video(self.sensor_name) is not None
+            )
+            logger.warning(
+                f"VideoStreamEnded: mxid={self.camera.mxid} sensor={self.sensor_name} "
+                f"natural_eof={is_natural_replay_eof} sensor_same={current_sensor is sensor}"
+            )
+            if is_natural_replay_eof:
+                mgr = webrtc_manager_factory()
+                mgr.mark_stream_ended(self.camera.mxid, self.sensor_name)
+                channels = mgr.get_event_channels(self.camera.mxid, self.sensor_name)
+                logger.warning(f"EOF: {len(channels)} channel(s) registered")
+                for ch in channels:
+                    if ch.readyState == "open":
+                        try:
+                            ch.send(json.dumps({"event": "eof"}))
+                        except Exception as exc:
+                            logger.warning(f"EOF send failed: {exc}")
+                # Give SCTP transport time to flush the EOF message before
+                # MediaStreamError tears down the PC and closes all channels.
+                await asyncio.sleep(0.1)
+            self.stop()
+            _drop_track(self.camera.mxid, self.sensor_name)
+            raise MediaStreamError()
+        except Exception as e:
+            logger.error(f"Error in VideoTrack encode: {e}")
+            self.stop()
+            _drop_track(self.camera.mxid, self.sensor_name)
+            raise MediaStreamError()
+
+        return self._packet_buffer.popleft()
+
+
+_TrackKey = tuple[str, str]
+_video_tracks: dict[_TrackKey, VideoTrack] = {}
+_media_relays: dict[_TrackKey, MediaRelay] = {}
+
+
+def video_track_factory(camera: Camera, sensor_name: str) -> VideoTrack:
+    key = (camera.mxid, sensor_name)
+    track = _video_tracks.get(key)
+    if track is None:
+        track = VideoTrack(camera, sensor_name)
+        _video_tracks[key] = track
+    return track
+
+
+def media_relay_factory(camera: Camera, sensor_name: str) -> MediaRelay:
+    key = (camera.mxid, sensor_name)
+    relay = _media_relays.get(key)
+    if relay is None:
+        relay = MediaRelay()
+        _media_relays[key] = relay
+    return relay
+
+
+def _drop_track(mxid: str, sensor_name: str) -> None:
+    key = (mxid, sensor_name)
+    _video_tracks.pop(key, None)
+    _media_relays.pop(key, None)

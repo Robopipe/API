@@ -1,121 +1,99 @@
 import depthai as dai
 
+from typing import Self
+
 from ..nn import CameraNNConfig
+from ..sahi import Tile
+from ...models.sahi_config import SAHIConfig
 from .depth_pipeline import DepthPipeline
 from .pipeline_queue_type import PipelineQueueType
 
 
 class NNPipeline(DepthPipeline):
     def __init__(
-        self, networks: list[CameraNNConfig], pipeline: dai.Pipeline | None = None
+        self,
+        device: dai.Device,
+        pipeline: Self | None = None,
+        networks: list[CameraNNConfig] = [],
+        sensors: list[dai.CameraFeatures] = [],
     ):
         self.neural_networks: dict[str, dai.node.NeuralNetwork] = {}
         self.nn_configs: dict[str, CameraNNConfig] = {}
-        super().__init__(None, [], pipeline)
+        self.sahi_tile_queue: dict[str, dai.MessageQueue] = {}
+        self.sahi_manip_cfg: dict[str, dai.InputQueue] = {}
+        self.sahi_tiles: dict[str, list[Tile]] = {}
+        self.sahi_configs: dict[str, SAHIConfig] = {}
+        self.sahi_model_input_sizes: dict[str, tuple[int, int]] = {}
+
+        sensors = list(
+            filter(
+                lambda s: s.socket.name not in map(lambda nn: nn.sensor_name, networks),
+                sensors,
+            )
+        )
+        super().__init__(device, pipeline, sensors)
 
         for nn in networks:
             self.add_nn(nn)
 
-    def extract_properties(self):
-        super().extract_properties()
+    def recreate(self, pipeline: Self):
+        super().recreate(pipeline)
 
-        for neural_network in self.pipeline.getAllNodes():
-            if not isinstance(neural_network, dai.node.NeuralNetwork):
-                continue
-
-            for camera in self.cameras.values():
-                is_mono = isinstance(camera, dai.node.MonoCamera)
-
-                try:
-                    if is_mono:
-                        camera.out.unlink(neural_network.input)
-                        camera.out.link(neural_network.input)
-                    else:
-                        camera.preview.unlink(neural_network.input)
-                        camera.preview.link(neural_network.input)
-
-                    self.neural_networks[camera.getBoardSocket().name] = neural_network
-                    break
-                except:
-                    continue
+        for nn in pipeline.nn_configs.values():
+            self.add_nn(nn)
 
     def get_video_queue(self, sensor_name: str):
         return self.outputs[
             self.output_queues[sensor_name].get(PipelineQueueType.VIDEO)
         ]
 
-    def __setup_mono_camera(
-        self,
-        camera: dai.node.MonoCamera,
-        nn: CameraNNConfig,
-        nn_node: dai.node.NeuralNetwork,
-    ):
-        sensor_name = camera.getBoardSocket().name
-        script = self.scripts[sensor_name]
-        video_queue = self.get_video_queue(sensor_name)
-
-        script.outputs["preview"].link(nn_node.input)
-        script.outputs["video"].unlink(video_queue.input)
-        nn_node.passthrough.link(video_queue.input)
-
-    def __setup_camera(
-        self,
-        camera: dai.node.ColorCamera | dai.node.Camera,
-        nn: CameraNNConfig,
-        nn_node: dai.node.NeuralNetwork,
-    ):
-        camera.setPreviewSize(nn.input_shape[:2])
-        camera.setInterleaved(False)
-
-        video_queue = self.get_video_queue(nn.sensor_name)
-
-        camera.preview.link(nn_node.input)
-        camera.video.unlink(video_queue.input)
-        nn_node.passthrough.link(video_queue.input)
-
-    def __setup_stereo_camera(
-        self, nn: CameraNNConfig, nn_node: dai.node.NeuralNetwork
-    ):
-        video_queue = self.get_video_queue(nn.sensor_name)
-
-        self.scripts[nn.sensor_name].outputs["preview"].link(nn_node.input)
-        self.scripts[nn.sensor_name].outputs["video"].unlink(video_queue.input)
-        nn_node.passthrough.link(video_queue.input)
+    def add_nn_config(self, nn_config: CameraNNConfig):
+        self.remove_sensor(nn_config.sensor_name)
+        self.nn_configs[nn_config.sensor_name] = nn_config
 
     def add_nn(self, nn: CameraNNConfig):
         sensor_name = nn.sensor_name
-        self.nn_configs[sensor_name] = nn
         self.remove_nn(sensor_name)
-
-        nn_node = nn.create_node(self.pipeline, self.stereo_pair is not None)
-
-        if self.stereo_pair is not None and isinstance(
-            nn_node, dai.node.SpatialDetectionNetwork
-        ):
-            self.stereo_node.setDepthAlign(nn.sensor.socket)
-            self.stereo_node.depth.link(nn_node.inputDepth)
-
-        self.neural_networks[sensor_name] = nn_node
-        cam_nn_out = self.create_x_link(
-            sensor_name, PipelineQueueType.NN, False, False, 1
-        )
-        nn_node.out.link(cam_nn_out.input)
-
-        if sensor_name.startswith("DEPTH"):
-            left, right = sensor_name.split("_")[1:]
-            self.add_stereo_pair(f"CAM_{left}", f"CAM_{right}")
-            self.__setup_stereo_camera(nn, nn_node)
-            return
+        self.remove_sensor(sensor_name)
+        self.nn_configs[sensor_name] = nn
 
         if sensor_name not in self.cameras:
-            self.add_sensor(nn.sensor)
+            cam = self.pipeline.create(dai.node.Camera)
+            self.build_camera(
+                cam, nn.sensor.socket, replay_size=nn.model.getInputSize()
+            )
+            self.cameras[sensor_name] = cam
 
         cam = self.cameras[sensor_name]
 
-        if isinstance(cam, dai.node.MonoCamera):
-            self.__setup_mono_camera(cam, nn, nn_node)
+        if nn.sahi_config is not None:
+            sahi_nodes = nn.create_sahi_nodes(self.pipeline, cam)
+
+            self.neural_networks[sensor_name] = sahi_nodes.full_frame_nn
+            nn_out = sahi_nodes.full_frame_nn.out.createOutputQueue(
+                maxSize=1, blocking=False
+            )
+            self.add_queue(nn_out, PipelineQueueType.NN, sensor_name, False)
+            nn_video = sahi_nodes.full_frame_nn.passthrough.createOutputQueue(
+                maxSize=4, blocking=False
+            )
+            self.add_queue(nn_video, PipelineQueueType.VIDEO, sensor_name, False)
+
+            tile_out = sahi_nodes.tile_nn.out.createOutputQueue(
+                maxSize=1, blocking=False
+            )
+            self.sahi_tile_queue[sensor_name] = tile_out
+            self.sahi_manip_cfg[sensor_name] = sahi_nodes.tile_manip_cfg
+            self.sahi_tiles[sensor_name] = sahi_nodes.tiles
+            self.sahi_configs[sensor_name] = nn.sahi_config
+            self.sahi_model_input_sizes[sensor_name] = sahi_nodes.model_input_size
         else:
-            self.__setup_camera(cam, nn, nn_node)
+            nn_node = nn.create_node(self.pipeline, cam)
+            self.neural_networks[sensor_name] = nn_node
+            nn_out = nn_node.out.createOutputQueue(maxSize=1, blocking=False)
+            self.add_queue(nn_out, PipelineQueueType.NN, sensor_name, False)
+            nn_video = nn_node.passthrough.createOutputQueue(maxSize=4, blocking=False)
+            self.add_queue(nn_video, PipelineQueueType.VIDEO, sensor_name, False)
 
     def add_stereo_pair(self, left, right):
         nn_to_remove: list[CameraNNConfig] = []
@@ -158,24 +136,14 @@ class NNPipeline(DepthPipeline):
         if sensor_name not in self.neural_networks:
             return
 
-        nn_node = self.neural_networks[sensor_name]
-        video_queue = self.get_video_queue(sensor_name)
-
-        if sensor_name.startswith("DEPTH"):
-            script = self.scripts[self.get_depth_name()]
-            script.outputs["video"].link(video_queue.input)
-        else:
-            cam = self.cameras[sensor_name]
-
-            if isinstance(cam, dai.node.MonoCamera):
-                self.scripts[sensor_name].outputs["video"].link(video_queue.input)
-            else:
-                cam.video.link(video_queue.input)
-
-        self.pipeline.remove(nn_node)
+        self.del_all_queues(sensor_name)
+        self.sahi_tile_queue.pop(sensor_name, None)
+        self.sahi_manip_cfg.pop(sensor_name, None)
+        self.sahi_tiles.pop(sensor_name, None)
+        self.sahi_configs.pop(sensor_name, None)
+        self.sahi_model_input_sizes.pop(sensor_name, None)
         del self.neural_networks[sensor_name]
         del self.nn_configs[sensor_name]
-        self.del_queue(sensor_name, PipelineQueueType.NN)
 
     def remove_sensor(self, sensor):
         self.remove_nn(sensor)

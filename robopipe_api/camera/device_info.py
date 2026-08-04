@@ -8,12 +8,14 @@ class DevicePlatform(Enum):
     X_LINK_ANY_PLATFORM = dai.XLinkPlatform.X_LINK_ANY_PLATFORM.name
     X_LINK_MYRIAD_X = dai.XLinkPlatform.X_LINK_MYRIAD_X.name
     X_LINK_MYRIAD_2 = dai.XLinkPlatform.X_LINK_MYRIAD_2.name
+    X_LINK_RVC3 = dai.XLinkPlatform.X_LINK_RVC3.name
+    X_LINK_RVC4 = dai.XLinkPlatform.X_LINK_RVC4.name
 
 
 class DeviceProtocol(Enum):
     X_LINK_ANY_PROTOCOL = dai.XLinkProtocol.X_LINK_ANY_PROTOCOL.name
     X_LINK_IPC = dai.XLinkProtocol.X_LINK_IPC.name
-    X_LINK_NMB_OF_PROTOCOLS = dai.XLinkProtocol.name
+    X_LINK_NMB_OF_PROTOCOLS = dai.XLinkProtocol.X_LINK_NMB_OF_PROTOCOLS.name
     X_LINK_PCIE = dai.XLinkProtocol.X_LINK_PCIE.name
     X_LINK_TCP_IP = dai.XLinkProtocol.X_LINK_TCP_IP.name
     X_LINK_USB_CDC = dai.XLinkProtocol.X_LINK_USB_CDC.name
@@ -26,6 +28,10 @@ class DeviceState(Enum):
     X_LINK_BOOTLOADER = dai.XLinkDeviceState.X_LINK_BOOTLOADER.name
     X_LINK_FLASH_BOOTED = dai.XLinkDeviceState.X_LINK_FLASH_BOOTED.name
     X_LINK_UNBOOTED = dai.XLinkDeviceState.X_LINK_UNBOOTED.name
+    X_LINK_BOOTED_NON_EXCLUSIVE = dai.XLinkDeviceState.X_LINK_BOOTED_NON_EXCLUSIVE.name
+    X_LINK_GATE = dai.XLinkDeviceState.X_LINK_GATE.name
+    X_LINK_GATE_BOOTED = dai.XLinkDeviceState.X_LINK_GATE_BOOTED.name
+    X_LINK_GATE_SETUP = dai.XLinkDeviceState.X_LINK_GATE_SETUP.name
 
 
 @dataclasses.dataclass
@@ -41,7 +47,7 @@ class DeviceInfo:
     @classmethod
     def from_device_info(cls, device_info: dai.DeviceInfo, camera_name: str):
         return cls(
-            device_info.mxid,
+            device_info.deviceId,
             device_info.name,
             camera_name,
             DevicePlatform[device_info.platform.name],

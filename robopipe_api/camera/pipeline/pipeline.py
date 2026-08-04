@@ -1,23 +1,37 @@
 import depthai as dai
 
+from typing import Self
+
 from .pipeline_queue_type import PipelineQueueType
 
 
 class Pipeline:
-    def __init__(self, pipeline: dai.Pipeline | None = None):
-        self.pipeline = pipeline or dai.Pipeline()
+    def __init__(
+        self,
+        device: dai.Device,
+        pipeline: Self | None = None,
+    ):
         self.input_queues: dict[str, dict[PipelineQueueType, str]] = {}
         self.output_queues: dict[str, dict[PipelineQueueType, str]] = {}
-        self.cameras: dict[
-            str, dai.node.ColorCamera | dai.node.MonoCamera | dai.node.Camera
-        ] = {}
-        self.inputs: dict[str, dai.node.XLinkIn] = {}
-        self.outputs: dict[str, dai.node.XLinkOut] = {}
-
+        self.inputs: dict[str, dai.InputQueue] = {}
+        self.outputs: dict[str, dai.MessageQueue] = {}
+        self.cameras: dict[str, dai.node.Camera] = {}
+        self.pipeline = dai.Pipeline(device)
         self.pipeline.setXLinkChunkSize(0)
-        self.extract_properties()
 
-    def __add_queue(self, queue_type: PipelineQueueType, sensor_name: str, input: bool):
+        if pipeline is not None:
+            self.recreate(pipeline)
+
+    def recreate(self, pipeline: Self):
+        pass
+
+    def add_queue(
+        self,
+        queue,
+        queue_type: PipelineQueueType,
+        sensor_name: str,
+        input: bool,
+    ):
         queues = self.input_queues if input else self.output_queues
 
         if sensor_name not in queues:
@@ -25,49 +39,19 @@ class Pipeline:
 
         queues[sensor_name][queue_type] = queue_type.get_queue_name(sensor_name)
 
+        if input:
+            self.inputs[queues[sensor_name][queue_type]] = queue
+        else:
+            self.outputs[queues[sensor_name][queue_type]] = queue
+
     def __add_queue_from_name(self, queue_name: str, input: bool):
         self.__add_queue(*PipelineQueueType.parse_queue_name(queue_name), input)
 
-    def extract_properties(self):
-        nodes = self.pipeline.getAllNodes()
+    def get_input_queue(self, queue_name: str):
+        return self.inputs[queue_name]
 
-        for node in nodes:
-            if isinstance(
-                node, (dai.node.ColorCamera, dai.node.MonoCamera, dai.node.Camera)
-            ):
-                self.cameras[node.getBoardSocket().name] = node
-            elif isinstance(node, dai.node.XLinkIn):
-                self.__add_queue_from_name(node.getStreamName(), True)
-                self.inputs[node.getStreamName()] = node
-            elif isinstance(node, dai.node.XLinkOut):
-                self.__add_queue_from_name(node.getStreamName(), False)
-                self.outputs[node.getStreamName()] = node
-
-    def create_x_link(
-        self,
-        sensor_name: str,
-        queue_type: PipelineQueueType,
-        input: bool,
-        blocking: bool = True,
-        queue_size: int = 30,
-    ) -> dai.node.XLinkIn | dai.node.XLinkOut:
-        x_link_queue = queue_type.get_queue_name(sensor_name)
-        x_link = (
-            self.pipeline.createXLinkIn() if input else self.pipeline.createXLinkOut()
-        )
-        x_link.setStreamName(x_link_queue)
-
-        if input:
-            x_link.setMaxDataSize(1)
-            self.inputs[x_link_queue] = x_link
-        else:
-            x_link.input.setBlocking(blocking)
-            x_link.input.setQueueSize(queue_size)
-            self.outputs[x_link_queue] = x_link
-
-        self.__add_queue_from_name(x_link_queue, input)
-
-        return x_link
+    def get_output_queue(self, queue_name: str):
+        return self.outputs[queue_name]
 
     def del_queue(self, sensor_name: str, queue_type: PipelineQueueType):
         queue_name = queue_type.get_queue_name(sensor_name)
@@ -81,7 +65,6 @@ class Pipeline:
         else:
             return
 
-        self.pipeline.remove(nodes[queue_name])
         del nodes[queue_name]
         del queues[sensor_name][queue_type]
 
@@ -92,8 +75,10 @@ class Pipeline:
             except:
                 pass
 
-        del self.input_queues[sensor_name]
-        del self.output_queues[sensor_name]
+        if sensor_name in self.input_queues:
+            del self.input_queues[sensor_name]
+        if sensor_name in self.output_queues:
+            del self.output_queues[sensor_name]
 
 
 class EmptyPipeline(Pipeline):

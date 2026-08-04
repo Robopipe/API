@@ -16,3 +16,7 @@ Robopipe values all your feedback. If you encounter any problems with the API, p
 ## Community
 
 Join our [Robopipe subreddit](https://www.reddit.com/r/robopipe/) to share your apps, ask any questions regarding Robopipe, get help debugging your apps, or simply to read more about Robopipe from our users.
+
+
+## FFMpeg Wasm setup
+- Download [@ffmpeg/core](https://www.jsdelivr.com/package/npm/@ffmpeg/core) and [@ffmpeg/ffmpeg](https://www.jsdelivr.com/package/npm/@ffmpeg/ffmpeg) to their respective folders in robopipe-api/src/ffmpeg
