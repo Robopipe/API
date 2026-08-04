@@ -18,6 +18,7 @@ class NNGenericConfig(BaseModel):
 class NNConfig(BaseModel):
     type: NNType
     model_id: int | None = None
+    model_name: str | None = None
     num_inference_threads: int = 2
     nn_config: NNGenericConfig | None = None
     # Cap segmentation mask resolution before JSON-serializing to the client.

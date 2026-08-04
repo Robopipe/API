@@ -73,6 +73,7 @@ class DashboardConfig(BaseModel):
     productCheckSnoozeCommits: int = Field(default=30, ge=1, le=1000)
     productCheckSnoozeSeconds: float = Field(default=120.0, gt=0.0)
     productCheckStarvationMultiplier: float = Field(default=10.0, gt=1.0)
+    productCheckIdleTimeoutSeconds: float = Field(default=30.0, ge=3.0, le=600.0)
     testCases: list[EvalTestCase] = []
     thresholds: list[EvalThreshold] = []
     labels: list[Label] = []
@@ -108,6 +109,7 @@ class DashboardConfigUpdate(BaseModel):
     productCheckSnoozeCommits: int | None = Field(None, ge=1, le=1000)
     productCheckSnoozeSeconds: float | None = Field(None, gt=0.0)
     productCheckStarvationMultiplier: float | None = Field(None, gt=1.0)
+    productCheckIdleTimeoutSeconds: float | None = Field(None, ge=3.0, le=600.0)
 
     _validate_label_thresholds = field_validator("labelConfidenceThresholds")(
         _validate_label_confidence_thresholds

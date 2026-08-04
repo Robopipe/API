@@ -51,6 +51,7 @@ TUNING_OVERRIDE_FIELDS: tuple[str, ...] = (
     "productCheckSnoozeCommits",
     "productCheckSnoozeSeconds",
     "productCheckStarvationMultiplier",
+    "productCheckIdleTimeoutSeconds",
 )
 
 
@@ -92,6 +93,7 @@ class DashboardUserSettings(BaseModel):
     productCheckSnoozeCommits: int | None = Field(None, ge=1, le=1000)
     productCheckSnoozeSeconds: float | None = Field(None, gt=0.0)
     productCheckStarvationMultiplier: float | None = Field(None, gt=1.0)
+    productCheckIdleTimeoutSeconds: float | None = Field(None, ge=3.0, le=600.0)
 
     @field_validator("labelConfidenceThresholds")
     @classmethod

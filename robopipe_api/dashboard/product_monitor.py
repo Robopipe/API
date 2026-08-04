@@ -9,11 +9,6 @@ from datetime import datetime, timezone
 
 from ..models.dashboard.dashboard_config import DashboardConfig
 
-# The starvation timeout is multiplier × typical inter-product interval, but
-# never below this floor — on very fast lines a scaled timeout of a couple of
-# seconds would flash the banner in every ordinary gap between products.
-STARVATION_MIN_TIMEOUT_S = 10.0
-
 # Labels whose commit share (baseline and window alike) stays below this get
 # proportionally down-weighted in the mix divergence, so a label that is rare
 # on the trained product doesn't false-alarm by naturally missing from a
@@ -40,6 +35,9 @@ class _Baseline:
 @dataclass
 class _RunState:
     phase: str = "calibrating"  # calibrating | ok | mismatch | snoozed
+    # Anchors the starvation watchdog before any commit arrives. Run start
+    # resets the monitor, so state creation lands within one WS tick of it.
+    started_mono: float = field(default_factory=time.monotonic)
     calib: list[tuple[int, float | None]] = field(default_factory=list)
     calib_times: list[float] = field(default_factory=list)
     baseline: _Baseline | None = None
@@ -166,7 +164,11 @@ class ProductMonitor:
 
             if st.phase == "calibrating":
                 return {
-                    "state": "calibrating",
+                    "state": (
+                        "starved"
+                        if self._is_starved(st, config, now)
+                        else "calibrating"
+                    ),
                     "calibrated": len(st.calib),
                     "calibration_target": config.productCheckCalibrationCount,
                 }
@@ -349,15 +351,20 @@ class ProductMonitor:
     def _is_starved(
         st: _RunState, config: DashboardConfig, now: float
     ) -> bool:
-        if (
-            st.baseline is None
-            or st.baseline.typical_interval_s is None
-            or st.last_commit_mono is None
-        ):
-            return False
-        timeout = max(
-            config.productCheckStarvationMultiplier
-            * st.baseline.typical_interval_s,
-            STARVATION_MIN_TIMEOUT_S,
+        anchor = (
+            st.last_commit_mono
+            if st.last_commit_mono is not None
+            else st.started_mono
         )
-        return now - st.last_commit_mono > timeout
+        # productCheckIdleTimeoutSeconds is the floor even with a baseline —
+        # on very fast lines a scaled timeout of a couple of seconds would
+        # flash the banner in every ordinary gap between products.
+        if st.baseline is not None and st.baseline.typical_interval_s is not None:
+            timeout = max(
+                config.productCheckStarvationMultiplier
+                * st.baseline.typical_interval_s,
+                config.productCheckIdleTimeoutSeconds,
+            )
+        else:
+            timeout = config.productCheckIdleTimeoutSeconds
+        return now - anchor > timeout

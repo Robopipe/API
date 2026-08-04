@@ -39,12 +39,15 @@ class EventsStore:
             self.__run_pending_migrations(conn)
 
     def start_session(
-        self, dashboard_config_id: int, model_id: int | None = None
+        self,
+        dashboard_config_id: int,
+        model_id: int | None = None,
+        model_name: str | None = None,
     ) -> int:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "INSERT INTO dashboard_run_session (dashboard_config_id, model_id) VALUES (?, ?)",
-                (dashboard_config_id, model_id),
+                "INSERT INTO dashboard_run_session (dashboard_config_id, model_id, model_name) VALUES (?, ?, ?)",
+                (dashboard_config_id, model_id, model_name),
             )
             return cursor.lastrowid
 

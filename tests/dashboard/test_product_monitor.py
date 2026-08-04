@@ -28,6 +28,8 @@ def pc_config(**overrides) -> DashboardConfig:
         productCheckSnoozeCommits=3,
         productCheckSnoozeSeconds=120.0,
         productCheckStarvationMultiplier=10.0,
+        # Minimum bound; keeps the flat floor out of multiplier-scaled tests.
+        productCheckIdleTimeoutSeconds=3.0,
     )
     params.update(overrides)
     return make_config().model_copy(update=params)
@@ -330,14 +332,46 @@ class TestStarvation:
         assert m.status(config, now=2.1 + 19.1)["state"] == "starved"
 
     def test_starvation_timeout_has_floor(self):
-        m, config = ProductMonitor(), pc_config()
+        m, config = ProductMonitor(), pc_config(
+            productCheckIdleTimeoutSeconds=10.0
+        )
         for i in range(5):  # very fast line: commits every 0.1s
             commit(m, config, 1, now=i * 0.1)
 
-        # multiplier 10 × 0.1s = 1s would flash constantly; the 10s floor
-        # keeps the banner quiet until the pause is meaningfully long.
+        # multiplier 10 × 0.1s = 1s would flash constantly; the idle-timeout
+        # floor keeps the banner quiet until the pause is meaningfully long.
         assert m.status(config, now=0.4 + 5.0)["state"] == "ok"
         assert m.status(config, now=0.4 + 10.1)["state"] == "starved"
+
+    def test_starved_before_any_commit(self):
+        """A run where nothing ever commits must still warn: the watchdog
+        anchors at state creation (≈ run start) and uses the flat idle
+        timeout while no baseline exists."""
+        m, config = ProductMonitor(), pc_config(
+            productCheckIdleTimeoutSeconds=5.0
+        )
+        m.status(config, now=0.0)  # create state
+        m._runs[config.id].started_mono = 0.0  # pin the real-clock anchor
+
+        assert m.status(config, now=4.9)["state"] == "calibrating"
+        result = m.status(config, now=5.1)
+        assert result["state"] == "starved"
+        # Calibration progress stays in the payload alongside the state.
+        assert result["calibrated"] == 0
+        assert result["calibration_target"] == 5
+
+    def test_mid_calibration_stall_goes_starved_and_recovers(self):
+        m, config = ProductMonitor(), pc_config(
+            productCheckIdleTimeoutSeconds=5.0
+        )
+        commit(m, config, 1, now=0.0)
+        commit(m, config, 1, now=1.0)  # stall mid-calibration (target is 5)
+
+        assert m.status(config, now=5.9)["state"] == "calibrating"
+        assert m.status(config, now=6.1)["state"] == "starved"
+
+        commit(m, config, 1, now=7.0)
+        assert m.status(config, now=7.5)["state"] == "calibrating"
 
     def test_mismatch_takes_precedence_over_starved(self):
         m, config = ProductMonitor(), pc_config()

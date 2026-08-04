@@ -31,6 +31,22 @@ def test_migrations_add_end_reason_columns(store):
     assert row["end_time"] is None
 
 
+def test_start_session_persists_model_snapshot(store):
+    session_id = store.start_session(
+        dashboard_config_id=1, model_id=5, model_name="yolo-v8"
+    )
+    row = read_session(store, session_id)
+    assert row["model_id"] == 5
+    assert row["model_name"] == "yolo-v8"
+
+
+def test_start_session_model_snapshot_defaults_to_null(store):
+    session_id = store.start_session(dashboard_config_id=1)
+    row = read_session(store, session_id)
+    assert row["model_id"] is None
+    assert row["model_name"] is None
+
+
 def test_end_session_defaults_to_manual(store):
     session_id = store.start_session(dashboard_config_id=1)
     store.end_session(session_id)
